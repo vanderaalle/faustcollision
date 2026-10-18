@@ -30,6 +30,8 @@ not yet confirmed by a render. Kind: **bug?** (looks unintended), **undocumented
 | 17 | `AllpassC` (start-up) | outputs 0 for the first delay length; AllpassN/L output -fb * in there | bug? | measured, source |
 | 18 | `EnvGen` (audio-rate gate) | forced release (gate <= -1) during a segment corrupts the new segment and shortens it | bug? | measured, source |
 | 19 | `LocalIn` (server's first block) | outputs its uninitialised bus instead of the default when the synth starts at block 0 (e.g. NRT time 0) | bug? | measured, source |
+| 20 | `Formant` | phase sync product `phase1 * freq2` overflows int32: formant and bandwidth phases restart near 0 instead of at the fundamental's fraction | bug? | measured, source |
+| 21 | `Vibrato.ar` (constant or kr `freq`) | reads its input as an audio buffer: past the single value of a constant or control wire (garbage, NaN); the default `Vibrato.ar(440)` is affected | bug | measured, source |
 | 16 | `Ramp` | reads the input one sample past the segment; past the buffer end at a block boundary | bug? | source |
 
 ## 1. `Amplitude.kr` with an audio-rate input releases 64× too fast
@@ -282,3 +284,45 @@ translator rejects both.
 - Source: `server/plugins/IOUGens.cpp` `LocalIn_Ctor`, `LocalIn_next_a`, `LocalOut_next_a`;
   `server/scsynth/SC_World.cpp` (NRT loop: `mBufCounter` starts at 0; commands run up to the
   end of the current block).
+
+## 20. `Formant`: the phase sync overflows int32
+
+When the fundamental's phase passes a cycle, `Formant_next` restarts the formant and
+bandwidth phases in proportion to the fundamental's overshoot:
+
+    phase1 -= onecyc13;
+    phase2 = phase1 * freq2 / freq1;
+    phase3 = phase1 * freq3 / freq1;
+
+All are `int32`. `phase1` (the overshoot, up to `freq1`) times `freq2` is of the order of
+`freq1 * freq2`, e.g. 4.5e6 * 2e7 for 440/1760 Hz: far beyond 2^31. The product wraps (the
+overflow is undefined behaviour in C++; x86-64 code wraps), and the division gives a
+small, essentially arbitrary value: the phases restart near 0 instead of at
+`phase1 * freq2 / freq1`, a fraction of a sample's increment. The intended restart is
+sub-sample accurate; the actual one jitters by up to one sample of the formant phase.
+
+Measured: `Formant.ar` (440, 1760, 880): at the first restart the overshoot is 4473848;
+intended `phase2` 17895393 (3.3% of a cycle), actual 118. A port wrapping the product in
+int32 is bit-exact against scsynth on all test signals; the same simulation with 64-bit
+products differs on half the samples of the first second (14.6% relative RMS). A wrapped
+product can also be exactly -2^31.
+
+- Source: `server/plugins/OscUGens.cpp` `Formant_next`. Fix: compute the products in
+  int64 (or as `(int32)((double)phase1 * freq2 / freq1)`).
+
+## 21. `Vibrato.ar` reads a constant or control-rate input as an audio buffer
+
+`Vibrato_next` reads its input with `float* in = ZIN(0)` and `ZXP(in)` for every sample of
+the block, at any input rate. A constant or control-rate wire holds one value: the other 63
+reads go past it, into whatever follows in memory. `Vibrato` has no `checkInputs`, and the
+class's own defaults (`Vibrato.ar(freq: 440.0)`) take this path; the help file's examples
+use `DC.ar(400)`.
+
+Measured (NRT, depth 0, so the output should equal the input): `Vibrato.ar(0.5, 6, 0, 0,
+0, 0, 0)` outputs 0.5 on the first sample of each block and 0, tiny values and NaN on the
+others; with `LFNoise0.kr` as input, likewise; with `DC.ar(0.5)`, 0.5 throughout. The
+garbage depends on the memory layout, so it differs between servers and runs.
+
+- Source: `server/plugins/LFUGens.cpp` `Vibrato_next` (`ZIN(0)`/`ZXP(in)`), `Osc.sc`
+  `Vibrato`. Fix: a `checkInputs` requiring an audio-rate input for `.ar` (or a calc
+  function reading `ZIN0(0)` when the input is not audio rate).

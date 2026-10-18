@@ -659,12 +659,19 @@ bl_dsin(p) = sintbl(pidx(p)) + (sintbl(pidx(p) + 1) - sintbl(pidx(p))) * pfr(p);
 bl_dinv(p) = csctbl(pidx(p)) + (csctbl(pidx(p) + 1) - csctbl(pidx(p))) * pfr(p);
 bl_num(p, n2) = sintbl(pidx(r)) + pfr(r) * (sintbl(pidx(r) + 1) - sintbl(pidx(r))) with { r = p * n2; };
 blit_t(p, n2) = bl_bad(p) & (abs(bl_dsin(p)) < 0.0005);
-blit_r(p, n2) = select2(bl_bad(p), bl_num(p, n2) * bl_dinv(p), bl_num(p, n2) / bl_dsin(p));
+blit_r(p, n2) = select2(bl_bad(p), fmul(bl_num(p, n2), bl_dinv(p)), bl_num(p, n2) / bl_dsin(p));
 
 // per-block quantities shared by Saw and Pulse
 bl_fin(freq) = fmaf(a2k(freq), 1.0, 0.0);  // opaque: stops the compiler re-analysing the upstream graph
 bl_prev(x) = select2(ba.time < blocksize, x@blocksize, x);
-bl_N(fin) = int(ma.SR * 0.5 / fin);
+// (int)((SAMPLERATE * 0.5) / freq) in double: the float quotient can round up to an integer
+// (24000 / 166.66667f), so it is corrected by the exact remainder c - q f (fmaf)
+bl_N(fin) = q - (r < 0) + (r >= fin)
+with {
+    cc = ma.SR * 0.5;
+    q = int(cc / fin);
+    r = fmaf(0.0 - float(q), fin, cc);
+};
 bl_xf = float(ba.time % blocksize) / blocksize;
 
 // The per-block quantities are computed once and passed to the loop as wires (lambda
@@ -684,9 +691,9 @@ with {
     };
     core = \(n2, pn2, sc, psc, xf, p).((\(fy).(y, y with {
         y1 = select2(ba.time == 0, fy, -0.46);
-        a = (blit_r(p, n2) - 1.0) * sc;
-        xa = (blit_r(p, pn2) - 1.0) * psc;
-        y = select2(blit_t(p, n2), select2(xf, a, xa + bl_xf * (a - xa)) + 0.999 * y1, 1.0 + 0.999 * y1);
+        a = fmul(fsub(blit_r(p, n2), 1.0), sc);   // opaque: no (r - 1) * sc -> r * sc - sc
+        xa = fmul(fsub(blit_r(p, pn2), 1.0), psc);
+        y = select2(blit_t(p, n2), fadd(select2(xf, a, fadd(xa, fmul(bl_xf, fsub(a, xa)))), fmul(0.999, y1)), fadd(1.0, fmul(0.999, y1)));
     })) ~ _ : !, _);
 };
 
@@ -709,10 +716,12 @@ with {
     };
     core = \(n2, pn2, sc, psc, xf, p, off).((\(fy).(y, y with {
         y1 = select2(ba.time == 0, fy, 0.0);
-        rsc = 1.0 / sc + 1.0;
+        rsc = fadd(1.0 / fmul(sc, 1.0), 1.0);   // opaque: Faust would fold 1 / (0.5 / N) to 2N
         pl(q) = select2(blit_t(q, n2), blit_r(q, n2), rsc);
-        px(q) = select2(blit_t(q, n2), (blit_r(q, pn2) - 1.0) * psc + bl_xf * ((blit_r(q, n2) - 1.0) * sc - (blit_r(q, pn2) - 1.0) * psc), 1.0);
-        y = select2(xf, (pl(p) - pl(p + off)) * sc, px(p) - px(p + off)) + 0.999 * y1;
+        k1(q) = fmul(fsub(blit_r(q, pn2), 1.0), psc);
+        k2(q) = fmul(fsub(blit_r(q, n2), 1.0), sc);
+        px(q) = select2(blit_t(q, n2), fadd(k1(q), fmul(bl_xf, fsub(k2(q), k1(q)))), 1.0);
+        y = fadd(select2(xf, fmul(fsub(pl(p), pl(p + off)), sc), fsub(px(p), px(p + off))), fmul(0.999, y1));
     })) ~ _ : _, !);
 };
 
@@ -1442,3 +1451,316 @@ with {
 };
 syncsaw_aa(f1, f2) = syncsaw_clk(fmul(f1, float(2.0 / ma.SR)), fmul(f2, float(2.0 / ma.SR)), 1);
 syncsaw_kr(f1, f2) = syncsaw_clk(fmul(a2k(f1), float(2.0 * blocksize / ma.SR)), fmul(a2k(f2), float(2.0 * blocksize / ma.SR)), krclk);
+
+//------------------------------------------------------------------------------
+// Blip (OscUGens.cpp:2238): Saw's band-limited kernel with numharm harmonics (clipped to
+// SR/2 / freq, at least 1), output (kernel - 1) * 0.5/N, no integrator. freq and numharm
+// are read per block; when either changes and N changes, the kernels are crossfaded over
+// the block; while harmonics are clipped, the increment uses the larger of the previous and
+// the new freq.
+//------------------------------------------------------------------------------
+blip(freq, numharm) = freq, numharm : \(fq, nh).(pre(fq, nh) : core)
+with {
+    pre(fq, nh) = n2, pn2, sc, psc, xf, p
+    with {
+        fin = bl_fin(fq); pfin = bl_prev(fin);
+        h = int(a2k(nh)); ph = bl_prev(h);
+        Nof(f, k) = select2(k > bl_N(f), max(k, 1), bl_N(f));
+        N = Nof(fin, h); pN = bl_prev(N);
+        changed = (h != ph) | (fin != pfin);
+        xf = changed & (N != pN);
+        inc = select2(changed & (h > bl_N(fin)), dinc(fin, 28), dinc(max(pfin, fin), 28));
+        p = iphase(int(inc));
+        n2 = 2 * N + 1; pn2 = 2 * pN + 1;
+        sc = 0.5 / float(N); psc = 0.5 / float(pN);
+    };
+    core = \(n2, pn2, sc, psc, xf, p).(select2(blit_t(p, n2),
+        select2(xf, a, xa + bl_xf * (a - xa)), 1.0)
+    with {
+        // opaque: Faust would expand (r - 1) * sc to r * sc - sc
+        a = fmul(fsub(blit_r(p, n2), 1.0), sc);
+        xa = fmul(fsub(blit_r(p, pn2), 1.0), psc);
+    });
+};
+
+//------------------------------------------------------------------------------
+// Line, exact (LFUGens.cpp Line_next_nova, Line_next): the double level and slope are
+// float pairs (translator/derive.py: level = start + slope after the constructor).
+// ar: while more than a block remains, nova's set_slope_vec_simd writes the block from
+// float (level, slope) in four SSE lanes (f, f+s, f+2s, f+2s+s, each lane += 4s), and the
+// level steps by 64 * slope (one double addition); in the last block, the double loop
+// (out = level; level += slope), then the end level. kr: the double loop, one step per block.
+//------------------------------------------------------------------------------
+dadd2(h, l, ah, al) = dfast(s, fadd(fadd(e, l), al))
+with { s = twosum(h, ah) : _, !; e = twosum(h, ah) : !, _; };
+line_x(n, lh, ll, sh, sl, bh, bl, endf) = (\(h, l).(step(h, l))) ~ (_, _) : !, !, _
+with {
+    j = ba.time % blocksize;
+    rem = n - blocksize * int(ba.time / blocksize);
+    lanes = rem > blocksize;
+    s = fadd(sh, sl);
+    st(prev, init) = select2(ba.time == 0, prev, init);
+    lane(f) = (\(y4).(select2(j < 4, fadd(y4, s * 4.0), base))) ~ @(3)
+    with {
+        s2 = fadd(s, s);
+        base = ba.selectn(4, j % 4, f, fadd(f, s), fadd(f, s2), fadd(fadd(f, s2), s));
+    };
+    step(h, l) = nh, nl, out
+    with {
+        h0 = st(h, lh); l0 = st(l, ll);
+        blk = lanes & (j == blocksize - 1);
+        smp = (lanes == 0) & (rem > 0) & (j < rem);
+        nh = select2(blk, select2(smp, h0, (dadd2(h0, l0, sh, sl) : _, !)), (dadd2(h0, l0, bh, bl) : _, !));
+        nl = select2(blk, select2(smp, l0, (dadd2(h0, l0, sh, sl) : !, _)), (dadd2(h0, l0, bh, bl) : !, _));
+        out = select2(rem <= 0, select2(lanes, select2(j < rem, endf, fadd(h0, l0)), lane(fadd(h0, l0))), endf);
+    };
+};
+line_x_kr(n, lh, ll, sh, sl, endf) = (\(h, l).(step(h, l))) ~ (_, _) : !, !, _ : ba.sAndH(krclk)
+with {
+    k = int(ba.time / blocksize);
+    st(prev, init) = select2(ba.time == 0, prev, init);
+    step(h, l) = nh, nl, select2(k < n, endf, fadd(h0, l0))
+    with {
+        h0 = st(h, lh); l0 = st(l, ll);
+        go = krclk & (k < n);
+        nh = select2(go, h0, (dadd2(h0, l0, sh, sl) : _, !));
+        nl = select2(go, l0, (dadd2(h0, l0, sh, sl) : !, _));
+    };
+};
+
+//------------------------------------------------------------------------------
+// Formant (OscUGens.cpp:2175): three int32 phases (one cycle = 2^29), increments
+// (int32)(float(2^29 / SR) * freq) per block (a float product: m_cpstoinc is read into a
+// float). out = (sine[phase3 + 3/4 cycle] + 1) * sine[phase2] while phase3 is within its
+// first cycle (phase3 += max(freq1, freq3)), else 0. When phase1 passes a cycle it wraps
+// and phase2, phase3 restart at phase1 * freq / freq1 in int32: the product overflows and
+// wraps (sc-findings 20), then divides truncating. Non-interpolated sine table.
+//------------------------------------------------------------------------------
+// C int division (truncating), d > 0: a float quotient corrected by the exact int remainder
+// (twice; the float quotient of |a| <= 2^31 is within a few units). Works on the signed
+// value: negating a wrapped product of -2^31 would overflow (Formant hits it).
+idiv(a, d) = int(float(a) / float(d)) : fix : fix
+with {
+    fix(q) = select2(a < 0, q - (r < 0) + (r >= d), q + (r <= 0 - d) - (r > 0)) with { r = a - q * d; };
+};
+formant(f1, f2, f3) = (\(p1, p2, p3).(step(p1, p2, p3))) ~ (_, _, _) : !, !, !, _
+with {
+    onecyc = 536870912;
+    tq = 402653184;
+    cps = float(536870912.0 / ma.SR);
+    i1 = int(fmul(cps, a2k(f1))); i2 = int(fmul(cps, a2k(f2))); i3 = int(fmul(cps, a2k(f3)));
+    ff = max(i1, i3);
+    step(p1, p2, p3) = q1, q2, q3, out
+    with {
+        on = p3 < onecyc;
+        out = select2(on, 0.0, fmul(fadd(sintbl(pidx(p3 + tq)), 1.0), sintbl(pidx(p2))));
+        a1 = p1 + i1;
+        a2 = p2 + i2;
+        a3 = select2(on, p3, p3 + ff);
+        w = a1 > onecyc;
+        b1 = a1 - onecyc;
+        q1 = select2(w, a1, b1);
+        q2 = select2(w, a2, idiv(b1 * i2, i1));
+        q3 = select2(w, a3, idiv(b1 * i3, i1));
+    };
+};
+
+//------------------------------------------------------------------------------
+// Klang (OscUGens.cpp:2761): n float sine recursions y0 = b1 y1 - y2, summed in scsynth's
+// order (the n % 4 last partials first, then each group of four, as in Klank). The
+// initial states and b1 come from translator/derive.py (read once). No zapping.
+//------------------------------------------------------------------------------
+klang(n, y1s, y2s, b1s) = s
+with {
+    tk(k, list) = list : ba.selector(k, n);
+    term(k) = (\(f1, f2).(y0, p1, y0 with {
+            p1 = select2(ba.time == 0, f1, tk(k, y1s));
+            p2 = select2(ba.time == 0, f2, tk(k, y2s));
+            y0 = fsub(fmul(tk(k, b1s), p1), p2);
+        })) ~ (_, _) : !, !, _;
+    imax = int(n / 4);
+    r = n - 4 * imax;
+    b = 4 * imax;
+    remf(0) = 0.0;
+    remf(1) = term(b);
+    remf(2) = fadd(term(b), term(b + 1));
+    remf(3) = fadd(fadd(term(b), term(b + 1)), term(b + 2));
+    grp(g) = fadd(fadd(fadd(term(4 * g), term(4 * g + 1)), term(4 * g + 2)), term(4 * g + 3));
+    sumg(0) = remf(r);
+    sumg(g) = fadd(sumg(g - 1), grp(g - 1));
+    s = sumg(imax);
+};
+
+//------------------------------------------------------------------------------
+// LFGauss (LFUGens.cpp:LFGauss_next_k/_a/_aa): x (double, a float pair here) runs from
+// -1 - iphase by step = 2 / (dur SR) per sample, wrapping by -2 above 1 when loop;
+// out = exp(x^2 factor), factor = -1 / (2 c^2), exp of a double argument (here expf(hi)
+// (1 + lo): within an ulp). The phase is stored as x + iphase at block end and re-offset
+// by the next block's iphase. _k: dur, width read per block, step 2 / (dur * SR) a double
+// quotient; _a: dur per sample (a float quotient), width per sample (aa) or per block.
+//------------------------------------------------------------------------------
+lfgauss_g(step, factor, b, lp, clk, blk) = (\(h, l, pb).(st(h, l, pb))) ~ (_, _, _) : !, !, !, _ : ba.sAndH(clk)
+with {
+    st(h, l, pb) = nh, nl, b, out
+    with {
+        // at a block start: x = (x + previous iphase) - iphase (two double additions)
+        h0 = select2(ba.time == 0, h, -1.0);
+        l0 = select2(ba.time == 0, l, 0.0);
+        rh = select2(blk & (ba.time > 0), h0, (dadd(h0, l0, pb) : daddB(0.0 - b) : _, !));
+        rl = select2(blk & (ba.time > 0), l0, (dadd(h0, l0, pb) : daddB(0.0 - b) : !, _));
+        xh = select2(ba.time == 0, rh, (dadd(-1.0, 0.0, 0.0 - b) : _, !));
+        xl = select2(ba.time == 0, rl, (dadd(-1.0, 0.0, 0.0 - b) : !, _));
+        w = dgt(xh, xl, 1.0) & (lp != 0);
+        yh = select2(w, xh, (dsubc(xh, xl, 2.0) : _, !));
+        yl = select2(w, xl, (dsubc(xh, xl, 2.0) : !, _));
+        // x^2 * factor as a pair, then exp
+        sh = yh * yh;
+        sl = fmaf(yh, yh, 0.0 - sh) + 2.0 * yh * yl;
+        ah = dmulf(sh, sl, factor) : _, !;
+        al = dmulf(sh, sl, factor) : !, _;
+        e = exp(ah);
+        // the decaying tail passes through denormals (scsynth outputs them): flushed below
+        // 1e-30, so that downstream gains do not make them denormal either
+        out = fmaf(e, al, e) <: select2(abs(_) < 1e-30, _, 0.0);
+        nh = select2(clk, h0, (dadd(yh, yl, step) : _, !));
+        nl = select2(clk, l0, (dadd(yh, yl, step) : !, _));
+    };
+};
+// 2 / (d * sr) with d * sr exact (TwoProd) and the quotient corrected once
+qstep(d, sr) = fadd(q, (fmaf(0.0 - q, ph, 2.0) - q * pl) / ph)
+with { ph = d * sr; pl = fmaf(d, sr, 0.0 - ph); q = 2.0 / ph; };
+lgfactor(c) = -1.0 / fmul(fmul(2.0, c), c);
+lfgauss_k(dur, width, b, lp) = lfgauss_g(qstep(a2k(dur), ma.SR), lgfactor(a2k(width)), a2k(b), a2k(lp), 1, ba.time % blocksize == 0);
+lfgauss_a(dur, width, b, lp) = lfgauss_g(2.0 / fmul(dur, ma.SR), lgfactor(width), a2k(b), a2k(lp), 1, ba.time % blocksize == 0);
+lfgauss_kr(dur, width, b, lp) = lfgauss_g(qstep(a2k(dur), ma.SR / blocksize), lgfactor(a2k(width)), a2k(b), a2k(lp), krclk, krclk);
+
+//------------------------------------------------------------------------------
+// Phasor (TriggerUGens.cpp:1539): a double level (float pair) wrapped into [start, end)
+// by sc_wrap (one range, else floor: the floor branch is approximate here). next_kk (ar,
+// kr trig and rate): a trigger rising through 0 at a block start resets the level to
+// resetPos; per sample level = wrap(level), out level, level += rate. next_ak/_aa (audio
+// trig, or kr): out level, level += rate, level = wrap(level); a trigger rising between
+// samples resets to resetPos + frac * rate, frac = 1 - prev / (cur - prev).
+//------------------------------------------------------------------------------
+// Pair operations as boxes: intermediate pairs are lambda wires, computed once (selecting
+// outputs of a multi-output expression repeatedly re-expands it: compile times of minutes).
+daddfB(x) = \(h, l).(dadd(h, l, x));
+dadd2B(ah, al) = \(h, l).(dadd2(h, l, ah, al));
+// sc_wrap(level, lo, hi) on a pair
+dwrapB(lo, hi) = \(h, l).((h, l) : dadd2B(0.0 - rh, 0.0 - rl) : \(dh, dl).((h, l) : dadd2B(rh, rl)
+    : \(uh, ul).((dh, dl) : fl : \(fdh, fdl).((uh, ul) : fl : \(fuh, ful).(
+        select2(up, select2(dn, h, select2(hi == lo, select2(dge(uh, ul, lo), fuh, uh), lo)),
+                    select2(hi == lo, select2(dlt(dh, dl, hi), fdh, dh), lo)),
+        select2(up, select2(dn, l, select2(hi == lo, select2(dge(uh, ul, lo), ful, ul), 0.0)),
+                    select2(hi == lo, select2(dlt(dh, dl, hi), fdl, dl), 0.0))
+    with { up = dge(h, l, hi); dn = dlt(h, l, lo); })))))
+with {
+    rh = twosum(hi, 0.0 - lo) : _, !;
+    rl = twosum(hi, 0.0 - lo) : !, _;
+    // the floor form: v - range * floor((v - lo) / range)
+    fl = \(vh, vl).(dadd2(vh, vl, 0.0 - kh, 0.0 - kl)
+        with { k = floor((vh - lo) / rh); kh = k * rh; kl = fmaf(k, rh, 0.0 - kh) + k * rl; });
+};
+phasor_kk(trig, rate, start, end, rpos) = (\(h, l).(st(h, l))) ~ (_, _) : !, !, _
+with {
+    tr = a2k(trig); ptr = select2(ba.time < blocksize, tr@blocksize, tr);
+    rs = (ba.time % blocksize == 0) & (ptr <= 0) & (tr > 0);
+    lo = a2k(start); hi = a2k(end); rt = a2k(rate);
+    st(h, l) = (select2(ba.time == 0, select2(rs, h, a2k(rpos)), initv(start)),
+                select2((ba.time == 0) | rs, l, 0.0))
+        : dwrapB(lo, hi) : \(wh, wl).((wh, wl) : daddfB(rt) : \(nh, nl).(nh, nl, fadd(wh, wl)));
+};
+phasor_a(trig, rate, start, end, rpos, clk) = (\(h, l, p).(st(h, l, p))) ~ (_, _, _) : !, !, !, _ : ba.sAndH(clk)
+with {
+    lo = a2k(start); hi = a2k(end); rp = a2k(rpos);
+    st(h, l, p) = (select2(rs, h0, rh), select2(rs, l0, rl))
+        : \(xh, xl).((xh, xl) : daddfB(rate) : dwrapB(lo, hi)
+        : \(nh, nl).(select2(clk, h0, nh), select2(clk, l0, nl), select2(clk, pin, trig), fadd(xh, xl)))
+    with {
+        pin = select2(ba.time == 0, p, trig);
+        h0 = select2(ba.time == 0, h, initv(start));
+        l0 = select2(ba.time == 0, l, 0.0);
+        rs = (pin <= 0) & (trig > 0);
+        frac = 1.0 - pin / (trig - pin);
+        // resetPos + frac * rate: TwoProd, then a pair addition
+        ph = frac * rate;
+        rh = dadd(ph, fmaf(frac, rate, 0.0 - ph), rp) : _, !;
+        rl = dadd(ph, fmaf(frac, rate, 0.0 - ph), rp) : !, _;
+    };
+};
+
+//------------------------------------------------------------------------------
+// Vibrato (LFUGens.cpp:295), with rateVariation = depthVariation = 0 (they draw random
+// numbers). out = in * (1 + m): after `delay` seconds (in passes through) and an `onset`
+// attack (m scaled by a double level rising by 1/(1 + onset SR) per sample), a parabolic
+// LFO on a double phase in [-1, 3): m = depth (1 - z^2) below 1, depth ((ph - 2)^2 - 1)
+// below 3, else the phase wraps by 4 and rate, depth are read again (ZIN0). A trigger rising
+// at a block start restarts everything; the constructor runs one sample.
+// State: phase pair, increment, depths A/B, delay and attack counters, attack level and
+// slope pairs, previous trigger.
+//------------------------------------------------------------------------------
+// (n wires, n wires) -> n wires: the second bus where c, else the first
+selbus(n, c) = ro.interleave(n, 2) : par(i, n, select2(c));
+vibrato_g(x, rate, depth, delay, onset, iphase, trig, clk, sr) = (\(a, b, c, d, e, f, g, h, i, j, k, l).(
+        run(a, b, c, d, e, f, g, h, i, j, k, l)))
+    ~ si.bus(12) : par(n, 12, !), _ : ba.sAndH(clk)
+with {
+    blk = select2(clk == 1, ba.time % blocksize == 0, 1);  // ar: block starts; kr: every step
+    rt = a2k(rate); dp = a2k(depth); tr = a2k(trig);
+    fm = float(4.0 / sr);
+    wr(v) = v - floor(v);                       // sc_wrap(v, 0, 1)
+    // the state a trigger (or the constructor) sets
+    ph0h = twosum(4.0 * wr(a2k(iphase)), -1.0) : _, !;
+    ph0l = twosum(4.0 * wr(a2k(iphase)), -1.0) : !, _;
+    nd = int(tmul(a2k(delay), sr));
+    na = int(tmul(a2k(onset), sr));
+    ash = 1.0 / float(1 + na);
+    asl = fmaf(0.0 - ash, float(1 + na), 1.0) / float(1 + na);
+    init = ph0h, ph0l, fmul(rt, fm), dp, dp, nd, na, ash, asl, ash, asl, 0.0;
+    // one sample: (state, input, block start) -> (state', out)
+    step(xx, sb, a, b, c, d, e, f, g, h, i, j, k, l) = run1
+    with {
+        rs = sb & (l <= 0) & (tr > 0);
+        P = (a, b, c, d, e, f, g, h, i, j, k), (init : par(n, 11, _), !) : selbus(11, rs);
+        run1 = P : \(ph, pl, ff, sa, sb2, dl, at, alh, all, aah, aal).(core(ph, pl, ff, sa, sb2, dl, at, alh, all, aah, aal));
+        core(ph, pl, ff, sa, sb2, dl, at, alh, all, aah, aal) =
+            nph, npl, nff, nsa, nsb, ndl, nat, nalh, nall, aah, aal, select2(sb, l, tr), out
+        with {
+            indl = dl > 0;
+            inat = (dl <= 0) & (at > 0);
+            seg1 = dlt(ph, pl, 1.0);
+            seg2 = dlt(ph, pl, 3.0);
+            wrap = (seg2 == 0) & (indl == 0);
+            qh = select2(wrap, ph, (dadd(ph, pl, -4.0) : _, !));
+            ql = select2(wrap, pl, (dadd(ph, pl, -4.0) : !, _));
+            nff = select2(wrap, ff, fmul(rt, fm));
+            nsa = select2(wrap, sa, dp);
+            nsb = select2(wrap, sb2, dp);
+            z1 = fadd(qh, ql);
+            z2 = dadd(ph, pl, -2.0) : fadd;
+            m1 = fsub(1.0, fmul(z1, z1));
+            m2 = fsub(fmul(z2, z2), 1.0);
+            alf = fadd(alh, all);
+            sc1 = select2(inat, nsa, fmul(alf, nsa));
+            sc2 = select2(inat, nsb, fmul(alf, nsb));
+            md = select2(seg1 | wrap, fmul(sc2, m2), fmul(sc1, m1));
+            out = select2(indl, fmul(xx, fadd(1.0, md)), xx);
+            nph = select2(indl, (dadd(qh, ql, nff) : _, !), ph);
+            npl = select2(indl, (dadd(qh, ql, nff) : !, _), pl);
+            ndl = select2(indl, dl, dl - 1);
+            nat = select2(inat, at, at - 1);
+            nalh = select2(inat, alh, (dadd2(alh, all, aah, aal) : _, !));
+            nall = select2(inat, all, (dadd2(alh, all, aah, aal) : !, _));
+        };
+    };
+    // the constructor's sample, from the trigger-set state with the trigger seen as 0
+    first = (x, 1, init) : step : par(n, 12, _), !;
+    run(a, b, c, d, e, f, g, h, i, j, k, l) = (a, b, c, d, e, f, g, h, i, j, k, l), first : selbus(12, ba.time == 0)
+        : \(a1, b1, c1, d1, e1, f1, g1, h1, i1, j1, k1, l1).(
+            ((a1, b1, c1, d1, e1, f1, g1, h1, i1, j1, k1, l1),
+             (step(x, blk, a1, b1, c1, d1, e1, f1, g1, h1, i1, j1, k1, l1) : par(n, 12, _), !) : selbus(12, clk)),
+            (step(x, blk, a1, b1, c1, d1, e1, f1, g1, h1, i1, j1, k1, l1) : par(n, 12, !), _));
+};
+// Vibrato.kr: one step per block (the same code, sample rate SR / blocksize)
+vibrato(x, rate, depth, delay, onset, iphase, trig) = vibrato_g(x, rate, depth, delay, onset, iphase, trig, 1, ma.SR);
+vibrato_kr(x, rate, depth, delay, onset, iphase, trig) = vibrato_g(x, rate, depth, delay, onset, iphase, trig, krclk, ma.SR / blocksize);

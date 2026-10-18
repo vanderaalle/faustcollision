@@ -132,3 +132,51 @@ def fsinosc(c):
         for k, v in vals.items():
             out[f"{k}h_{rate}"], out[f"{k}l_{rate}"] = _pair(v)
     return out
+
+
+def line(c):
+    """LFUGens.cpp Line_Ctor: counter = (int)(dur * rate + .5f), at least 1; slope =
+    (end - start) / counter and level = start + slope, in double (counter 0: level = end,
+    slope 0). Fields per rate (ar: 64 * slope too, the nova block step), as float pairs."""
+    start, end, dur = (float(f32(c[k])) for k in ("start", "end", "dur"))
+    out = {}
+    for rate, sr in (("ar", SR), ("kr", SR / 64)):
+        n = int(dur * sr + 0.5)
+        if n == 0:
+            level, slope = end, 0.0
+        else:
+            slope = (end - start) / n
+            level = start + slope
+        n = max(1, n)
+        out[f"n_{rate}"] = n
+        out[f"lh_{rate}"], out[f"ll_{rate}"] = _pair(level)
+        out[f"sh_{rate}"], out[f"sl_{rate}"] = _pair(slope)
+        out[f"bh_{rate}"], out[f"bl_{rate}"] = _pair(64.0 * slope)
+    out["endf"] = repr(float(f32(end)))
+    return out
+
+
+def klang(c):
+    """OscUGens.cpp Klang_SetCoefs: w = freq * freqscale + freqoffset (float; freqscale and
+    freqoffset are double products stored as float); y1 = level sin(phase - w), y2 =
+    level sin(phase - 2w) (phase 0: level -sin(w), level -sin(w + w)), sinf of floats;
+    b1 = 2 cos(w), cosf then a double product stored as float."""
+    rps = 2.0 * math.pi / SR
+    fs = f32(float(f32(c["freqscale"])) * rps)
+    fo = f32(float(f32(c["freqoffset"])) * rps)
+    sinf = lambda x: f32(math.sin(float(x)))
+    y1s, y2s, b1s = [], [], []
+    for k in range(c["n"]):
+        w = f32(f32(f32(c[f"freq{k}"]) * fs) + fo)
+        level, phase = f32(c[f"amp{k}"]), f32(c[f"phase{k}"])
+        if phase != 0:
+            y1 = f32(level * sinf(f32(phase - w)))
+            y2 = f32(level * sinf(f32(f32(phase - w) - w)))
+        else:
+            y1 = f32(level * -sinf(w))
+            y2 = f32(level * -sinf(f32(w + w)))
+        y1s.append(y1)
+        y2s.append(y2)
+        b1s.append(f32(2.0 * float(f32(math.cos(float(w))))))
+    return {k: ", ".join(repr(float(v)) for v in vs) for k, vs in
+            (("y1s", y1s), ("y2s", y2s), ("b1s", b1s))}

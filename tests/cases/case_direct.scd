@@ -89,7 +89,11 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 		metadata: (specs: (dt: spec.(0.0005, 0.2, 0.01))))
 } ++ [
 	// Lines: ar and kr, rising and falling, a duration shorter than the render
-	SynthDef(\case_Line, { Out.ar(0, [Line.ar(-0.5, 0.8, 0.7), Line.ar(1, 0, 0.0123), K2A.ar(Line.kr(0, 1, 0.5))]) }),
+	SynthDef(\case_Line, { Out.ar(0, [Line.ar(-0.5, 0.8, 0.7), Line.ar(1, 0, 0.0123), K2A.ar(Line.kr(0, 1, 0.5)),
+		Line.ar(2000, 60, 8), Line.ar(0.3, 0.9, 0), K2A.ar(Line.kr(900, 50, 9))]) }),
+	// Line with a control start: read once, the closed-form fallback
+	SynthDef(\case_Line_var, { |knob = 0.2| Out.ar(0, [Line.ar(knob, 2, 3), K2A.ar(Line.kr(knob, -1, 1.5))]) },
+		metadata: (specs: (knob: ControlSpec(-1, 1, \lin, 0, 0.2)))),
 	SynthDef(\case_XLine, { Out.ar(0, [XLine.ar(0.01, 1, 0.7), XLine.ar(1, 0.001, 0.3), K2A.ar(XLine.kr(1, 0.1, 0.5))]) }),
 	// EnvGen: all shapes, audio-rate and kr gates, release node with loop, .kr
 	SynthDef(\case_EnvGen, {
@@ -168,6 +172,43 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 		SyncSaw.ar(110, 377), SyncSaw.ar(Line.kr(50, 300, 8), SinOsc.ar(0.5).range(400, 1200)),
 		SyncSaw.ar(SinOsc.ar(2).range(100, 200), Line.kr(300, 900, 9)), SyncSaw.ar(1234.5, 2999),
 		K2A.ar(SyncSaw.kr(3, Line.kr(5, 13, 7)))
+	] * 0.5) }),
+	// Blip: fixed, clipped harmonics, moving freq and numharm (crossfades), audio-rate freq
+	SynthDef(\case_Blip, { Out.ar(0, [
+		Blip.ar(220, 20), Blip.ar(3000, 200), Blip.ar(Line.kr(900, 50, 9), LFSaw.kr(0.5).range(1, 40)),
+		Blip.ar(Line.kr(2000, 60, 8), 300), Blip.ar(SinOsc.ar(3).range(100, 300), 7)
+	] * 0.5) }),
+	// Formant: defaults, a low fundamental with a high formant, moving inputs (kr, ar)
+	SynthDef(\case_Formant, { Out.ar(0, [
+		Formant.ar, Formant.ar(87, 2345, 600), Formant.ar(Line.kr(100, 400, 9), LFTri.kr(0.3).range(500, 3000), 300),
+		Formant.ar(SinOsc.ar(2).range(150, 250), 1500, SinOsc.ar(0.5).range(200, 900))
+	] * 0.5) }),
+	// Klang: 3 partials with phases, 8 partials (two groups) scaled and offset
+	SynthDef(\case_Klang, { Out.ar(0, [
+		Klang.ar(`[[200, 671, 1153], [0.3, 0.2, 0.1], [0, 1, pi]]),
+		Klang.ar(`[[100, 200, 300, 400, 510, 620, 777, 1999], nil, [0, 0.5, 0, 1, 0, 2, 0, 3]], 1.25, 13)
+	] * 0.1) }),
+	// LFGauss: defaults, iphase, one-shot (loop 0), audio-rate duration and width, kr
+	SynthDef(\case_LFGauss, { Out.ar(0, [
+		LFGauss.ar, LFGauss.ar(0.013, 0.3, 0.4), LFGauss.ar(2, 0.2, 0, 0),
+		LFGauss.ar(SinOsc.ar(0.3).range(0.005, 0.02), SinOsc.ar(0.7).range(0.05, 0.3)),
+		K2A.ar(LFGauss.kr(0.37, Line.kr(0.1, 0.4, 5)))
+	] * 0.5) }),
+	// Phasor: free-running (kk), kr trigger, audio trigger with sub-sample reset, audio rate,
+	// rate above the range (floor branch), negative rate, control rate
+	SynthDef(\case_Phasor, { Out.ar(0, [
+		Phasor.ar(0, 0.01), Phasor.ar(Impulse.kr(3), 0.003, -1, 1, 0.5),
+		Phasor.ar(in.value, 0.0045833, 0, 1, 0.2),
+		Phasor.ar(Impulse.ar(7.3), SinOsc.ar(0.4).range(0.001, 0.02), 0, 2),
+		Phasor.ar(0, 2.7, 0, 1), Phasor.ar(0, -0.013, -0.5, 0.5),
+		K2A.ar(Phasor.kr(Impulse.kr(1.1), 0.05, 0, 3))
+	] * 0.5) }),
+	// Vibrato (variations 0): plain, delay and onset, phase and depth, audio input, retrigger
+	SynthDef(\case_Vibrato, { Out.ar(0, [
+		Vibrato.ar(DC.ar(1), 6, 0.02, 0, 0, 0, 0), Vibrato.ar(DC.ar(1), 5, 0.1, 0.1, 0.3, 0, 0),
+		Vibrato.ar(DC.ar(1), 3.3, 0.2, 0, 0, 0, 0, 0.3), Vibrato.ar(in.value, 7, 0.05, 0, 0.05, 0, 0),
+		Vibrato.ar(DC.ar(1), 4, 0.1, 0.05, 0.1, 0, 0, 0.6, Impulse.kr(0.7)),
+		K2A.ar(Vibrato.kr(1, 2.5, 0.3, 0, 0.5, 0, 0))
 	] * 0.5) }),
 	// Noise: statistics only (scsynth's generator is seeded per server). Each at ar and kr.
 	// Rates and densities stay >= 100/s: a statistical comparison needs ~1000 random events

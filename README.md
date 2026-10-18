@@ -56,12 +56,12 @@ reproducers; drafts of upstream issues in `docs/issues/`). Faust pitfalls met al
 
 Covered: arithmetic and all unary/binary operators (at ar and kr, including scsynth's
 nova-simd approximations at audio rate), oscillators (SinOsc, FSinOsc, SinOscFB, Saw,
-Pulse, VarSaw, SyncSaw, LF*, Impulse), noise, filters (LPF/HPF/RLPF/RHPF/BPF/BRF,
-resonators, one/two-pole/zero, lags, decays), delays, combs and allpasses, EnvGen,
-Line/XLine, dynamics, FreeVerb/FreeVerb2/GVerb, Pan2, Latch, Amplitude, MoogFF, Klank,
-PitchShift, LocalIn/LocalOut (feedback); Pitch as a substitute tracker. Unmapped UGens are
-a translation error naming the class: nothing is translated by guesswork. Excluded by
-design: buffers, buses, demand rate, FFT.
+Pulse, Blip, Formant, VarSaw, SyncSaw, Klang, LF*, LFGauss, Impulse, Phasor, Vibrato),
+noise, filters (LPF/HPF/RLPF/RHPF/BPF/BRF, resonators, one/two-pole/zero, lags, decays),
+delays, combs and allpasses, EnvGen, Line/XLine, dynamics, FreeVerb/FreeVerb2/GVerb, Pan2,
+Latch, Amplitude, MoogFF, Klank, PitchShift, LocalIn/LocalOut (feedback); Pitch as a
+substitute tracker. Unmapped UGens are a translation error naming the class: nothing is
+translated by guesswork. Excluded by design: buffers, buses, demand rate, FFT.
 
 Known limitation: where scsynth reads an input in the constructor (an initial phase or
 duty, the start of a ramp), the port uses the input's first-block value. The two differ

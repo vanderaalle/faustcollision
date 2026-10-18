@@ -237,11 +237,21 @@ def translate(sdef: SynthDef, meta: dict, table=None) -> Translation:
         for iname in constant:
             if not isinstance(args[iname], Const):
                 raise TranslationError(f"{u.cls}: input '{iname}' must be a constant (scsynth reads it once)")
+        for iname in e.get("ar_inputs", []):  # read per sample at ar, whatever its rate
+            v = args[iname]
+            if u.rate == "ar" and not (isinstance(v, Ref) and ugens[v.ugen].rate == "ar"):
+                raise TranslationError(f"{u.cls}.ar: input '{iname}' must be audio rate (scsynth reads "
+                                       f"a constant or control input past its one value)")
         for iname in e.get("kr_inputs", []):
             v = args[iname]
             if isinstance(v, Ref) and ugens[v.ugen].rate == "ar":
                 raise TranslationError(f"{u.cls}: input '{iname}' must not be audio rate")
         template = rec["faust"]
+        # derive_when_constant: the exact template (with derive) when these inputs are
+        # constants, otherwise faust_var (an approximation documented in the entry)
+        exact = all(isinstance(args[k], Const) for k in e.get("derive_when_constant", []))
+        if not exact:
+            template = rec["faust_var"]
         if isinstance(template, dict):
             def rate_of(v):
                 return ugens[v.ugen].rate if isinstance(v, Ref) else "ir"
@@ -271,9 +281,9 @@ def translate(sdef: SynthDef, meta: dict, table=None) -> Translation:
         fixed = set(e.get("inputs", []))
         wires = {k: arg(k, v) for k, v in args.items() if isinstance(v, Ref) and k in fixed}
         fmt = {k: (f"w_{k}" if k in wires else arg(k, v)) for k, v in args.items()}
-        if e.get("derive"):  # constructor-time structure, computed here (translator/derive.py)
+        if e.get("derive") and exact:  # constructor-time structure (translator/derive.py)
             from . import derive
-            consts = {k: args[k].value for k in constant}
+            consts = {k: args[k].value for k in constant + e.get("derive_when_constant", [])}
             if e.get("variadic"):
                 consts["n"] = (len(u.inputs) - len(fixed)) // len(e["variadic"]["group"])
             fmt.update(getattr(derive, e["derive"])(consts))

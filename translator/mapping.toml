@@ -800,7 +800,8 @@ inputs = ["freq"]
 # freq is read per block; kernel crossfade when the harmonic count changes.
 faust = { ar = "sc.saw({freq})" }
 compare = "waveform"
-tol = 1e-3
+# bit-exact (measured) with opaque arithmetic and the exact harmonic count
+tol = 1e-6
 case = "case_Saw"
 
 [MoogFF]
@@ -1115,7 +1116,8 @@ inputs = ["freq", "width"]
 # OscUGens.cpp: difference of two Saw kernels offset by width, leaky integrator
 faust = { ar = "sc.pulse({freq}, {width})" }
 compare = "waveform"
-tol = 1e-3
+# bit-exact (measured) with opaque arithmetic and the exact harmonic count
+tol = 1e-6
 case = "case_Pulse"
 
 [Latch]
@@ -1380,7 +1382,12 @@ tier = "direct"
 inputs = ["start", "end", "dur", "doneAction"]
 require = { doneAction = 0.0 }
 self_hold = true
-faust = { ar = "sc.line({start}, {end}, {dur})", kr = "sc.line_kr({start}, {end}, {dur})" }
+# Constant start/end/dur: exact (double level on float pairs, nova's SSE lanes at ar).
+# Otherwise (controls, read once): closed form in float, measured 1.6e-7.
+derive_when_constant = ["start", "end", "dur"]
+derive = "line"
+faust = { ar = "sc.line_x({n_ar}, {lh_ar}, {ll_ar}, {sh_ar}, {sl_ar}, {bh_ar}, {bl_ar}, {endf})", kr = "sc.line_x_kr({n_kr}, {lh_kr}, {ll_kr}, {sh_kr}, {sl_kr}, {endf})" }
+faust_var = { ar = "sc.line({start}, {end}, {dur})", kr = "sc.line_kr({start}, {end}, {dur})" }
 compare = "waveform"
 tol = 1e-5
 case = "case_Line"
@@ -1563,3 +1570,72 @@ self_hold = true
 compare = "waveform"
 tol = 1e-6
 case = "case_SyncSaw"
+
+[Blip]
+tier = "direct"
+inputs = ["freq", "numharm"]
+# Saw's kernel without the integrator (sc.blit_*); freq and numharm read per block
+faust = { ar = "sc.blip({freq}, {numharm})" }
+compare = "waveform"
+tol = 1e-6
+case = "case_Blip"
+
+[Formant]
+tier = "direct"
+inputs = ["fundfreq", "formfreq", "bwfreq"]
+# int32 phases; the restart product overflows like scsynth's (sc-findings 20); per block.
+# Measured: bit-exact.
+faust = { ar = "sc.formant({fundfreq}, {formfreq}, {bwfreq})" }
+compare = "waveform"
+tol = 1e-6
+case = "case_Formant"
+
+[Klang]
+tier = "direct"
+inputs = ["freqscale", "freqoffset"]
+# read once in the constructor: the states and coefficients come from translator/derive.py
+# (sinf/cosf of float arguments). Measured: bit-exact.
+variadic = { group = ["freq", "amp", "phase"], constant = true }
+constant_inputs = ["freqscale", "freqoffset"]
+derive = "klang"
+faust = { ar = "sc.klang({n}, ({y1s}), ({y2s}), ({b1s}))" }
+compare = "waveform"
+tol = 1e-6
+case = "case_Klang"
+
+[LFGauss]
+tier = "direct"
+inputs = ["duration", "width", "iphase", "loop", "doneAction"]
+require = { doneAction = 0.0 }
+# double phase on float pairs; exp of a double argument within an ulp (expf(hi) (1 + lo)),
+# measured 2e-8 (ar). Output below 1e-30 flushed to 0 (scsynth's tail goes denormal).
+faust = { ar = "sc.lfgauss_k({duration}, {width}, {iphase}, {loop})", "ar<duration:ar" = "sc.lfgauss_a({duration}, {width}, {iphase}, {loop})", kr = "sc.lfgauss_kr({duration}, {width}, {iphase}, {loop})" }
+self_hold = true
+compare = "waveform"
+tol = 1e-6
+case = "case_LFGauss"
+
+[Phasor]
+tier = "direct"
+inputs = ["trig", "rate", "start", "end", "resetPos"]
+# double level on float pairs; next_kk (kr trig) wraps before output, next_ak/_aa after.
+# Measured: bit-exact except a rare 1-ulp flip near 0 after a wrap (pair precision:
+# 1 sample in 1570 resets on bass_di).
+faust = { ar = "sc.phasor_kk({trig}, {rate}, {start}, {end}, {resetPos})", "ar<trig:ar" = "sc.phasor_a({trig}, {rate}, {start}, {end}, {resetPos}, 1)", kr = "sc.phasor_a({trig}, {rate}, {start}, {end}, {resetPos}, sc.krclk)" }
+self_hold = true
+compare = "waveform"
+tol = 1e-6
+case = "case_Phasor"
+
+[Vibrato]
+tier = "direct"
+inputs = ["freq", "rate", "depth", "delay", "onset", "rateVariation", "depthVariation", "iphase", "trig"]
+# the variations draw scsynth's random numbers: not ported. freq is read per sample at ar;
+# a constant or kr input makes scsynth read past it (sc-findings 21): rejected
+require = { rateVariation = 0.0, depthVariation = 0.0 }
+ar_inputs = ["freq"]
+faust = { ar = "sc.vibrato({freq}, {rate}, {depth}, {delay}, {onset}, {iphase}, {trig})", kr = "sc.vibrato_kr({freq}, {rate}, {depth}, {delay}, {onset}, {iphase}, {trig})" }
+self_hold = true
+compare = "waveform"
+tol = 1e-6
+case = "case_Vibrato"

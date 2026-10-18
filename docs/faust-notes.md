@@ -79,3 +79,12 @@ scsynth multiplies by the float `c / SR` (two roundings). Use the opaque
 
 **In a function call, `f(a, x : _, !)` passes three arguments** (`a`, `x : _`, `!`): the
 comma splits first. Parenthesise: `f(a, (x : _, !))`.
+
+**The normaliser distributes and folds.** `(r - 1) * sc` becomes `r * sc - sc`, and
+`1 / (0.5 / N)` becomes `2 * N`: algebraically equal, different roundings. Where scsynth's
+float order matters, hide operands behind `fmul`/`fadd`/`fsub` (opaque `fmaf`). This made
+Saw, Pulse and Blip bit-exact (they had been at 1e-3).
+
+**Float division may round a quotient up to an integer** (`24000 / 166.66667f` = 144 in
+float, 143.99999 in double): for `(int)(a / b)` computed in double, correct the float
+quotient with the exact remainder `fmaf(-q, b, a)` (`sc.bl_N`).
