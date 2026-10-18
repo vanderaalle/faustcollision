@@ -1,0 +1,75 @@
+//------------------------------------------------------------------------------
+// sc.lib: hand-written Faust ports of SuperCollider UGens.
+// Referenced from translator/mapping.toml; generated code imports it as `sc`.
+//------------------------------------------------------------------------------
+declare name "sc";
+import("stdfaust.lib");
+
+// scsynth's default block size; control-rate behaviour is defined in terms of it.
+blocksize = 64;
+
+// Control-rate semantics. A kr UGen fed by audio produces one value per block:
+// krhold samples it at the block start. An audio-rate consumer that interpolates
+// its kr inputs (BinaryOpUGen) ramps from the previous block's value to the
+// current one across the block: kr2ar. scsynth computes the kr value from the
+// whole block before the consumer runs; a causal port cannot, so krhold takes
+// the value at the end of the previous block: kr paths run exactly one block late.
+krhold(x) = ba.sAndH(ba.time % blocksize == 0, x@1);
+kr2ar(x) = p + (x - p) * (ba.time % blocksize) / blocksize
+with { p = select2(ba.time < blocksize, x@blocksize, x); };  // first block: no ramp, as in scsynth
+
+// BinaryOpUGen 'pow': sign-preserving.
+spow(a, b) = select2(a < 0, 1, -1) * pow(abs(a), b);
+
+// Amplitude: peak follower with -20 dB attack and release times (SC uses log(0.1)).
+amplitude(att, rel, x) = abs(x) : (step ~ _)
+with {
+    coef(t) = select2(t == 0, exp(log(0.1) / (t * ma.SR)), 0);
+    step(prev, v) = select2(v < prev, v + (prev - v) * coef(att), v + (prev - v) * coef(rel));
+};
+
+// Amplitude.kr: SC computes coefficients at control rate but iterates over the
+// audio block, so the effective times are divided by the block size.
+// (The per-block hold is added by the code generator, as for every kr UGen.)
+amplitude_kr(att, rel, x) = amplitude(att / blocksize, rel / blocksize, x);
+
+// MoogFF: port of server/plugins/MoogFF.cpp (Fontana 2007). Four TDF one-pole
+// sections b0 (1 + z^-1) / (1 + a1 z^-1) with the delay-free feedback loop
+// solved per sample. `reset` is not supported (mapping requires it to be 0).
+moogff(freq, gain, x) = (step ~ (_, _, _, _)) : !, !, !, !, _
+with {
+    k = max(0, min(4, gain));
+    wcD = max(0, 2 * tan(ma.PI * freq / ma.SR) * ma.SR);
+    TwcD = wcD / ma.SR;
+    b0 = TwcD / (TwcD + 2);
+    a1 = (TwcD - 2) / (TwcD + 2);
+    b4 = b0 * b0 * b0 * b0;
+    step(s1, s2, s3, s4) = s1n, s2n, s3n, s4n, y
+    with {
+        o = s4 + b0 * (s3 + b0 * (s2 + b0 * s1));
+        y = (b4 * x + o) / (1 + b4 * k);
+        u = x - k * y;
+        f1 = b0 * u + s1;
+        s1n = b0 * u - a1 * f1;
+        f2 = b0 * f1 + s2;
+        s2n = b0 * f1 - a1 * f2;
+        f3 = b0 * f2 + s3;
+        s3n = b0 * f2 - a1 * f3;
+        s4n = b0 * f3 - a1 * y;
+    };
+};
+
+// Pitch: NOT a port. SC's Pitch is autocorrelation-based; this is Faust's
+// zero-crossing tracker with SC's interface: clamped to [minFreq, maxFreq],
+// voiced when the input envelope exceeds ampThreshold, last value held when
+// unvoiced, initFreq until the first voiced sample. Outputs freq, hasFreq.
+pitch(initFreq, minFreq, maxFreq, ampThreshold, x) = freq, hasFreq
+with {
+    // tau 0.05 s and 30 ms smoothing: within 50 cents of SC on the bass_di notes,
+    // ~140 ms to settle (tests/cases/case_Pitch.scd, report/fidelity.md).
+    raw = an.pitchTracker(4, 0.05, x) : si.smooth(ba.tau2pole(0.03)) : max(minFreq) : min(maxFreq);
+    hasFreq = float(an.amp_follower_ar(0.001, 0.05, x) > ampThreshold);
+    held = ba.sAndH(hasFreq > 0, raw);
+    seen = hasFreq : (max ~ _);
+    freq = select2(seen > 0, initFreq, held);
+};

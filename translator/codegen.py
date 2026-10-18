@@ -1,0 +1,241 @@
+"""SynthDef → Faust code generator, driven by mapping.toml.
+
+One named Faust signal per live UGen output inside a `with` block. SoundIn
+becomes a `process` input, Out the outputs, spec'd controls `hslider`s.
+Anything the table does not cover is a TranslationError naming the class.
+"""
+import math
+import re
+import tomllib
+from dataclasses import dataclass
+from pathlib import Path
+
+from .scsyndef import Const, Ref, SynthDef
+
+HERE = Path(__file__).parent
+MAPPING = HERE / "mapping.toml"
+FAUST_LIB_DIR = HERE / "faust"
+COMPARE_ORDER = ["waveform", "envelope", "spectrum", "statistics"]
+
+
+class TranslationError(Exception):
+    pass
+
+
+@dataclass
+class Entry:
+    """One mapping-table entry as used by a graph (an operator counts as its own entry)."""
+    key: str  # "MoogFF", "BinaryOpUGen.pow"
+    tier: str
+    compare: str
+    tol: float
+    case: str
+
+
+@dataclass
+class Translation:
+    name: str
+    code: str
+    inputs: int
+    outputs: int
+    controls: dict  # name -> spec dict
+    entries: list  # of Entry, deduplicated, in first-use order
+
+    @property
+    def compare(self):
+        return max((e.compare for e in self.entries), key=COMPARE_ORDER.index)
+
+    @property
+    def tol(self):
+        return max(e.tol for e in self.entries if e.compare == self.compare)
+
+
+def load_table(path=MAPPING):
+    with open(path, "rb") as f:
+        table = tomllib.load(f)
+    for cls, e in table.items():
+        kind = e.get("kind", "ugen")
+        records = e["operators"].values() if kind == "operator" else [e]
+        for rec in records:
+            for k in ("compare", "tol", "case"):
+                if k not in rec:
+                    raise ValueError(f"mapping entry {cls}: missing '{k}'")
+            if rec["compare"] not in COMPARE_ORDER:
+                raise ValueError(f"mapping entry {cls}: unknown compare '{rec['compare']}'")
+    return table
+
+
+def _literal(v):
+    if not math.isfinite(v):
+        raise TranslationError(f"non-finite constant {v}")
+    s = repr(float(v))
+    return f"({s})" if v < 0 else s
+
+
+def _ident(name):
+    if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", name):
+        raise TranslationError(f"control name '{name}' is not a valid Faust identifier")
+    return name
+
+
+def translate(sdef: SynthDef, meta: dict, table=None) -> Translation:
+    table = table or load_table()
+    ugens = sdef.ugens
+    specs = meta.get("specs", {})
+
+    def n_out_of(e):
+        return e.get("outputs", 1)
+
+    def entry_of(u):
+        e = table.get(u.cls)
+        if e is None:
+            raise TranslationError(f"unmapped UGen class {u.cls}")
+        return e
+
+    def input_names(u, e):
+        names = e.get("inputs", [])
+        if len(names) != len(u.inputs):
+            raise TranslationError(f"{u.cls}: binary has {len(u.inputs)} inputs, table lists {len(names)}")
+        return names
+
+    def soundin_channel(u):
+        # In's bus must be NumOutputBuses (+ constant), i.e. SoundIn.
+        bus = u.inputs[0]
+        if isinstance(bus, Ref):
+            src = ugens[bus.ugen]
+            if src.cls == "NumOutputBuses":
+                return 0
+            if src.cls == "BinaryOpUGen" and src.special == 0:
+                a, b = src.inputs
+                if isinstance(a, Ref) and ugens[a.ugen].cls == "NumOutputBuses" and isinstance(b, Const):
+                    return int(b.value)
+        raise TranslationError("In: only SoundIn (bus = NumOutputBuses + constant) is supported")
+
+    outs = [u for u in ugens if entry_of(u).get("kind") == "output"]
+    if len(outs) != 1:
+        raise TranslationError(f"expected exactly one Out, found {len(outs)}")
+    out = outs[0]
+    if out.cls != "Out":
+        raise TranslationError(f"unsupported output UGen {out.cls}")
+
+    # Live UGens: reachable from Out's signal inputs. In's bus (and Out's) are not followed.
+    live, stack = set(), [r.ugen for r in out.inputs[1:] if isinstance(r, Ref)]
+    while stack:
+        i = stack.pop()
+        if i in live:
+            continue
+        live.add(i)
+        u = ugens[i]
+        if entry_of(u).get("kind") != "input":
+            stack += [r.ugen for r in u.inputs if isinstance(r, Ref)]
+
+    names, lines, controls, entries, channels = {}, [], {}, {}, {}
+    control_outputs = set()
+
+    def use(key, rec, tier):
+        entries.setdefault(key, Entry(key, tier, rec["compare"], rec["tol"], rec["case"]))
+
+    def expr(inp):
+        if isinstance(inp, Const):
+            return _literal(inp.value)
+        key = (inp.ugen, inp.output)
+        if key in control_outputs:  # only controls that are actually read become hsliders
+            cname = names[key]
+            if cname not in specs:
+                raise TranslationError(f"control '{cname}' is used but has no spec in the SynthDef metadata")
+            controls[cname] = specs[cname]
+            return _ident(cname)
+        return names[key]
+
+    for u in ugens:
+        e = entry_of(u)
+        kind = e.get("kind", "ugen")
+        if u.index not in live and kind != "output":
+            continue
+        if kind == "output":
+            use(u.cls, e, e["tier"])
+            continue
+        if kind == "control":
+            use(u.cls, e, e["tier"])
+            if u.cls != "Control":
+                raise TranslationError(f"unsupported control UGen {u.cls}")
+            for k in range(len(u.output_rates)):
+                cname = sdef.param_names.get(u.special + k)
+                if cname is None:
+                    raise TranslationError(f"control output {u.special + k} has no name")
+                names[(u.index, k)] = cname
+                control_outputs.add((u.index, k))
+            continue
+        if kind == "input":
+            if u.cls != "In":
+                raise TranslationError(f"{u.cls} is only legal as the bus of SoundIn")
+            use(u.cls, e, e["tier"])
+            use("NumOutputBuses", table["NumOutputBuses"], "direct")
+            base = soundin_channel(u)
+            for k in range(len(u.output_rates)):
+                channels[base + k] = f"in{base + k}"
+                names[(u.index, k)] = f"in{base + k}"
+            continue
+
+        args = dict(zip(input_names(u, e), u.inputs))
+        if kind == "operator":
+            rec = e["operators"].get(str(u.special))
+            if rec is None:
+                raise TranslationError(f"unmapped {u.cls} special index {u.special}")
+            key = f"{u.cls}.{rec['name']}"
+        else:
+            rec, key = e, u.cls
+        for iname, want in e.get("require", {}).items():
+            got = args[iname]
+            if not (isinstance(got, Const) and math.isclose(got.value, want, rel_tol=1e-6, abs_tol=1e-9)):
+                raise TranslationError(f"{u.cls}: input '{iname}' must be the constant {want}, got {got}")
+        template = rec["faust"]
+        if isinstance(template, dict):
+            if u.rate not in template:
+                raise TranslationError(f"{u.cls}.{u.rate} is not mapped (only {', '.join(template)})")
+            template = template[u.rate]
+        use(key, rec, e["tier"])
+
+        def arg(v):
+            x = expr(v)
+            if u.rate == "ar" and e.get("kr_interpolate") and isinstance(v, Ref) and ugens[v.ugen].rate == "kr":
+                return f"sc.kr2ar({x})"
+            return x
+        body = template.format(**{k: arg(v) for k, v in args.items()})
+        if u.rate == "kr" and any(isinstance(v, Ref) and ugens[v.ugen].rate == "ar" for v in u.inputs):
+            body = f"sc.krhold({body})" if n_out_of(e) == 1 else f"({body}) : par(i, {n_out_of(e)}, sc.krhold)"
+        node = f"u{u.index}"
+        n_out = n_out_of(e)
+        if n_out != len(u.output_rates):
+            raise TranslationError(f"{u.cls}: binary has {len(u.output_rates)} outputs, table lists {n_out}")
+        lines.append(f"    {node} = {body};")
+        if n_out == 1:
+            names[(u.index, 0)] = node
+        else:
+            for k in range(n_out):
+                sel = ", ".join("_" if j == k else "!" for j in range(n_out))
+                lines.append(f"    {node}_{k} = {node} : {sel};")
+                names[(u.index, k)] = f"{node}_{k}"
+
+    if channels and sorted(channels) != list(range(len(channels))):
+        raise TranslationError(f"SoundIn channels must be contiguous from 0, got {sorted(channels)}")
+    ins = [channels[c] for c in sorted(channels)]
+    results = [expr(i) for i in out.inputs[1:]]
+
+    head = [
+        f"// Generated by translator/codegen.py from {sdef.name}.scsyndef. Do not edit.",
+        f'declare name "{sdef.name}";',
+        'import("stdfaust.lib");',
+        'sc = library("sc.lib");',
+        "",
+    ]
+    for cname, s in controls.items():
+        lo, hi, default = s["min"], s["max"], s["default"]
+        scale = {"lin": "", "linear": "", "exp": "[scale:log]", "exponential": "[scale:log]"}.get(s.get("warp", "lin"))
+        if scale is None:
+            raise TranslationError(f"control '{cname}': unsupported warp {s.get('warp')}")
+        head.append(f'{cname} = hslider("{cname}{scale}", {default!r}, {lo!r}, {hi!r}, {(hi - lo) / 10000!r});')
+    proc = f"process({', '.join(ins)})" if ins else "process"
+    body = [f"{proc} = {', '.join(results)}", "with {", *lines, "};"] if lines else [f"{proc} = {', '.join(results)};"]
+    code = "\n".join(head + [""] + body + [""])
+    return Translation(sdef.name, code, len(ins), len(results), controls, list(entries.values()))

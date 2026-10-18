@@ -1,0 +1,5 @@
+dawdreamer
+numpy
+scipy
+soundfile
+pytest

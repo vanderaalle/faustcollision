@@ -1,0 +1,141 @@
+# SC UGen → Faust mapping table. Data, not code: translator/codegen.py only interprets it.
+#
+# Per entry:
+#   tier     direct | approximate | handwritten   (memorandum, translator section)
+#   kind     ugen (default) | control | input | output | operator
+#   inputs   SC input names, in binary order; templates refer to them as {name}
+#   faust    template, or a table by rate: { ar = "...", kr = "..." }
+#   outputs  number of outputs the template yields (default 1)
+#   require  inputs the port ignores: they must be these constants, else the translation fails
+#   compare  how a graph using this entry is checked against scsynth, loosest wins:
+#            waveform < envelope < spectrum < statistics
+#   tol      threshold for that comparison: waveform = relative RMS error,
+#            others = mean absolute dB difference (see tests/compare.py)
+#   case     regression case in tests/cases/ (one per entry, or per operator)
+#   kr_interpolate  at audio rate, kr inputs are ramped across the block (sc.kr2ar);
+#            otherwise they are read once per block, as most scsynth UGens do
+#
+# Rates: every kr UGen with an audio input is held per 64-sample block (sc.krhold).
+#
+# Hand-written ports live in translator/faust/sc.lib, imported as `sc`.
+
+[Control]
+tier = "direct"
+kind = "control"
+compare = "waveform"
+tol = 1e-6
+case = "case_Control"
+
+[In]
+tier = "direct"
+kind = "input"
+compare = "waveform"
+tol = 1e-6
+case = "case_In_Out"
+
+[Out]
+tier = "direct"
+kind = "output"
+compare = "waveform"
+tol = 1e-6
+case = "case_In_Out"
+
+[NumOutputBuses]
+# Only legal as the bus of In, where SoundIn puts it. In consumes it; it is never emitted.
+tier = "direct"
+kind = "input"
+compare = "waveform"
+tol = 1e-6
+case = "case_In_Out"
+
+[BinaryOpUGen]
+tier = "direct"
+kind = "operator"
+inputs = ["a", "b"]
+# Measured: in * Amplitude.kr(in) is 0 at a block's first sample in scsynth (case_Amplitude, ch 1).
+kr_interpolate = true
+
+[BinaryOpUGen.operators.0]
+name = "+"
+faust = "({a} + {b})"
+compare = "waveform"
+tol = 1e-6
+case = "case_BinaryOp_add"
+
+[BinaryOpUGen.operators.1]
+name = "-"
+faust = "({a} - {b})"
+compare = "waveform"
+tol = 1e-6
+case = "case_BinaryOp_sub"
+
+[BinaryOpUGen.operators.2]
+name = "*"
+faust = "({a} * {b})"
+compare = "waveform"
+tol = 1e-6
+case = "case_BinaryOp_mul"
+
+[BinaryOpUGen.operators.25]
+name = "pow"
+# SC's pow is sign-preserving: a < 0 gives -(|a| ** b).
+faust = "sc.spow({a}, {b})"
+compare = "waveform"
+tol = 1e-5
+case = "case_BinaryOp_pow"
+
+[MulAdd]
+tier = "direct"
+inputs = ["in", "mul", "add"]
+faust = "({in} * {mul} + {add})"
+compare = "waveform"
+tol = 1e-6
+case = "case_MulAdd"
+
+[Saw]
+tier = "direct"
+inputs = ["freq"]
+# SC's Saw is band-limited, falling, and half the level of an ideal ±1 saw (every harmonic
+# -6.0 dB, measured). os.sawtooth is a rising ±1 DPW saw, hence the -0.5. DPW rolls off
+# near Nyquist where SC's does not, so compare spectra.
+faust = { ar = "(-0.5 * os.sawtooth({freq}))" }
+compare = "spectrum"
+tol = 3.0
+case = "case_Saw"
+
+[MoogFF]
+tier = "approximate"
+inputs = ["in", "freq", "gain", "reset"]
+require = { reset = 0.0 }
+# Line-by-line port of MoogFF.cpp (Fontana 2007 structure). A float64 run of the same
+# algorithm matches scsynth to < 1e-3. Single precision (the Daisy target) reaches ~1e-2 at
+# gain 4, the self-oscillation edge; tol is that floor ×2. Gain ≤ 2 stays under 1e-3.
+faust = { ar = "sc.moogff({freq}, {gain}, {in})" }
+compare = "waveform"
+tol = 2e-2
+case = "case_MoogFF"
+
+[Amplitude]
+tier = "approximate"
+inputs = ["in", "attackTime", "releaseTime"]
+# -20 dB time constants (measured). SC's .kr loops over the audio block with control-rate
+# coefficients, so its times are 1/blocksize of the stated ones; the port reproduces that.
+# .ar is sample-exact. .kr runs one block late (sc.krhold): with the default 10 ms times the
+# value is |in| at a block edge, so at bass frequencies 10 ms envelopes differ by ~2 dB.
+faust = { ar = "sc.amplitude({attackTime}, {releaseTime}, {in})", kr = "sc.amplitude_kr({attackTime}, {releaseTime}, {in})" }
+compare = "envelope"
+tol = 2.5
+case = "case_Amplitude"
+
+[Pitch]
+tier = "handwritten"
+inputs = ["in", "initFreq", "minFreq", "maxFreq", "execFreq", "maxBinsPerOctave", "median",
+          "ampThreshold", "peakThreshold", "downSample", "clar"]
+require = { execFreq = 100.0, maxBinsPerOctave = 16.0, median = 1.0, peakThreshold = 0.5, downSample = 1.0, clar = 0.0 }
+outputs = 2
+# Not a port: SC's Pitch is autocorrelation-based, this is Faust's zero-crossing tracker
+# (an.pitchTracker) with SC's clamping, voicing threshold and hold. Hardware fallback: YIN in the shell.
+faust = { kr = "sc.pitch({initFreq}, {minFreq}, {maxFreq}, {ampThreshold}, {in})" }
+compare = "statistics"
+tol = 6.0
+case = "case_Pitch"
