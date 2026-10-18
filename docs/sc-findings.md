@@ -28,6 +28,7 @@ not yet confirmed by a render. Kind: **bug?** (looks unintended), **undocumented
 | 14 | scsynth NRT | occasional abort (exit 134) on a render that succeeds when rerun | bug? | measured, not reproduced |
 | 15 | `APF` | not an allpass: +28 dB at its frequency, +38 dB at 100 Hz (indexing errors in the unrolled loop) | bug? | measured, source |
 | 17 | `AllpassC` (start-up) | outputs 0 for the first delay length; AllpassN/L output -fb * in there | bug? | measured, source |
+| 18 | `EnvGen` (audio-rate gate) | forced release (gate <= -1) during a segment corrupts the new segment and shortens it | bug? | measured, source |
 | 16 | `Ramp` | reads the input one sample past the segment; past the buffer end at a block boundary | bug? | source |
 
 ## 1. `Amplitude.kr` with an audio-rate input releases 64× too fast
@@ -236,3 +237,23 @@ within the first 0.2 s (error 1.2e-2 against a zero-buffer allpass; exact once r
 - Source: `server/plugins/DelayUGens.cpp`, `AllpassC_helper<true>` (`if (irdphase0 < 0) { ...; ZXP(out) = 0.f; }`)
   vs `AllpassL_helper<true>` (`ZXP(out) = -feedbk * zin;`).
 - Translation: reproduced (`sc.allpassx`).
+
+## 18. `EnvGen` with an audio-rate gate: forced release corrupts the release segment
+
+With an audio-rate gate, `EnvGen_next_aa` checks the gate inside the running segment's
+sample loop (`EnvGen_perform`, which keeps that shape's state in local variables). A gate
+of -1 or below forces the last stage: `check_gate` calls `EnvGen_initSegment` right there,
+setting the new segment's `m_b1`, `m_y1`, `m_y2`, `m_counter`. The loop then breaks and
+writes its stale locals back (`unit->m_b1 = b1` for a curve segment, `m_y1`/`m_y2` for
+sine/welch/squared/cubed), overwriting the new segment's state. Also, `check_gate` adds the
+in-loop offset to the counter but `EnvGen_initSegment` recomputes the counter without it,
+and the caller then subtracts the offset: the release is shortened by the samples already
+run in that loop.
+
+Measured: `EnvGen.ar(Env.perc(0.01, 0.3), SoundIn.ar(0))` on white noise; the gate dips to
+-1.012, the envelope (near 1.0) jumps to -0.0187 instead of starting a 12 ms curve to 0.
+The port reproduces both effects for curve -> curve (scsynth's `Env.perc`/`adsr` shapes)
+within 2.7e-7; other shape pairs are not reproduced.
+
+- Source: `server/plugins/LFUGens.cpp` `check_gate` (forced branch), `EnvGen_perform`
+  (write-back after the loop), `EnvGen_next_aa`.

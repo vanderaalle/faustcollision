@@ -21,10 +21,10 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 	SynthDef(\case_LFTri_kr, { |freq = 3| Out.ar(0, K2A.ar(LFTri.kr(freq))) }, metadata: (specs: (freq: spec.(0.1, 300, 3)), signals: [\impulse])),
 	SynthDef(\case_LFPar, { |freq = 440| Out.ar(0, [LFPar.ar(freq, 1), LFPar.ar(in.value * 300 + 200)] * 0.5) },
 		metadata: (specs: (freq: spec.(0.5, 5000, 440)))),
-	SynthDef(\case_LFPar_kr, { |freq = 3| Out.ar(0, K2A.ar(LFPar.kr(freq))) }, metadata: (specs: (freq: spec.(0.1, 300, 3)), signals: [\impulse])),
+	SynthDef(\case_LFPar_kr, { |freq = 3| Out.ar(0, K2A.ar(LFPar.kr(freq))) }, metadata: (specs: (freq: spec.(0.1, 500, 3)), signals: [\impulse])),
 	SynthDef(\case_LFCub, { |freq = 440| Out.ar(0, [LFCub.ar(freq, 0.2), LFCub.ar(in.value * 300 + 200)] * 0.5) },
 		metadata: (specs: (freq: spec.(0.5, 5000, 440)))),
-	SynthDef(\case_LFCub_kr, { |freq = 3| Out.ar(0, K2A.ar(LFCub.kr(freq))) }, metadata: (specs: (freq: spec.(0.1, 300, 3)), signals: [\impulse])),
+	SynthDef(\case_LFCub_kr, { |freq = 3| Out.ar(0, K2A.ar(LFCub.kr(freq))) }, metadata: (specs: (freq: spec.(0.1, 500, 3)), signals: [\impulse])),
 	SynthDef(\case_LFPulse, { |freq = 440, width = 0.3| Out.ar(0, [LFPulse.ar(freq, 0.1, width), LFPulse.ar(in.value * 300 + 200, 0, width)] * 0.5) },
 		metadata: (specs: (freq: spec.(0.5, 5000, 440), width: spec.(0, 1, 0.3, \lin)))),
 	SynthDef(\case_LFPulse_kr, { |freq = 3| Out.ar(0, K2A.ar(LFPulse.kr(freq, 0, 0.5))) }, metadata: (specs: (freq: spec.(0.1, 300, 3)), signals: [\impulse])),
@@ -99,7 +99,8 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 			EnvGen.ar(Env([0, 1, 0.5, 0.7, 0.2, 0], [0.03, 0.1, 0.1, 0.05, 0.2], [\cub, \step, \hold, 3, -4]), trig),
 			EnvGen.ar(Env.perc(0.005, 0.2), in.value > 0.1),
 			EnvGen.ar(Env([0, 1, 0.2, 0], [0.05, 0.1, 0.2], \lin, 2, 0), LFPulse.kr(0.7, 0, 0.6), 0.8, 0.1, 1.5),
-			K2A.ar(EnvGen.kr(Env.perc(0.01, 0.3, 1, -2), trig))
+			K2A.ar(EnvGen.kr(Env.perc(0.01, 0.3, 1, -2), trig)),
+			EnvGen.ar(Env.perc(0.01, 0.3), in.value * 1.5)   // audio gate dipping below -1: forced release
 		] * 0.5)
 	}),
 	// Dynamics

@@ -357,16 +357,20 @@ lftri_kr(freq, iphase) = lfosc_kr(lftriB(freq * float(4.0 * blocksize / ma.SR)),
 
 // LFPar: pre-wrap at 3 by -4; 1 - z^2 below 1, (z - 2)^2 - 1 above; then step.
 sq(z) = z * z;
-lfparB(inc) = cwrap(\(h, l).(dge(h, l, 3.0)), 4.0)
-    : _, _ <: \(h, l).(select2(dlt(h, l, 1.0), sq(fadd(fsub(h, 2.0), l)) - 1.0, 1.0 - sq(dval(h, l)))), daddB(inc);
+// (the branch is decided before the wrap: after wrapping, 1 - z^2 even if z >= 1, which
+// happens when the increment exceeds 2, e.g. LFPar.kr at 440 Hz)
+lfparB(inc) = _, _ <: (\(h, l).(dge(h, l, 3.0))), (cwrap(\(h, l).(dge(h, l, 3.0)), 4.0))
+    : \(w, h, l).(select2(dlt(h, l, 1.0) | w, sq(fadd(fsub(h, 2.0), l)) - 1.0, 1.0 - sq(dval(h, l))), h, l)
+    : _, daddB(inc);
 lfpar(freq, iphase) = lfosc(lfparB(freq * float(4.0 / ma.SR)), iphase);
 lfpar_kr(freq, iphase) = lfosc_kr(lfparB(freq * float(4.0 * blocksize / ma.SR)), iphase);
 
 // LFCub: phase starts at iphase + 0.5; pre-wrap at 2 by -2; z = phase or 2 - phase;
 // z * z * (6 - 4z) - 1; then step.
 cub(z) = z * z * (6.0 - 4.0 * z) - 1.0;
-lfcubB(inc) = cwrap(\(h, l).(dge(h, l, 2.0)), 2.0)
-    : _, _ <: \(h, l).(cub(select2(dlt(h, l, 1.0), fadd(fsub(2.0, h), 0.0 - l), dval(h, l)))), daddB(inc);
+lfcubB(inc) = _, _ <: (\(h, l).(dge(h, l, 2.0))), (cwrap(\(h, l).(dge(h, l, 2.0)), 2.0))
+    : \(w, h, l).(cub(select2(dlt(h, l, 1.0) | w, fadd(fsub(2.0, h), 0.0 - l), dval(h, l))), h, l)
+    : _, daddB(inc);
 lfcub(freq, iphase) = lfosc(lfcubB(freq * float(2.0 / ma.SR)), iphase + 0.5);
 lfcub_kr(freq, iphase) = lfosc_kr(lfcubB(freq * float(2.0 * blocksize / ma.SR)), iphase + 0.5);
 
@@ -936,7 +940,11 @@ with { p = f * s; e = fmaf(f, s, 0.0 - p); q = p + 0.5; t = floor(q); };
 // sine resonator's 2 cos(pi / count) is 2 - 4e-7 for a 0.1 s segment), so each
 // shape is evaluated in closed form from k, the sample index within the segment.
 //------------------------------------------------------------------------------
-envgen(n, gate, ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves, sr, gchk, clk) =
+// aa = 1 for an audio-rate gate: a forced release (gate <= -1) is then initialised inside the
+// running segment's loop, and scsynth's loop writes its stale locals back over the new
+// segment (curve shape: b1) and drops the in-loop offset from the counter
+// (docs/sc-findings.md #18). Reproduced for curve -> curve; other shape pairs are not.
+envgen(n, gate, ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves, sr, gchk, clk, aa) =
     machine(12, step, init, 1, clk)
 with {
     INF = 1e9;
@@ -1006,12 +1014,20 @@ with {
         ns = initseg(nst, -1.0, lv, sh, el);
         nseg = need & (1 - done) & ((1 - sus) | lp);
         hold = need & sus & (1 - lp);
-        fin = need & done;
+        // a forced release whose counter is already <= 0 finishes in the same sample
+        fdone = forced & ((fsx : ba.selector(0, 8)) <= 0);
+        fin = (need & done) | fdone;
         newseg = forced | nseg;
-        pick(i, d) = select2(forced, select2(nseg, d, ns : ba.selector(i, 8)), fs : ba.selector(i, 8));
+        pick(i, d) = select2(forced, select2(nseg, d, ns : ba.selector(i, 8)), fsx : ba.selector(i, 8));
+        // forced release from an audio gate: counter loses the samples already run in this
+        // loop (since the block or segment start); curve -> curve keeps the old b1 multiplier
+        inloop = min(float(ba.time % blocksize), k);
+        fstale = aa & (sh == 5) & ((fs : ba.selector(2, 8)) == 5);
+        fsx = fs : \(c, l2, s3, pp, a, b, h, e).(c - select2(aa, 0.0, inloop), l2, s3, pp, a,
+                                                  select2(fstale, b, b1 * exp(p * k)), h, e);
         st3 = select2(nseg, st1, nst);
         cn3 = select2(fin | hold, pick(0, cn1), INF);
-        lv3 = select2(fin | hold, pick(1, lv), el);
+        lv3 = select2(fin | hold, pick(1, lv), el3);
         sh3 = select2(fin, select2(hold, pick(2, sh), 9999), 0);
         p3 = pick(3, p); a23 = pick(4, a2); b13 = pick(5, b1); ph3 = pick(6, ph); el3 = pick(7, el);
         k3 = select2(newseg, k, 0.0);
@@ -1020,12 +1036,12 @@ with {
     };
 };
 envgen_ak(n, gate, ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves) =
-    envgen(n, a2k(gate), ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves, ma.SR, krclk, 1);
+    envgen(n, a2k(gate), ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves, ma.SR, krclk, 1, 0);
 envgen_aa(n, gate, ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves) =
-    envgen(n, gate, ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves, ma.SR, 1, 1);
+    envgen(n, gate, ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves, ma.SR, 1, 1, 1);
 // (the machine's output between steps already shows the next state: hold it per block)
 envgen_kr(n, gate, ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves) =
-    envgen(n, a2k(gate), ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves, ma.SR / blocksize, 1, krclk) : a2k;
+    envgen(n, a2k(gate), ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves, ma.SR / blocksize, 1, krclk, 0) : a2k;
 
 //------------------------------------------------------------------------------
 // Dynamics (FilterUGens.cpp).
