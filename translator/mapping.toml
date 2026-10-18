@@ -1449,3 +1449,12 @@ faust = { ar = "sc.freeverb({in}, {mix}, {room}, {damp})" }
 compare = "waveform"
 tol = 1e-5
 case = "case_FreeVerb"
+
+[FreeVerb2]
+tier = "direct"
+inputs = ["in", "in2", "mix", "room", "damp"]
+outputs = 2
+faust = { ar = "sc.freeverb2({in}, {in2}, {mix}, {room}, {damp})" }
+compare = "waveform"
+tol = 1e-5
+case = "case_FreeVerb2"

@@ -1089,21 +1089,26 @@ fvcomb(L, x, room, d1, d2) = (\(fc).(w(fc) @ L)) ~ _
 with { w(fc) = (0.015 * x) + room * ((\(flp).((d1 * fc) + (d2 * flp))) ~ _); };
 // allpass of length L on x: T[n] = w[n - L], w[n] = 0.5 T[n-1] + x[n] (x given as a sum
 // to add in scsynth's order), out = T - x
-freeverb(x, mix, room, damp) = (1.0 - m) * x + m * r0
+// the wet signal: comb input xc, combs of lengths k1..k8, allpasses a1 (fed by the combs)
+// down to a4 (the output)
+fvwet(xc, r5, d1, d2, k1, k2, k3, k4, k5, k6, k7, k8, a1, a2, a3, a4) = ap(a4, ap(a3, ap(a2, r3)))
 with {
-    m = fvclip(mix);
-    r5 = 0.7 + 0.28 * fvclip(room);
-    d2 = 0.4 * fvclip(damp);
-    d1 = 1.0 - d2;
-    c4 = fvcomb(1617, x, r5, d1, d2); c6 = fvcomb(1557, x, r5, d1, d2);
-    c8 = fvcomb(1491, x, r5, d1, d2); c10 = fvcomb(1422, x, r5, d1, d2);
-    c12 = fvcomb(1277, x, r5, d1, d2); c14 = fvcomb(1116, x, r5, d1, d2);
-    c16 = fvcomb(1188, x, r5, d1, d2); c18 = fvcomb(1356, x, r5, d1, d2);
+    c4 = fvcomb(k1, xc, r5, d1, d2); c6 = fvcomb(k2, xc, r5, d1, d2);
+    c8 = fvcomb(k3, xc, r5, d1, d2); c10 = fvcomb(k4, xc, r5, d1, d2);
+    c12 = fvcomb(k5, xc, r5, d1, d2); c14 = fvcomb(k6, xc, r5, d1, d2);
+    c16 = fvcomb(k7, xc, r5, d1, d2); c18 = fvcomb(k8, xc, r5, d1, d2);
     f8 = fadd(c16, c18);
-    // allpass 556: written ((0.5 T' + c4) + (c6 + c8)) + ((c10 + c12) + (c14 + f8)),
+    // first allpass: written ((0.5 T' + c4) + (c6 + c8)) + ((c10 + c12) + (c14 + f8)),
     // output T - (((c4 + c6) + (c8 + c10)) + ((c12 + c14) + f8))
-    t3 = (\(fT).(fadd(fadd(fadd(0.5 * fT, c4), fadd(c6, c8)), fadd(fadd(c10, c12), fadd(c14, f8))) @ 556)) ~ _;
+    t3 = (\(fT).(fadd(fadd(fadd(0.5 * fT, c4), fadd(c6, c8)), fadd(fadd(c10, c12), fadd(c14, f8))) @ a1)) ~ _;
     r3 = fsub(t3, fadd(fadd(fadd(c4, c6), fadd(c8, c10)), fadd(fadd(c12, c14), f8)));
     ap(L, xin) = fsub(t, xin) with { t = (\(fT).(fadd(0.5 * fT, xin) @ L)) ~ _; };
-    r0 = ap(225, ap(341, ap(441, r3)));
 };
+freeverb(x, mix, room, damp) = (1.0 - m) * x + m * fvwet(x, r5, d1, d2, 1617, 1557, 1491, 1422, 1277, 1116, 1188, 1356, 556, 441, 341, 225)
+with { m = fvclip(mix); r5 = 0.7 + 0.28 * fvclip(room); d2 = 0.4 * fvclip(damp); d1 = 1.0 - d2; };
+// FreeVerb2: both channels' combs fed by 0.015 (left + right); the right channel's lengths
+// are the left's plus 23; mix, room and damp are not clipped (unlike FreeVerb)
+freeverb2(l, r, mix, room, damp) =
+    (1.0 - m) * l + m * fvwet(l + r, r5, d1, d2, 1617, 1557, 1491, 1422, 1277, 1116, 1188, 1356, 556, 441, 341, 225),
+    (1.0 - m) * r + m * fvwet(l + r, r5, d1, d2, 1640, 1580, 1514, 1445, 1300, 1139, 1211, 1379, 579, 464, 364, 248)
+with { m = a2k(mix); r5 = 0.7 + 0.28 * a2k(room); d2 = 0.4 * a2k(damp); d1 = 1.0 - d2; };
