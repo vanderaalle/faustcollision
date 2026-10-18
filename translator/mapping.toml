@@ -5,7 +5,8 @@
 #   kind     ugen (default) | control | input | output | operator
 #   inputs   SC input names, in binary order; templates refer to them as {name}
 #   faust    template, or a table by rate: { ar = "...", kr = "..." }; a key "kr<kr" (unit rate <
-#            rate of the first input) takes precedence when scsynth picks a different calc function
+#            rate of the first input) or "ar<coef:ar" (rate of a named input) takes precedence
+#            when scsynth picks a different calc function
 #   outputs  number of outputs the template yields (default 1)
 #   require  inputs the port ignores: they must be these constants, else the translation fails
 #   constant_inputs  inputs scsynth reads once at construction: must be constants
@@ -1024,3 +1025,50 @@ faust = { ar = "sc.lfnoise2_clk({seed}, {freq}, ma.SR, 1)", kr = "sc.lfnoise2_cl
 compare = "statistics"
 tol = 1.5
 case = "case_LFNoise2"
+
+# Filters (FilterUGens.cpp): double state and coefficients in scsynth, float here.
+# Mapped at audio rate; .kr is not ported yet (translation error).
+
+[LPF]
+tier = "direct"
+inputs = ["in", "freq"]
+# Butterworth biquad; freq read per block, coefficients moved in 21 steps of 3 samples.
+# Float state at 30 Hz: 1.5e-4 measured (a float64 run of the same recursion is exact).
+faust = { ar = "sc.lpf({in}, {freq})" }
+compare = "waveform"
+tol = 5e-4
+case = "case_LPF"
+
+[HPF]
+tier = "direct"
+inputs = ["in", "freq"]
+# float state at 30 Hz: up to 8e-5 measured
+faust = { ar = "sc.hpf({in}, {freq})" }
+compare = "waveform"
+tol = 2e-4
+case = "case_HPF"
+
+[OnePole]
+tier = "direct"
+inputs = ["in", "coef"]
+# kr/constant coef: a different formula for coef < 0 (OnePole_next_k); audio coef: one formula
+faust = { ar = "sc.onepole({in}, {coef})", "ar<coef:ar" = "sc.onepole_ar({in}, {coef})" }
+compare = "waveform"
+tol = 1e-4
+case = "case_OnePole"
+
+[OneZero]
+tier = "direct"
+inputs = ["in", "coef"]
+faust = { ar = "sc.onezero({in}, {coef})" }
+compare = "waveform"
+tol = 1e-5
+case = "case_OneZero"
+
+[LeakDC]
+tier = "direct"
+inputs = ["in", "coef"]
+faust = { ar = "sc.leakdc({in}, {coef})" }
+compare = "waveform"
+tol = 1e-4
+case = "case_LeakDC"

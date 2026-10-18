@@ -23,6 +23,7 @@ not yet confirmed by a render. Kind: **bug?** (looks unintended), **undocumented
 | 11 | `scaleneg` (sclang, demand rate) | returns −a·b for a < 0 instead of a·b | bug? | measured |
 | 12 | `UnaryOpUGen` `reciprocal` | 1/0 is NaN, not inf, at both rates | undocumented | measured, source |
 | 13 | `K2A` (first block) | ramps from the kr source's constructor output | convention | measured |
+| 14 | scsynth NRT | occasional abort (exit 134) on a render that succeeds when rerun | bug? | measured, not reproduced |
 
 ## 1. `Amplitude.kr` with an audio-rate input releases 64× too fast
 
@@ -162,3 +163,13 @@ constructor) give a ramp across the first block: `K2A.ar(LFSaw.kr(3, -0.5))` sta
 −0.5 and reaches the block-0 value at sample 63. The port starts at the block-0 value.
 
 - Test policy: comparisons skip the first 64 samples (`tests/compare.py`, `SKIP`).
+
+## 14. scsynth NRT occasionally aborts
+
+Twice in a few thousand renders, `scsynth -N` exited with status 134 (SIGABRT) on a
+control-rate operator case (`case_BinaryOp_amclip_kr` on `impulse`, and one in the
+first operator batch); rerunning the identical command succeeded. Not reproduced on
+demand; possibly timing- or memory-dependent.
+
+- Test policy: `translator/batch.scd` retries a failed render once and logs it.
+- To do: catch a core dump (`ulimit -c`) next time it happens.

@@ -198,10 +198,16 @@ def translate(sdef: SynthDef, meta: dict, table=None) -> Translation:
                 raise TranslationError(f"{u.cls}: input '{iname}' must not be audio rate")
         template = rec["faust"]
         if isinstance(template, dict):
+            def rate_of(v):
+                return ugens[v.ugen].rate if isinstance(v, Ref) else "ir"
             first = u.inputs[0] if u.inputs else None
-            in_rate = ugens[first.ugen].rate if isinstance(first, Ref) else "ir"
-            if f"{u.rate}<{in_rate}" in template:
-                template = {u.rate: template[f"{u.rate}<{in_rate}"]}
+            # "kr<kr": by the first input's rate; "ar<coef:ar": by a named input's rate
+            named = [k for k in template if k.startswith(f"{u.rate}<") and ":" in k
+                     and rate_of(args[k.split("<")[1].split(":")[0]]) == k.split(":")[1]]
+            if named:
+                template = {u.rate: template[named[0]]}
+            elif first is not None and f"{u.rate}<{rate_of(first)}" in template:
+                template = {u.rate: template[f"{u.rate}<{rate_of(first)}"]}
             if u.rate not in template:
                 raise TranslationError(f"{u.cls}.{u.rate} is not mapped (only {', '.join(template)})")
             template = template[u.rate]

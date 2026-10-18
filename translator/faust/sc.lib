@@ -518,3 +518,87 @@ with {
             tot2 = tot + nr - ba.selectn(16, k, d0, d1, d2, d3, d4, d5, d6, d7, d8, d9, d10, d11, d12, d13, d14, d15);
         });
 };
+
+//------------------------------------------------------------------------------
+// Filters (server/plugins/FilterUGens.cpp). scsynth keeps state and coefficients in
+// double; these run in float (the Daisy target), so tolerances are measured floors.
+//------------------------------------------------------------------------------
+// zapgremlins: |x| outside (1e-15, 1e15), or NaN, becomes 0. Applied to the state at the
+// end of each block.
+zap(x) = select2((abs(x) > 1e-15) & (abs(x) < 1e15), 0.0, x);
+blockend = ba.time % blocksize == blocksize - 1;
+// coefficient c from the value at block start; when it changes, scsynth moves to the new
+// value in mFilterLoops (21) steps, one per 3 samples (a0 += slope after each group)
+fcoef(c) = p + (n - p) * (1.0 / 21.0) * float(int((ba.time % blocksize) / 3))
+with { n = a2k(c); p = select2(ba.time < blocksize, n@blocksize, n); };
+
+// LPF / HPF: Butterworth biquad, y0 = in + b1 y1 + b2 y2, out = a0 (y0 + k y1 + y2)
+// with k = 2 (LPF) or -2 (HPF). The constructor processes the first input sample.
+sqrt2f = sqrt(2.0);
+// Coefficients in t = tan(pfreq) (LPF: t = 1/C). At low cutoffs the filter gain hangs on
+// 1 - b1 - b2 ~ 1e-5, so b1 and b2 must be the correctly rounded floats of scsynth's
+// double values: written as 2 - e1 and -1 + e2 with the small e computed directly, each
+// is rounded once (the textbook form in float is ~20x off at 30 Hz).
+bqd(t) = 1.0 + sqrt2f * t + t * t;
+bqb1(t) = 2.0 - 2.0 * (sqrt2f * t + 2.0 * t * t) / bqd(t);
+bqb2(t) = -1.0 + 2.0 * sqrt2f * t / bqd(t);
+lpfc(f, rps) = t * t / bqd(t), bqb1(t), bqb2(t) with { t = tan(f * rps * 0.5); };
+hpfc(f, rps) = 1.0 / bqd(t), bqb1(t), bqb2(t) with { t = tan(f * rps * 0.5); };
+scbiquad(k, a0, b1, b2, x) = (loop ~ (_, _)) : !, !, _
+with {
+    first = ba.time == 0;
+    loop(fy1, fy2) = zz(y0), zz(y1), a0 * (y0 + k * y1 + y2)
+    with {
+        y1 = select2(first, fy1, zap(x));   // after the constructor sample: y1 = in[0], y2 = 0
+        y2 = select2(first, fy2, 0.0);
+        y0 = x + b1 * y1 + b2 * y2;
+        zz(v) = select2(blockend, v, zap(v));
+    };
+};
+lpf(x, freq) = scbiquad(2.0, fcoef(a0), fcoef(b1), fcoef(b2), x)
+with { rps = 2.0 * ma.PI / ma.SR; a0 = lpfc(freq, rps) : _, !, !; b1 = lpfc(freq, rps) : !, _, !; b2 = lpfc(freq, rps) : !, !, _; };
+hpf(x, freq) = scbiquad(-2.0, fcoef(a0), fcoef(b1), fcoef(b2), x)
+with { rps = 2.0 * ma.PI / ma.SR; a0 = hpfc(freq, rps) : _, !, !; b1 = hpfc(freq, rps) : !, _, !; b2 = hpfc(freq, rps) : !, !, _; };
+
+// OnePole. Constant/kr coefficient (OnePole_next_k): y = x + b (y1 - x) for b >= 0,
+// x + b (y1 + x) for b < 0, and (1 - |b|) x + b y1 while b ramps across zero; the ramp
+// goes from the previous block's value to the new one (CALCSLOPE). Audio-rate coefficient
+// (next_a): always x + b (y1 - x).
+onepole_step(x, b, bp, bn, y1) = select2((bp >= 0) & (bn >= 0),
+                                   select2((bp <= 0) & (bn <= 0), (1.0 - abs(b)) * x + b * y1, x + b * (y1 + x)),
+                                   x + b * (y1 - x));
+onepole(x, coef) = (\(fy).(y, select2(blockend, y, zap(y)) with {
+        y1 = select2(ba.time == 0, fy, x * (1.0 - n));   // constructor: next_a on the first sample
+        y = onepole_step(x, b, p, n, y1);
+    }) ~ _) : _, !
+with {
+    n = a2k(coef);
+    p = select2(ba.time < blocksize, n@blocksize, n);
+    b = p + (n - p) * float(ba.time % blocksize) / blocksize;
+};
+onepole_ar(x, coef) = (\(fy).(y, select2(blockend, y, zap(y)) with {
+        y1 = select2(ba.time == 0, fy, x * (1.0 - coef));
+        y = x + coef * (y1 - x);
+    }) ~ _) : _, !;
+
+// OneZero: out = x + b (x1 - x) / x + b (x1 + x) / mixed, as OnePole; x1 starts at in[0].
+onezero(x, coef) = select2((p >= 0) & (n >= 0),
+                     select2((p <= 0) & (n <= 0), (1.0 - abs(b)) * x + b * x1, x + b * (x1 + x)),
+                     x + b * (x1 - x))
+with {
+    n = a2k(coef);
+    p = select2(ba.time < blocksize, n@blocksize, n);
+    b = p + (n - p) * float(ba.time % blocksize) / blocksize;
+    x1 = select2(ba.time == 0, x', x);
+};
+
+// LeakDC: y = x - x1 + b y1; x1 starts at in[0], y1 at 0; coefficient ramps when it changes.
+leakdc(x, coef) = (\(fy).(y, select2(blockend, y, zap(y)) with {
+        y = x - x1 + b * select2(ba.time == 0, fy, 0.0);
+    }) ~ _) : _, !
+with {
+    n = a2k(coef);
+    p = select2(ba.time < blocksize, n@blocksize, n);
+    b = p + (n - p) * float(ba.time % blocksize) / blocksize;
+    x1 = select2(ba.time == 0, x', x);
+};
