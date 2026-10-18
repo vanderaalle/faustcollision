@@ -795,12 +795,12 @@ case = "case_MulAdd"
 [Saw]
 tier = "direct"
 inputs = ["freq"]
-# SC's Saw is band-limited, falling, and half the level of an ideal ±1 saw (every harmonic
-# -6.0 dB, measured). os.sawtooth is a rising ±1 DPW saw, hence the -0.5. DPW rolls off
-# near Nyquist where SC's does not, so compare spectra.
-faust = { ar = "(-0.5 * os.sawtooth({freq}))" }
-compare = "spectrum"
-tol = 3.0
+# Port of OscUGens.cpp Saw: band-limited impulse train from the sine/cosecant tables
+# plus a 0.999 leaky integrator (hence falling, at half the level of an ideal saw).
+# freq is read per block; kernel crossfade when the harmonic count changes.
+faust = { ar = "sc.saw({freq})" }
+compare = "waveform"
+tol = 1e-3
 case = "case_Saw"
 
 [MoogFF]
@@ -1079,9 +1079,7 @@ case = "case_LeakDC"
 tier = "direct"
 inputs = ["in", "maxdelaytime", "delaytime"]
 constant_inputs = ["maxdelaytime"]
-kr_inputs = ["delaytime"]
-faust = { ar = "sc.delayn({in}, {maxdelaytime}, {delaytime})", "ar<delaytime:ir" = "sc.delay0({in}, {maxdelaytime}, {delaytime})" }
-# audio-rate delaytime (DelayN_next_a) not mapped yet: port in sc.delayn_ar is off by up to 4.5e-3
+faust = { ar = "sc.delayn({in}, {maxdelaytime}, {delaytime})", "ar<delaytime:ir" = "sc.delay0({in}, {maxdelaytime}, {delaytime})", "ar<delaytime:ar" = "sc.delayn_ar({in}, {maxdelaytime}, {delaytime})" }
 compare = "waveform"
 tol = 1e-6
 case = "case_DelayN"
@@ -1090,9 +1088,7 @@ case = "case_DelayN"
 tier = "direct"
 inputs = ["in", "maxdelaytime", "delaytime"]
 constant_inputs = ["maxdelaytime"]
-kr_inputs = ["delaytime"]
-faust = { ar = "sc.delayl({in}, {maxdelaytime}, {delaytime})", "ar<delaytime:ir" = "sc.delayl0({in}, {maxdelaytime}, {delaytime})" }
-# audio-rate delaytime (DelayL_next_a) not mapped yet: port in sc.delayl_ar is off by up to 4e-5
+faust = { ar = "sc.delayl({in}, {maxdelaytime}, {delaytime})", "ar<delaytime:ir" = "sc.delayl0({in}, {maxdelaytime}, {delaytime})", "ar<delaytime:ar" = "sc.delayl_ar({in}, {maxdelaytime}, {delaytime})" }
 compare = "waveform"
 tol = 1e-5
 case = "case_DelayL"
@@ -1112,3 +1108,289 @@ faust = { ar = "sc.delay2({in})" }
 compare = "waveform"
 tol = 1e-6
 case = "case_Delay2"
+
+[Pulse]
+tier = "direct"
+inputs = ["freq", "width"]
+# OscUGens.cpp: difference of two Saw kernels offset by width, leaky integrator
+faust = { ar = "sc.pulse({freq}, {width})" }
+compare = "waveform"
+tol = 1e-3
+case = "case_Pulse"
+
+[Latch]
+tier = "direct"
+inputs = ["in", "trig"]
+# .kr reads only the first input sample of the block (available at block start): sampled
+# there by the template, not held one block late like UGens that consume the whole block
+self_hold = true
+faust = { ar = "sc.latch({in}, {trig})", "ar<trig:ar" = "sc.latch_ar({in}, {trig})", kr = "sc.latch({in}, {trig})" }
+compare = "waveform"
+tol = 1e-6
+case = "case_Latch"
+
+[Pan2]
+tier = "direct"
+inputs = ["in", "pos", "level"]
+outputs = 2
+faust = { ar = "sc.pan2({in}, {pos}, {level})", "ar<pos:ar" = "sc.pan2_ar({in}, {pos}, {level})" }
+compare = "waveform"
+tol = 1e-6
+case = "case_Pan2"
+
+# More filters (FilterUGens.cpp), audio rate; coefficients per block, interpolated in
+# 21 steps of 3 samples. Resonators use 1 - R forms so coefficients round once.
+
+[RLPF]
+tier = "direct"
+inputs = ["in", "freq", "rq"]
+# coefficients in float can differ from scsynth's doubles by 1 ulp; at 50 Hz that moves
+# the gain by up to ~0.3%: tol is twice the measured worst case (the 50 Hz setting)
+faust = { ar = "sc.rlpf({in}, {freq}, {rq})" }
+compare = "waveform"
+tol = 1.5e-2
+case = "case_RLPF"
+
+[RHPF]
+tier = "direct"
+inputs = ["in", "freq", "rq"]
+# coefficients in float can differ from scsynth's doubles by 1 ulp; at 50 Hz that moves
+# the gain by up to ~0.3%: tol is twice the measured worst case (the 50 Hz setting)
+faust = { ar = "sc.rhpf({in}, {freq}, {rq})" }
+compare = "waveform"
+tol = 1e-2
+case = "case_RHPF"
+
+[BPF]
+tier = "direct"
+inputs = ["in", "freq", "rq"]
+# coefficients in float can differ from scsynth's doubles by 1 ulp; at 50 Hz that moves
+# the gain by up to ~0.3%: tol is twice the measured worst case (the 50 Hz setting)
+faust = { ar = "sc.bpf({in}, {freq}, {rq})" }
+compare = "waveform"
+tol = 2.5e-3
+case = "case_BPF"
+
+[BRF]
+tier = "direct"
+inputs = ["in", "freq", "rq"]
+# coefficients in float can differ from scsynth's doubles by 1 ulp; at 50 Hz that moves
+# the gain by up to ~0.3%: tol is twice the measured worst case (the 50 Hz setting)
+faust = { ar = "sc.brf({in}, {freq}, {rq})" }
+compare = "waveform"
+tol = 4e-3
+case = "case_BRF"
+
+[Resonz]
+tier = "direct"
+inputs = ["in", "freq", "bwr"]
+# coefficients in float can differ from scsynth's doubles by 1 ulp; at 50 Hz that moves
+# the gain by up to ~0.3%: tol is twice the measured worst case (the 50 Hz setting)
+faust = { ar = "sc.resonz({in}, {freq}, {bwr})" }
+compare = "waveform"
+tol = 2e-2
+case = "case_Resonz"
+
+[Ringz]
+tier = "direct"
+inputs = ["in", "freq", "decaytime"]
+# coefficients in float can differ from scsynth's doubles by 1 ulp; at 50 Hz that moves
+# the gain by up to ~0.3%: tol is twice the measured worst case (the 50 Hz setting)
+faust = { ar = "sc.ringz({in}, {freq}, {decaytime})" }
+compare = "waveform"
+tol = 5e-3
+case = "case_Ringz"
+
+[Formlet]
+tier = "direct"
+inputs = ["in", "freq", "attacktime", "decaytime"]
+# coefficients in float can differ from scsynth's doubles by 1 ulp; at 50 Hz that moves
+# the gain by up to ~0.3%: tol is twice the measured worst case (the 50 Hz setting)
+faust = { ar = "sc.formlet({in}, {freq}, {attacktime}, {decaytime})" }
+compare = "waveform"
+tol = 4e-4
+case = "case_Formlet"
+
+[TwoPole]
+tier = "direct"
+inputs = ["in", "freq", "radius"]
+faust = { ar = "sc.twopole({in}, {freq}, {radius})" }
+compare = "waveform"
+tol = 1e-4
+case = "case_TwoPole"
+
+[TwoZero]
+tier = "direct"
+inputs = ["in", "freq", "radius"]
+faust = { ar = "sc.twozero({in}, {freq}, {radius})" }
+compare = "waveform"
+tol = 1e-4
+case = "case_TwoZero"
+
+[APF]
+tier = "direct"
+inputs = ["in", "freq", "radius"]
+# reproduces scsynth"s unrolled-loop indexing (docs/sc-findings.md #15)
+faust = { ar = "sc.apf({in}, {freq}, {radius})" }
+compare = "waveform"
+tol = 1e-4
+case = "case_APF"
+
+# Lags and decays (FilterUGens.cpp), audio rate; time and coefficient inputs read per block.
+
+[Lag]
+tier = "direct"
+inputs = ["in", "lagTime"]
+# long times put the coefficient within ~1e-4 of 1: float floor 1.6e-4 measured at 0.5 s
+faust = { ar = "sc.lag({in}, {lagTime})" }
+compare = "waveform"
+tol = 3e-4
+case = "case_Lag"
+
+[Lag2]
+tier = "direct"
+inputs = ["in", "lagTime"]
+# long times put the coefficient within ~1e-4 of 1: float floor 1.6e-4 measured at 0.5 s
+faust = { ar = "sc.lag2({in}, {lagTime})" }
+compare = "waveform"
+tol = 3e-4
+case = "case_Lag2"
+
+[Lag3]
+tier = "direct"
+inputs = ["in", "lagTime"]
+# long times put the coefficient within ~1e-4 of 1: float floor 1.6e-4 measured at 0.5 s
+faust = { ar = "sc.lag3({in}, {lagTime})" }
+compare = "waveform"
+tol = 3e-4
+case = "case_Lag3"
+
+[LagUD]
+tier = "direct"
+inputs = ["in", "lagTimeU", "lagTimeD"]
+# long times put the coefficient within ~1e-4 of 1: float floor 1.6e-4 measured at 0.5 s
+faust = { ar = "sc.lagud({in}, {lagTimeU}, {lagTimeD})" }
+compare = "waveform"
+tol = 3e-4
+case = "case_LagUD"
+
+[Decay]
+tier = "direct"
+inputs = ["in", "decayTime"]
+# long times put the coefficient within ~1e-4 of 1: float floor 1.6e-4 measured at 0.5 s
+faust = { ar = "sc.decay({in}, {decayTime})" }
+compare = "waveform"
+tol = 3e-4
+case = "case_Decay"
+
+[Decay2]
+tier = "direct"
+inputs = ["in", "attackTime", "decayTime"]
+# long times put the coefficient within ~1e-4 of 1: float floor 1.6e-4 measured at 0.5 s
+faust = { ar = "sc.decay2({in}, {attackTime}, {decayTime})" }
+compare = "waveform"
+tol = 3e-4
+case = "case_Decay2"
+
+[Integrator]
+tier = "direct"
+inputs = ["in", "coef"]
+faust = { ar = "sc.integrator({in}, {coef})" }
+compare = "waveform"
+tol = 1e-4
+case = "case_Integrator"
+
+[Slew]
+tier = "direct"
+inputs = ["in", "up", "dn"]
+faust = { ar = "sc.slew({in}, {up}, {dn})" }
+compare = "waveform"
+tol = 1e-4
+case = "case_Slew"
+
+# DelayC, combs and allpasses (DelayUGens.cpp). maxdelaytime is read once.
+
+[DelayC]
+tier = "direct"
+inputs = ["in", "maxdelaytime", "delaytime"]
+constant_inputs = ["maxdelaytime"]
+faust = { ar = "sc.delayc({in}, {maxdelaytime}, {delaytime})", "ar<delaytime:ar" = "sc.delayc_ar({in}, {maxdelaytime}, {delaytime})" }
+compare = "waveform"
+tol = 1e-5
+case = "case_DelayC"
+
+[CombN]
+tier = "direct"
+inputs = ["in", "maxdelaytime", "delaytime", "decaytime"]
+constant_inputs = ["maxdelaytime"]
+faust = { ar = "sc.comb(0, {in}, {maxdelaytime}, {delaytime}, {decaytime})", "ar<delaytime:ar" = "sc.comb_ar(0, {in}, {maxdelaytime}, {delaytime}, {decaytime})" }
+compare = "waveform"
+tol = 1e-4
+case = "case_CombN"
+
+[AllpassN]
+tier = "direct"
+inputs = ["in", "maxdelaytime", "delaytime", "decaytime"]
+constant_inputs = ["maxdelaytime"]
+faust = { ar = "sc.allpass(0, {in}, {maxdelaytime}, {delaytime}, {decaytime})", "ar<delaytime:ar" = "sc.allpass_ar(0, {in}, {maxdelaytime}, {delaytime}, {decaytime})" }
+compare = "waveform"
+tol = 1e-4
+case = "case_AllpassN"
+
+[CombL]
+tier = "direct"
+inputs = ["in", "maxdelaytime", "delaytime", "decaytime"]
+constant_inputs = ["maxdelaytime"]
+faust = { ar = "sc.comb(1, {in}, {maxdelaytime}, {delaytime}, {decaytime})", "ar<delaytime:ar" = "sc.comb_ar(1, {in}, {maxdelaytime}, {delaytime}, {decaytime})" }
+compare = "waveform"
+tol = 1e-4
+case = "case_CombL"
+
+[AllpassL]
+tier = "direct"
+inputs = ["in", "maxdelaytime", "delaytime", "decaytime"]
+constant_inputs = ["maxdelaytime"]
+faust = { ar = "sc.allpass(1, {in}, {maxdelaytime}, {delaytime}, {decaytime})", "ar<delaytime:ar" = "sc.allpass_ar(1, {in}, {maxdelaytime}, {delaytime}, {decaytime})" }
+compare = "waveform"
+tol = 1e-4
+case = "case_AllpassL"
+
+[CombC]
+tier = "direct"
+inputs = ["in", "maxdelaytime", "delaytime", "decaytime"]
+constant_inputs = ["maxdelaytime"]
+faust = { ar = "sc.comb(3, {in}, {maxdelaytime}, {delaytime}, {decaytime})", "ar<delaytime:ar" = "sc.comb_ar(3, {in}, {maxdelaytime}, {delaytime}, {decaytime})" }
+compare = "waveform"
+tol = 1e-4
+case = "case_CombC"
+
+[AllpassC]
+tier = "direct"
+inputs = ["in", "maxdelaytime", "delaytime", "decaytime"]
+constant_inputs = ["maxdelaytime"]
+faust = { ar = "sc.allpass(3, {in}, {maxdelaytime}, {delaytime}, {decaytime})", "ar<delaytime:ar" = "sc.allpass_ar(3, {in}, {maxdelaytime}, {delaytime}, {decaytime})" }
+compare = "waveform"
+tol = 1e-4
+case = "case_AllpassC"
+
+# Lines (LFUGens.cpp). start/end/dur read once; doneAction is server machinery.
+
+[Line]
+tier = "direct"
+inputs = ["start", "end", "dur", "doneAction"]
+require = { doneAction = 0.0 }
+self_hold = true
+faust = { ar = "sc.line({start}, {end}, {dur})", kr = "sc.line_kr({start}, {end}, {dur})" }
+compare = "waveform"
+tol = 1e-5
+case = "case_Line"
+
+[XLine]
+tier = "direct"
+inputs = ["start", "end", "dur", "doneAction"]
+require = { doneAction = 0.0 }
+self_hold = true
+faust = { ar = "sc.xline({start}, {end}, {dur})", kr = "sc.xline_kr({start}, {end}, {dur})" }
+compare = "waveform"
+tol = 1e-5
+case = "case_XLine"

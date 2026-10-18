@@ -4,6 +4,8 @@ Behaviour of scsynth (SuperCollider 3.13.0) that the documentation does not stat
 found by comparing renders sample by sample or by porting the C++. Source references
 are to the `Version-3.13.0` tag (`~/src/supercollider`).
 
+Issue drafts for #4, #5, #11: `docs/issues/`.
+
 Status: **measured** = confirmed on scsynth NRT renders; **source** = read in the C++,
 not yet confirmed by a render. Kind: **bug?** (looks unintended), **undocumented**,
 **convention** (intended, but matters for porting), **limitation**.
@@ -13,8 +15,8 @@ not yet confirmed by a render. Kind: **bug?** (looks unintended), **undocumented
 | 1 | `Amplitude.kr` (audio input) | attack/release 64× faster than stated | bug? | measured, source |
 | 2 | `Saw` | falling ramp, every harmonic −6 dB vs an ideal ±1 saw | undocumented | measured |
 | 3 | all (constructors) | first input sample processed twice | convention | measured |
-| 4 | `BinaryOpUGen` `rrand` (audio rate) | draws from −1..1: range [2a−b, b); kr is correct | bug? | source |
-| 5 | `BinaryOpUGen` `unsignedRightShift`, `fill` | not implemented: compute `a + b` | bug? | source |
+| 4 | `BinaryOpUGen` `rrand` (audio rate) | draws from −1..1: range [2a−b, b); kr is correct | bug? | measured, source |
+| 5 | `BinaryOpUGen` `unsignedRightShift`, `fill` | not implemented: compute `a + b` | bug? | measured, source |
 | 6 | `UnaryOpUGen` `asInteger`, `asFloat` | pass the signal through | undocumented | source |
 | 7 | `UnaryOpUGen` `log2` | float version takes no `abs`; double version and `log10` do | bug? | source |
 | 8 | `DC` | input read once at construction | convention | source |
@@ -24,6 +26,9 @@ not yet confirmed by a render. Kind: **bug?** (looks unintended), **undocumented
 | 12 | `UnaryOpUGen` `reciprocal` | 1/0 is NaN, not inf, at both rates | undocumented | measured, source |
 | 13 | `K2A` (first block) | ramps from the kr source's constructor output | convention | measured |
 | 14 | scsynth NRT | occasional abort (exit 134) on a render that succeeds when rerun | bug? | measured, not reproduced |
+| 15 | `APF` | not an allpass: +28 dB at its frequency, +38 dB at 100 Hz (indexing errors in the unrolled loop) | bug? | measured, source |
+| 17 | `AllpassC` (start-up) | outputs 0 for the first delay length; AllpassN/L output -fb * in there | bug? | measured, source |
+| 16 | `Ramp` | reads the input one sample past the segment; past the buffer end at a block boundary | bug? | source |
 
 ## 1. `Amplitude.kr` with an audio-rate input releases 64× too fast
 
@@ -173,3 +178,61 @@ demand; possibly timing- or memory-dependent.
 
 - Test policy: `translator/batch.scd` retries a failed render once and logs it.
 - To do: catch a core dump (`ulimit -c`) next time it happens.
+
+## 15. `APF`'s unrolled loop indexes the wrong past output
+
+`APF_next` processes 3 samples per loop iteration with rotating variables. The b2 term of
+the second sample uses `y2` before it is reassigned (y[n-3] where the recursion needs
+y[n-2]), and the third sample uses the just-computed `y2` (y[n-1]). Only the first sample of
+each group, and the 64th sample of a block (`mFilterRemain`), compute the documented
+allpass `y = x + b1 (y1 - x1) + b2 (y2 - x2)`.
+
+```cpp
+// server/plugins/FilterUGens.cpp, APF_next (both branches)
+x0 = ZXP(in); ZXP(out) = y0 = x0 + b1 * (y1 - x1) + b2 * (y2 - x2);
+x2 = ZXP(in); ZXP(out) = y2 = x2 + b1 * (y0 - x0) + b2 * (y2 - x1);   // should be (y1 - x1)
+x1 = ZXP(in); ZXP(out) = y1 = x1 + b1 * (y2 - x2) + b2 * (y2 - x0);   // should be (y0 - x0)
+```
+
+Moreover the per-sample formula itself, `y = x + b1 (y1 - x1) + b2 (y2 - x2)`, has the
+same numerator and denominator, `(1 - b1 z^-1 - b2 z^-2) / (1 - b1 z^-1 - b2 z^-2)`: as
+written it is the identity, not an allpass. What `APF` outputs is therefore decided by the
+indexing errors. Measured magnitude response of `APF.ar(impulse, 1000, 0.95)` (NRT,
+8192-point FFT of the impulse response):
+
+| Frequency | 100 Hz | 300 Hz | 1 kHz | 2 kHz | 5 kHz | 12 kHz |
+| --- | --- | --- | --- | --- | --- | --- |
+| Gain | +37.8 dB | +35.6 dB | +27.9 dB | +21.8 dB | +11.1 dB | +4.9 dB |
+
+- Translation: reproduced sample for sample (`sc.apf`, `case_APF` within 1.3e-5).
+
+
+## 16. `Ramp` reads past its input buffer
+
+`Ramp_next` advances the input pointer by the samples just output, then reads `*in` to set
+the next slope. When a segment ends at the end of the block, that is `in[inNumSamples]`,
+one past the buffer; with a control-rate input (a one-sample buffer) every read past the
+first is out of bounds. The value read is whatever lies in adjacent memory.
+
+```cpp
+// server/plugins/FilterUGens.cpp, Ramp_next
+LOOP(nsmps, ZXP(out) = level; level += slope;);
+in += nsmps;
+...
+if (counter <= 0) { ...; slope = (*in - level) / counter; }
+```
+
+- Translation: `Ramp` not mapped until measured.
+
+## 17. `AllpassC` drops its direct path at start-up
+
+While the delay line is not yet filled (`AllpassC_helper<true>`, the "checked" variant),
+a sample whose newest read index is negative outputs `0`. The allpass output there is
+`value - feedbk * dwr` with `value = 0`, i.e. `-feedbk * in`, which is what `AllpassN` and
+`AllpassL` output in the same situation. So for the first delay-length of samples
+`AllpassC` lacks the `-feedbk * in` term. Seen with a 0.2 s delay on signals that start
+within the first 0.2 s (error 1.2e-2 against a zero-buffer allpass; exact once reproduced).
+
+- Source: `server/plugins/DelayUGens.cpp`, `AllpassC_helper<true>` (`if (irdphase0 < 0) { ...; ZXP(out) = 0.f; }`)
+  vs `AllpassL_helper<true>` (`ZXP(out) = -feedbk * zin;`).
+- Translation: reproduced (`sc.allpassx`).

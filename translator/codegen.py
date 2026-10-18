@@ -220,8 +220,14 @@ def translate(sdef: SynthDef, meta: dict, table=None) -> Translation:
                     and isinstance(v, Ref) and ugens[v.ugen].rate == "kr":
                 return f"sc.kr2ar({x})"
             return x
-        # {seed}: a per-node constant, so random operators get independent streams
-        body = template.format(seed=u.index, **{k: arg(k, v) for k, v in args.items()})
+        # {seed}: a per-node constant, so random operators get independent streams.
+        # Signal arguments enter as wires of a lambda: Faust re-expands a named expression at
+        # every use inside the library function, which can make compilation explode.
+        wires = {k: arg(k, v) for k, v in args.items() if isinstance(v, Ref)}
+        fmt = {k: (f"w_{k}" if k in wires else arg(k, v)) for k, v in args.items()}
+        body = template.format(seed=u.index, **fmt)
+        if wires:
+            body = f"({', '.join(wires.values())}) : \\({', '.join('w_' + k for k in wires)}).({body})"
         if u.rate == "kr" and not e.get("self_hold"):
             # A kr output changes once per block. Fed by audio, the value must come from the
             # previous block (causality): krhold. Fed only by kr inputs (already per block),

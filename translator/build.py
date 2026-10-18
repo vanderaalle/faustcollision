@@ -57,7 +57,8 @@ def translate_all():
                 "compare": t.compare, "tol": t.tol, "entries": [asdict(e) for e in t.entries]}
         (out / f"{name}.json").write_text(json.dumps(info, indent=2))
         print(f"translate: {name}: {t.inputs} in, {t.outputs} out, {t.compare} ≤ {t.tol}")
-    shutil.copy(FAUST_LIB_DIR / "sc.lib", out / "sc.lib")
+    for lib in FAUST_LIB_DIR.glob("*.lib"):   # sc.lib and the generated sctables.lib
+        shutil.copy(lib, out / lib.name)
     return failed
 
 

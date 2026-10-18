@@ -207,7 +207,8 @@ def score_translated(done):
     faust_dir = OUT / "faust"
     shutil.rmtree(faust_dir, ignore_errors=True)
     faust_dir.mkdir()
-    shutil.copy(ROOT / "translator" / "faust" / "sc.lib", faust_dir)
+    for lib in (ROOT / "translator" / "faust").glob("*.lib"):
+        shutil.copy(lib, faust_dir)
     sclang(ROOT / "translator" / "batch.scd", ROOT, "build/census/rendered", "tolerant", "build/census/render_probes")
     faustrun.FAUST_DIR = faust_dir
     results = {}

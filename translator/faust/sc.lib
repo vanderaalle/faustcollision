@@ -255,9 +255,9 @@ with {
 // "wavetable" form (common/Samp.cpp SignalAsWavetable) and read by lookupi1.
 //------------------------------------------------------------------------------
 sinesize = 8192;
-sine(i) = sin(float(i) * (2.0 * ma.PI / sinesize));
-sinew0(i) = rdtable(sinesize, 2.0 * sine(ba.time) - sine(ba.time + 1), i);
-sinew1(i) = rdtable(sinesize, sine(ba.time + 1) - sine(ba.time), i);
+sct = library("sctables.lib");   // scsynth's tables, bit for bit (translator/gen_tables.py)
+sinew0(i) = rdtable(sct.sinew0, i);
+sinew1(i) = rdtable(sct.sinew1, i);
 lookupi1(phase) = sinew0(i) + sinew1(i) * (1.0 + float(phase & 65535) / 65536.0)
 with { i = (phase >> 16) & (sinesize - 1); };
 
@@ -567,19 +567,19 @@ with { rps = 2.0 * ma.PI / ma.SR; a0 = hpfc(freq, rps) : _, !, !; b1 = hpfc(freq
 onepole_step(x, b, bp, bn, y1) = select2((bp >= 0) & (bn >= 0),
                                    select2((bp <= 0) & (bn <= 0), (1.0 - abs(b)) * x + b * y1, x + b * (y1 + x)),
                                    x + b * (y1 - x));
-onepole(x, coef) = (\(fy).(y, select2(blockend, y, zap(y)) with {
+onepole(x, coef) = (\(fy).(select2(blockend, y, zap(y)), y with {
         y1 = select2(ba.time == 0, fy, x * (1.0 - n));   // constructor: next_a on the first sample
         y = onepole_step(x, b, p, n, y1);
-    }) ~ _) : _, !
+    }) ~ _) : !, _
 with {
     n = a2k(coef);
     p = select2(ba.time < blocksize, n@blocksize, n);
     b = p + (n - p) * float(ba.time % blocksize) / blocksize;
 };
-onepole_ar(x, coef) = (\(fy).(y, select2(blockend, y, zap(y)) with {
+onepole_ar(x, coef) = (\(fy).(select2(blockend, y, zap(y)), y with {
         y1 = select2(ba.time == 0, fy, x * (1.0 - coef));
         y = x + coef * (y1 - x);
-    }) ~ _) : _, !;
+    }) ~ _) : !, _;
 
 // OneZero: out = x + b (x1 - x) / x + b (x1 + x) / mixed, as OnePole; x1 starts at in[0].
 onezero(x, coef) = select2((p >= 0) & (n >= 0),
@@ -593,9 +593,9 @@ with {
 };
 
 // LeakDC: y = x - x1 + b y1; x1 starts at in[0], y1 at 0; coefficient ramps when it changes.
-leakdc(x, coef) = (\(fy).(y, select2(blockend, y, zap(y)) with {
+leakdc(x, coef) = (\(fy).(select2(blockend, y, zap(y)), y with {
         y = x - x1 + b * select2(ba.time == 0, fy, 0.0);
-    }) ~ _) : _, !
+    }) ~ _) : !, _
 with {
     n = a2k(coef);
     p = select2(ba.time < blocksize, n@blocksize, n);
@@ -612,7 +612,9 @@ with {
 nextpow2(n) = int(2.0 ^ ceil(log(float(n)) / log(2.0) - 1e-9));
 dlylen(maxdt, sr) = nextpow2(int(ceil(maxdt * sr + 1.0)) + blocksize);
 dlymax(maxdt) = dlylen(maxdt, 192000.0) + 2;
-dsampc(dt, maxdt) = max(1.0, min(float(dlylen(maxdt, ma.SR)), dt * float(ma.SR)));
+// delaytime * SR rounded once, as scsynth does: through fmaf, so the compiler cannot fold
+// a constant factor of the delay time into SR (that moved a delay of 381.99997 to 382)
+dsampc(dt, maxdt) = max(1.0, min(float(dlylen(maxdt, ma.SR)), fmaf(dt, float(ma.SR), 0.0)));
 // kr/constant delay time: read per block; when it changes, ramp from the previous value
 // (dsamp += slope before each sample, so the new value is reached at the block's end)
 dsamp_k(dt, maxdt) = select2(n == p, p + (n - p) / blocksize * float(ba.time % blocksize + 1), n)
@@ -633,3 +635,282 @@ delayl0(x, maxdt, dt) = select2(dt == 0, delayl(x, maxdt, dt), x);
 delay1(x) = select2(ba.time == 0, x', x);
 // Delay2: out[0] = 0 (x2 not initialised; zero here), out[1] = in[0], then in[n-2].
 delay2(x) = select2(ba.time == 1, x'', x');
+
+//------------------------------------------------------------------------------
+// Saw and Pulse (OscUGens.cpp): band-limited impulse trains sin(N2 x)/sin(x) from the
+// 8193-point sine table and its cosecant (kBadValue near the zeros, where the sine is
+// divided instead), then a leaky integrator y = blit + 0.999 y1. Pulse is the difference
+// of two trains offset by duty. N = SR/2 / freq per block; when N changes, the two kernels
+// are crossfaded over the block. Phase: int32, increment (int32)(double(2^28/SR) * freq).
+//------------------------------------------------------------------------------
+sintbl(i) = rdtable(sct.sine, i);
+cscbad(i) = (i <= 8) | ((i >= 4088) & (i <= 4104)) | (i >= 8184);
+csctbl(i) = rdtable(sct.cosecant, i);   // kBadValue (1e20) at the zeros, as in gInvSine
+pidx(p) = (p >> 16) & (sinesize - 1);
+pfr(p) = float(p & 65535) / 65536.0;
+// The kernel at phase p for odd harmonic count n2, as single-output functions (a tuple
+// selected several times would be re-expanded by the compiler at every use).
+bl_bad(p) = cscbad(pidx(p)) | cscbad(pidx(p) + 1);
+bl_dsin(p) = sintbl(pidx(p)) + (sintbl(pidx(p) + 1) - sintbl(pidx(p))) * pfr(p);
+bl_dinv(p) = csctbl(pidx(p)) + (csctbl(pidx(p) + 1) - csctbl(pidx(p))) * pfr(p);
+bl_num(p, n2) = sintbl(pidx(r)) + pfr(r) * (sintbl(pidx(r) + 1) - sintbl(pidx(r))) with { r = p * n2; };
+blit_t(p, n2) = bl_bad(p) & (abs(bl_dsin(p)) < 0.0005);
+blit_r(p, n2) = select2(bl_bad(p), bl_num(p, n2) * bl_dinv(p), bl_num(p, n2) / bl_dsin(p));
+
+// per-block quantities shared by Saw and Pulse
+bl_fin(freq) = fmaf(a2k(freq), 1.0, 0.0);  // opaque: stops the compiler re-analysing the upstream graph
+bl_prev(x) = select2(ba.time < blocksize, x@blocksize, x);
+bl_N(fin) = int(ma.SR * 0.5 / fin);
+bl_xf = float(ba.time % blocksize) / blocksize;
+
+// The per-block quantities are computed once and passed to the loop as wires (lambda
+// parameters): a with-name is re-expanded at every use, which made five Saws on a
+// filtered input take minutes to compile.
+saw(freq) = freq : \(fq).(pre(fq) : core)
+with {
+    pre(fq) = n2, pn2, sc, psc, xf, p
+    with {
+        fin = bl_fin(fq); pfin = bl_prev(fin);
+        N = bl_N(fin); pN = bl_prev(N);
+        xf = (fin != pfin) & (N != pN);
+        inc = select2(xf, dinc(fin, 28), dinc(max(pfin, fin), 28));
+        p = iphase(int(inc));
+        n2 = 2 * N + 1; pn2 = 2 * pN + 1;
+        sc = 0.5 / float(N); psc = 0.5 / float(pN);
+    };
+    core = \(n2, pn2, sc, psc, xf, p).((\(fy).(y, y with {
+        y1 = select2(ba.time == 0, fy, -0.46);
+        a = (blit_r(p, n2) - 1.0) * sc;
+        xa = (blit_r(p, pn2) - 1.0) * psc;
+        y = select2(blit_t(p, n2), select2(xf, a, xa + bl_xf * (a - xa)) + 0.999 * y1, 1.0 + 0.999 * y1);
+    })) ~ _ : !, _);
+};
+
+pulse(freq, width) = freq, width : \(fq, wd).(pre(fq, wd) : core)
+with {
+    pre(fq, wd) = n2, pn2, sc, psc, xf, p, off
+    with {
+        fin = bl_fin(fq); pfin = bl_prev(fin);
+        N = bl_N(fin); pN = bl_prev(N);
+        xf = (fin != pfin) & (N != pN);
+        inc = select2(xf, dinc(fin, 28), dinc(max(pfin, fin), 28));
+        p = iphase(int(inc));
+        n2 = 2 * N + 1; pn2 = 2 * pN + 1;
+        sc = 0.5 / float(N); psc = 0.5 / float(pN);
+        // duty offset: int ramp from the previous block's value (0 before the first block)
+        nxt = int(a2k(wd) * 268435456.0);
+        prv = select2(ba.time < blocksize, nxt@blocksize, 0);
+        d = nxt - prv;
+        off = prv + int(float(d - d % blocksize) / blocksize) * (ba.time % blocksize);
+    };
+    core = \(n2, pn2, sc, psc, xf, p, off).((\(fy).(y, y with {
+        y1 = select2(ba.time == 0, fy, 0.0);
+        rsc = 1.0 / sc + 1.0;
+        pl(q) = select2(blit_t(q, n2), blit_r(q, n2), rsc);
+        px(q) = select2(blit_t(q, n2), (blit_r(q, pn2) - 1.0) * psc + bl_xf * ((blit_r(q, n2) - 1.0) * sc - (blit_r(q, pn2) - 1.0) * psc), 1.0);
+        y = select2(xf, (pl(p) - pl(p + off)) * sc, px(p) - px(p + off)) + 0.999 * y1;
+    })) ~ _ : _, !);
+};
+
+// Latch (TriggerUGens.cpp). Audio-rate trigger: sample `in` where trig rises through 0
+// (prev <= 0, cur > 0; prev starts at 0). kr/constant trigger: tested once per block,
+// taking the block's first input sample.
+latch_ar(x, trig) = ba.sAndH((trig' <= 0) & (trig > 0), x);
+latch(x, trig) = ba.sAndH(krclk & (p <= 0) & (n > 0), a2k(x))
+with { n = a2k(trig); p = select2(ba.time < blocksize, n@blocksize, 0.0); };
+
+// Pan2 (PanUGens.cpp): gains from the sine table at ipos = (int)(1024 pos + 1024.5),
+// clipped to [0, 2048]; left = level sin[2048 - ipos], right = level sin[ipos].
+pan2gain(pos, level) = level * sintbl(2048 - ip), level * sintbl(ip)
+with { ip = max(0, min(2048, int(1024.0 * pos + 1024.0 + 0.5))); };
+// kr pos/level: gains ramp from the previous block's to the new ones when either changes
+pan2(x, pos, level) = x * ramp(gl), x * ramp(gr)
+with {
+    np = a2k(pos); nl = a2k(level);
+    gl = pan2gain(np, nl) : _, !;
+    gr = pan2gain(np, nl) : !, _;
+    ramp(g) = select2(ch, pg, pg + (g - pg) / blocksize * float(ba.time % blocksize))
+    with { pg = select2(ba.time < blocksize, g@blocksize, g); };
+    ch = (np != select2(ba.time < blocksize, np@blocksize, np)) | (nl != select2(ba.time < blocksize, nl@blocksize, nl));
+};
+// audio-rate pos: per-sample gains; level (kr) ramps when it changes
+pan2_ar(x, pos, level) = x * (pan2gain(pos, lv) : _, !), x * (pan2gain(pos, lv) : !, _)
+with {
+    nl = a2k(level);
+    pl = select2(ba.time < blocksize, nl@blocksize, nl);
+    lv = select2(nl != pl, pl, pl + (nl - pl) / blocksize * float(ba.time % blocksize));
+};
+
+// Generic two-state filter: step(x, y1, y2) -> (y0, out); y1 at time 0 is the state left
+// by the constructor sample (init); state zapped at block end, as in FilterUGens.cpp.
+iir2(step, init, x) = (loop ~ (_, _)) : !, !, _
+with {
+    first = ba.time == 0;
+    loop(fy1, fy2) = (x, select2(first, fy1, zap(init)), select2(first, fy2, 0.0)) : step
+        : \(y0, out).(zz(y0), zz(select2(first, fy1, zap(init))), out)
+    with { zz(v) = select2(blockend, v, zap(v)); };
+};
+// coefficient pair helpers: per-block, interpolated in 21 steps (fcoef); s2(p) = 2 sin^2(p/2) = 1 - cos p
+s2(p) = 2.0 * sin(p * 0.5) * sin(p * 0.5);
+
+// RLPF / RHPF: C = (1 - D) / (1 + D), D = tan(p rq / 2); b1 = (1 + C) cos p, b2 = -C,
+// a0 = (1 + C -/+ b1) / 4. Written as b1 = 2 - e1, b2 = -1 + e2 (rounded once).
+rlpfc(f, rq) = (1.0 + C) * s2(p) * 0.25, 2.0 - (2.0 * s2(p) + e2 * cos(p)), -1.0 + e2
+with { p = f * 2.0 * ma.PI / ma.SR; D = tan(p * max(0.001, rq) * 0.5); e2 = 2.0 * D / (1.0 + D); C = 1.0 - e2; };
+rhpfc(f, rq) = (1.0 + C) * (2.0 - s2(p)) * 0.25, 2.0 - (2.0 * s2(p) + e2 * cos(p)), -1.0 + e2
+with { p = f * 2.0 * ma.PI / ma.SR; D = tan(p * max(0.001, rq) * 0.5); e2 = 2.0 * D / (1.0 + D); C = 1.0 - e2; };
+rlpf(x, f, rq) = iir2(\(xx, y1, y2).(a0 * xx + b1 * y1 + b2 * y2 <: _, _ + 2.0 * y1 + y2), a0 * x, x)
+with { a0 = fcoef((rlpfc(f, rq) : _, !, !)); b1 = fcoef((rlpfc(f, rq) : !, _, !)); b2 = fcoef((rlpfc(f, rq) : !, !, _)); };
+rhpf(x, f, rq) = iir2(\(xx, y1, y2).(a0 * xx + b1 * y1 + b2 * y2 <: _, _ - 2.0 * y1 + y2), a0 * x, x)
+with { a0 = fcoef((rhpfc(f, rq) : _, !, !)); b1 = fcoef((rhpfc(f, rq) : !, _, !)); b2 = fcoef((rhpfc(f, rq) : !, !, _)); };
+
+// BPF: C = 1 / tan(p bw / 2), a0 = 1 / (1 + C), b1 = 2 C cos p a0, b2 = (1 - C) a0;
+// with t = tan(p bw / 2): a0 = t / (1 + t), b1 = 2 - (2t + 2 s2(p)) / (1 + t), b2 = -1 + 2t / (1 + t).
+bpfc(f, bw) = t / (1.0 + t), 2.0 - (2.0 * t + 2.0 * s2(p)) / (1.0 + t), -1.0 + 2.0 * t / (1.0 + t)
+with { p = f * 2.0 * ma.PI / ma.SR; t = tan(bw * p * 0.5); };
+bpf(x, f, bw) = iir2(\(xx, y1, y2).(xx + b1 * y1 + b2 * y2 <: _, a0 * (_ - y2)), x, x)
+with { a0 = fcoef((bpfc(f, bw) : _, !, !)); b1 = fcoef((bpfc(f, bw) : !, _, !)); b2 = fcoef((bpfc(f, bw) : !, !, _)); };
+
+// BRF: C = tan(p bw / 2), a0 = 1 / (1 + C), a1 = -2 cos p a0, b2 = (1 - C) a0;
+// ay = a1 y1, y0 = in - ay - b2 y2, out = a0 (y0 + y2) + ay.
+brfc(f, bw) = 1.0 / (1.0 + C), 0.0 - (2.0 - (2.0 * C + 2.0 * s2(p)) / (1.0 + C)), 1.0 - 2.0 * C / (1.0 + C)
+with { p = f * 2.0 * ma.PI / ma.SR; C = tan(bw * p * 0.5); };
+brf(x, f, bw) = iir2(\(xx, y1, y2).(xx - a1 * y1 - b2 * y2 <: _, a0 * (_ + y2) + a1 * y1), x, x)
+with { a0 = fcoef((brfc(f, bw) : _, !, !)); a1 = fcoef((brfc(f, bw) : !, _, !)); b2 = fcoef((brfc(f, bw) : !, !, _)); };
+
+// Resonators. R close to 1: work with r1 = 1 - R and e2 = 1 - R^2 = r1 (2 - r1), so that
+// b2 = -R^2 = -1 + e2 and b1 = 4 R^2 cos p / (1 + R^2) = 2 - (2 e2 + 4 R^2 s2(p)) / (1 + R^2)
+// each round once (as the doubles in scsynth do, to float precision).
+expm1f = ffunction(float expm1f|expm1|expm1l (float), <math.h>, "");
+resb1(r1, p) = 2.0 - (2.0 * e2 + 4.0 * R2 * s2(p)) / (1.0 + R2) with { e2 = r1 * (2.0 - r1); R2 = (1.0 - r1) * (1.0 - r1); };
+resb2(r1) = -1.0 + r1 * (2.0 - r1);
+// r1 for a -60 dB decay time: R = exp(log(0.001) / (t SR)); R = 0 when t = 0
+decr1(t) = select2(t == 0, 0.0 - expm1f(log(0.001) / (t * ma.SR)), 1.0);
+rad(f) = f * 2.0 * ma.PI / ma.SR;
+res2(a0, b1, b2, x) = iir2(\(xx, y1, y2).(xx + b1 * y1 + b2 * y2 <: _, a0 * (_ - y2)), x, x);
+
+// Resonz: R = 1 - B/2 with B = p rq; a0 = (1 - R^2) / 2
+resonz(x, f, rq) = res2(fcoef(e2 * 0.5), fcoef(resb1(r1, rad(f))), fcoef(resb2(r1)), x)
+with { r1 = rad(f) * rq * 0.5; e2 = r1 * (2.0 - r1); };
+// Ringz: R from the decay time, a0 = 0.5
+ringz(x, f, dt) = res2(0.5, fcoef(resb1(decr1(dt), rad(f))), fcoef(resb2(decr1(dt))), x);
+// Formlet: difference of two Ringz-type resonators (decay and attack), times 0.25
+formlet(x, f, at, dt) = (iir2(\(xx, y1, y2).(xx + b01 * y1 + b02 * y2 <: _, _ - y2), x, x)
+                       - iir2(\(xx, y1, y2).(xx + b11 * y1 + b12 * y2 <: _, _ - y2), x, x)) * 0.25
+with {
+    b01 = fcoef(resb1(decr1(dt), rad(f))); b02 = fcoef(resb2(decr1(dt)));
+    b11 = fcoef(resb1(decr1(at), rad(f))); b12 = fcoef(resb2(decr1(at)));
+};
+
+// TwoPole: y = in + b1 y1 + b2 y2 with b1 = 2 reson cos p (written 2 reson - 2 reson s2(p)), b2 = -reson^2
+twopole(x, f, r) = iir2(\(xx, y1, y2).(xx + b1 * y1 + b2 * y2 <: _, _), x, x)
+with { b1 = fcoef(2.0 * r - 2.0 * r * s2(rad(f))); b2 = fcoef(0.0 - r * r); };
+// TwoZero: out = in + b1 x1 + b2 x2, b1 = -2 reson cos p, b2 = reson^2; x1 starts at in[0]
+twozero(x, f, r) = x + b1 * x1 + b2 * x1'
+with {
+    b1 = fcoef(0.0 - (2.0 * r - 2.0 * r * s2(rad(f)))); b2 = fcoef(r * r);
+    x1 = select2(ba.time == 0, x', x);
+};
+// APF as scsynth computes it: in the unrolled loop the b2 term of the 2nd and 3rd sample of
+// each 3-sample group reads the wrong past output (y[n-3] and y[n-1] instead of y[n-2]);
+// the 64th sample of the block uses the right one (docs/sc-findings.md #15).
+apf(x, f, r) = (loop ~ (_, _, _)) : !, !, !, _
+with {
+    b1 = fcoef(2.0 * r - 2.0 * r * s2(rad(f))); b2 = fcoef(0.0 - r * r);
+    first = ba.time == 0;
+    x1 = select2(first, x', x);                // x[n-1], primed with in[0]
+    x2 = x1';                                  // x[n-2]
+    k = select2((ba.time % blocksize) == blocksize - 1, (ba.time % blocksize) % 3, 0);
+    loop(fy1, fy2, fy3) = zz(y), zz(y1), zz(y2), y
+    with {
+        y1 = select2(first, fy1, zap(x));      // y[n-1]; the constructor sample leaves in[0]
+        y2 = select2(first, fy2, 0.0);         // y[n-2]
+        y3 = select2(first, fy3, 0.0);         // y[n-3]
+        yb = select2(k == 0, select2(k == 1, y1, y3), y2);
+        y = x + b1 * (y1 - x1) + b2 * (yb - x2);
+        zz(v) = select2(blockend, v, zap(v));
+    };
+};
+
+//------------------------------------------------------------------------------
+// Lags, decays, integrator, slew (FilterUGens.cpp).
+//------------------------------------------------------------------------------
+// -60 dB coefficient exp(log(0.001) / (t SR)), 0 for t = 0; via expm1 so it rounds once
+dec60(t) = select2(t == 0, 1.0 + expm1f(log(0.001) / (t * ma.SR)), 0.0);
+// kr coefficient c (per block); when it changes, ramp from the old value.
+// pre = 1: b += slope before each sample (Lag); pre = 0: after (Decay, Integrator, OnePole)
+kcoef(c, pre) = select2(n == p, p + (n - p) / blocksize * float(ba.time % blocksize + pre), n)
+with { n = a2k(c); p = select2(ba.time < blocksize, n@blocksize, n); };
+zzend(v) = select2(blockend, v, zap(v));
+// one recursion y = f(x, y1, b) with y1 starting at y0init, state zapped at block end
+rec1(f, y0init, x, b) = (\(fy).(zzend(y), y with { y = f(x, select2(ba.time == 0, fy, y0init), b); })) ~ _ : !, _;
+lagstep(x, y1, b) = x + b * (y1 - x);
+
+// Lag: y = x + b (y1 - x); y1 starts at in[0] (the constructor sample leaves it there)
+lag(x, t) = rec1(lagstep, x, x, kcoef(dec60(t), 1));
+lag2(x, t) = rec1(lagstep, x, rec1(lagstep, x, x, b), b) with { b = kcoef(dec60(t), 1); };
+lag3(x, t) = rec1(lagstep, x, rec1(lagstep, x, rec1(lagstep, x, x, b), b), b) with { b = kcoef(dec60(t), 1); };
+// LagUD: up coefficient while the input is above the output, down otherwise
+lagud(x, tu, td) = (\(fy).(zzend(y), y with {
+        y1 = select2(ba.time == 0, fy, x);
+        y = x + select2(x > y1, kcoef(dec60(td), 1), kcoef(dec60(tu), 1)) * (y1 - x);
+    })) ~ _ : !, _;
+
+// Decay: y = x + b y1; y1 starts at in[0]
+decay(x, t) = rec1(\(xx, y1, b).(xx + b * y1), x, x, kcoef(dec60(t), 0));
+// Decay2: difference of two decays (decayTime - attackTime); both start at in[0]; no zap
+decay2(x, at, dt) = d(kcoef(dec60(dt), 0)) - d(kcoef(dec60(at), 0))
+with { d(b) = (\(fy).(y, y with { y = x + b * select2(ba.time == 0, fy, x); })) ~ _ : _, !; };
+// Integrator: y = x + b y1 from y1 = 0, no constructor sample
+integrator(x, coef) = rec1(\(xx, y1, b).(xx + b * y1), 0.0, x, kcoef(coef, 0));
+// Slew: level += clip(in - level, -dn / SR, up / SR); level starts at in[0]
+slew(x, up, dn) = rec1(\(xx, l, b).(l + max(0.0 - a2k(dn) * sdur, min(a2k(up) * sdur, xx - l))), x, x, 0)
+with { sdur = 1.0 / ma.SR; };
+
+// DelayC, Comb*, Allpass* (DelayUGens.cpp). Cubic variants have a minimum delay of 2.
+// cubicinterp: 4-point, 3rd-order Hermite (SC_SndBuf.h).
+cubic(x, y0, y1, y2, y3) = ((c3 * x + c2) * x + c1) * x + y1
+with { c1 = 0.5 * (y2 - y0); c2 = y0 - 2.5 * y1 + 2.0 * y2 - 0.5 * y3; c3 = 0.5 * (y3 - y0) + 1.5 * (y1 - y2); };
+dsampm(dt, maxdt, mind) = max(mind, min(float(dlylen(maxdt, ma.SR)), fmaf(dt, float(ma.SR), 0.0)));
+dsampm_k(dt, maxdt, mind) = select2(n == p, p + (n - p) / blocksize * float(ba.time % blocksize + 1), n)
+with { n = dsampm(a2k(dt), maxdt, mind); p = select2(ba.time < blocksize, n@blocksize, n); };
+frc(d) = d - float(int(d));
+delayc_d(x, d, maxdt) = cubic(frc(d), dly(x, d - 1.0, maxdt), dly(x, d, maxdt), dly(x, d + 1.0, maxdt), dly(x, d + 2.0, maxdt));
+delayc(x, maxdt, dt) = delayc_d(x, dsampm_k(dt, maxdt, 1.0), maxdt);   // DelayC: InterpolationUnit, min 1
+delayc_ar(x, maxdt, dt) = delayc_d(x, dsampm(dt, maxdt, 1.0), maxdt);
+
+// feedback for a -60 dB decay: sign of decaytime, 0 if either time is 0 (sc_CalcFeedback)
+calcfb(dt, dect) = select2((dt == 0) | (dect == 0), copysign(exp(log(0.001) * dt / abs(dect)), dect), 0.0);
+calcfb_k(dt, dect) = select2(n == p, p + (n - p) / blocksize * float(ba.time % blocksize + 1), n)
+with { n = calcfb(a2k(dt), a2k(dect)); p = select2(ba.time < blocksize, n@blocksize, n); };
+// the delayed value from the feedback signal fw (w delayed by one sample), by interpolation kind
+tap(0, fw, d, maxdt) = dly(fw, d - 1.0, maxdt);
+tap(1, fw, d, maxdt) = dly(fw, d - 1.0, maxdt) + frc(d) * (dly(fw, d, maxdt) - dly(fw, d - 1.0, maxdt));
+tap(3, fw, d, maxdt) = cubic(frc(d), dly(fw, d - 2.0, maxdt), dly(fw, d - 1.0, maxdt), dly(fw, d, maxdt), dly(fw, d + 1.0, maxdt));
+// Comb: w = in + fb v, out = v. Allpass: w = in + fb v, out = v - fb w. (v: w delayed by d)
+combx(kind, x, d, fb, maxdt) = (\(fw).(x + fb * v, v with { v = tap(kind, fw, d, maxdt); })) ~ _ : !, _;
+// AllpassC's start-up variant outputs 0 while its newest read index is still negative,
+// dropping the direct -fb * in path that AllpassN/L keep (docs/sc-findings.md #17)
+allpassx(kind, x, d, fb, maxdt) = (\(fw).(w, select2((kind == 3) & (ba.time + 1 < int(d)), v - fb * w, 0.0)
+    with { v = tap(kind, fw, d, maxdt); w = x + fb * v; })) ~ _ : !, _;
+mind(kind) = select2(kind == 3, 1.0, 2.0);
+comb(kind, x, maxdt, dt, dect) = combx(kind, x, dsampm_k(dt, maxdt, mind(kind)), calcfb_k(dt, dect), maxdt);
+comb_ar(kind, x, maxdt, dt, dect) = combx(kind, x, dsampm(dt, maxdt, mind(kind)), calcfb(dt, a2k(dect)), maxdt);
+allpass(kind, x, maxdt, dt, dect) = allpassx(kind, x, dsampm_k(dt, maxdt, mind(kind)), calcfb_k(dt, dect), maxdt);
+allpass_ar(kind, x, maxdt, dt, dect) = allpassx(kind, x, dsampm(dt, maxdt, mind(kind)), calcfb(dt, a2k(dect)), maxdt);
+
+// Line / XLine (LFUGens.cpp). start, end and dur are read once (constructor); the
+// constructor applies the first step, so the output is start + slope (k + 1) for
+// k < counter, then end. doneAction must be 0 (mapping): freeing the synth has no meaning here.
+initv(x) = ba.sAndH(ba.time == 0, x);
+lnc(dur, sr) = max(1, int(initv(dur) * sr + 0.5));
+line_sr(start, end, dur, sr, k) = select2(k < c, float(initv(end)), initv(start) + (initv(end) - initv(start)) / float(c) * float(k + 1))
+with { c = lnc(dur, sr); };
+line(start, end, dur) = line_sr(start, end, dur, ma.SR, ba.time);
+line_kr(start, end, dur) = line_sr(start, end, dur, ma.SR / blocksize, int(ba.time / blocksize));
+// XLine: start * growth^(k + 1), growth = (end / start)^(1 / counter); counter 0 gives end
+// (written with exp/log: pow(pow(a, 1/c), k) with c from a held value crashes the libfaust JIT)
+xline_sr(start, end, dur, sr, k) = select2((k < c) & (c > 0), e, s * exp(log(e / s) * float(k + 1) / float(c)))
+with { s = initv(start); e = initv(end); c = int(initv(dur) * sr + 0.5); };
+xline(start, end, dur) = xline_sr(start, end, dur, ma.SR, ba.time);
+xline_kr(start, end, dur) = xline_sr(start, end, dur, ma.SR / blocksize, int(ba.time / blocksize));
