@@ -45,6 +45,13 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 		metadata: (specs: (coef: spec.(-1, 1, 0.5, \lin)))),
 	SynthDef(\case_LeakDC, { |coef = 0.995| Out.ar(0, LeakDC.ar(in.value + 0.3, coef)) },
 		metadata: (specs: (coef: spec.(0.9, 0.9999, 0.995, \lin)))),
+	// Delays: constant and knob (kr) delay time; Delay1/2 (audio-rate delay time: not mapped yet)
+	SynthDef(\case_DelayN, { |dt = 0.01| Out.ar(0, [DelayN.ar(in.value, 0.2, 0.0123), DelayN.ar(in.value, 0.2, dt)]) },
+		metadata: (specs: (dt: spec.(0.0001, 0.2, 0.01)))),
+	SynthDef(\case_DelayL, { |dt = 0.01| Out.ar(0, [DelayL.ar(in.value, 0.2, 0.0123), DelayL.ar(in.value, 0.2, dt)]) },
+		metadata: (specs: (dt: spec.(0.0001, 0.2, 0.01)))),
+	SynthDef(\case_Delay1, { Out.ar(0, Delay1.ar(in.value)) }),
+	SynthDef(\case_Delay2, { Out.ar(0, Delay2.ar(in.value)) }),
 	// Noise: statistics only (scsynth's generator is seeded per server). Each at ar and kr.
 	// Rates and densities stay >= 100/s: a statistical comparison needs ~1000 random events
 	// per render (LFNoise2 at 20 Hz over 10 s varies ±2.4 dB from seed to seed).

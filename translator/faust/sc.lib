@@ -602,3 +602,34 @@ with {
     b = p + (n - p) * float(ba.time % blocksize) / blocksize;
     x1 = select2(ba.time == 0, x', x);
 };
+
+//------------------------------------------------------------------------------
+// Delays (DelayUGens.cpp). Buffer: next power of two above maxdelaytime * SR + 1 + 64.
+// Delay in samples clipped to [1, buffer length]. scsynth's "checked" start-up variants
+// output 0 where the read index is still negative: exactly what a zero-initialised Faust
+// delay line gives. The bound for @ assumes SR <= 192 kHz (Faust's own limit for ma.SR).
+//------------------------------------------------------------------------------
+nextpow2(n) = int(2.0 ^ ceil(log(float(n)) / log(2.0) - 1e-9));
+dlylen(maxdt, sr) = nextpow2(int(ceil(maxdt * sr + 1.0)) + blocksize);
+dlymax(maxdt) = dlylen(maxdt, 192000.0) + 2;
+dsampc(dt, maxdt) = max(1.0, min(float(dlylen(maxdt, ma.SR)), dt * float(ma.SR)));
+// kr/constant delay time: read per block; when it changes, ramp from the previous value
+// (dsamp += slope before each sample, so the new value is reached at the block's end)
+dsamp_k(dt, maxdt) = select2(n == p, p + (n - p) / blocksize * float(ba.time % blocksize + 1), n)
+with { n = dsampc(a2k(dt), maxdt); p = select2(ba.time < blocksize, n@blocksize, n); };
+dly(x, d, maxdt) = x @ min(max(0, int(d)), dlymax(maxdt));
+delayn_d(x, d, maxdt) = dly(x, d, maxdt);
+delayl_d(x, d, maxdt) = d1 + (d - float(int(d))) * (d2 - d1)
+with { d1 = dly(x, d, maxdt); d2 = dly(x, d + 1.0, maxdt); };
+delayn(x, maxdt, dt) = delayn_d(x, dsamp_k(dt, maxdt), maxdt);
+delayn_ar(x, maxdt, dt) = delayn_d(x, dsampc(dt, maxdt), maxdt);
+delayl(x, maxdt, dt) = delayl_d(x, dsamp_k(dt, maxdt), maxdt);
+delayl_ar(x, maxdt, dt) = delayl_d(x, dsampc(dt, maxdt), maxdt);
+// a constant delay time of 0 is a straight copy (DelayUnit_init_0)
+delay0(x, maxdt, dt) = select2(dt == 0, delayn(x, maxdt, dt), x);
+delayl0(x, maxdt, dt) = select2(dt == 0, delayl(x, maxdt, dt), x);
+
+// Delay1: out[0] = in[0] (the constructor primes x1 with the first input), then in[n-1].
+delay1(x) = select2(ba.time == 0, x', x);
+// Delay2: out[0] = 0 (x2 not initialised; zero here), out[1] = in[0], then in[n-2].
+delay2(x) = select2(ba.time == 1, x'', x');

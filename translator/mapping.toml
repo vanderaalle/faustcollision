@@ -1072,3 +1072,43 @@ faust = { ar = "sc.leakdc({in}, {coef})" }
 compare = "waveform"
 tol = 1e-4
 case = "case_LeakDC"
+
+# Delays (DelayUGens.cpp). maxdelaytime is read once (buffer allocation).
+
+[DelayN]
+tier = "direct"
+inputs = ["in", "maxdelaytime", "delaytime"]
+constant_inputs = ["maxdelaytime"]
+kr_inputs = ["delaytime"]
+faust = { ar = "sc.delayn({in}, {maxdelaytime}, {delaytime})", "ar<delaytime:ir" = "sc.delay0({in}, {maxdelaytime}, {delaytime})" }
+# audio-rate delaytime (DelayN_next_a) not mapped yet: port in sc.delayn_ar is off by up to 4.5e-3
+compare = "waveform"
+tol = 1e-6
+case = "case_DelayN"
+
+[DelayL]
+tier = "direct"
+inputs = ["in", "maxdelaytime", "delaytime"]
+constant_inputs = ["maxdelaytime"]
+kr_inputs = ["delaytime"]
+faust = { ar = "sc.delayl({in}, {maxdelaytime}, {delaytime})", "ar<delaytime:ir" = "sc.delayl0({in}, {maxdelaytime}, {delaytime})" }
+# audio-rate delaytime (DelayL_next_a) not mapped yet: port in sc.delayl_ar is off by up to 4e-5
+compare = "waveform"
+tol = 1e-5
+case = "case_DelayL"
+
+[Delay1]
+tier = "direct"
+inputs = ["in"]
+faust = { ar = "sc.delay1({in})" }
+compare = "waveform"
+tol = 1e-6
+case = "case_Delay1"
+
+[Delay2]
+tier = "direct"
+inputs = ["in"]
+faust = { ar = "sc.delay2({in})" }
+compare = "waveform"
+tol = 1e-6
+case = "case_Delay2"
