@@ -6,8 +6,9 @@ be finite, and never stay denormal for a whole block: that marks a recursive sta
 stuck in denormals, a CPU hazard (sc.lib code is compiled with -ftz 2, as on the
 target). Isolated denormal samples from products of decayed signals are counted but
 harmless: the codec's integer conversion makes them 0. Units in defs/ must also settle without DC in the
-silent tail; regression cases (tests/cases/) may output DC on purpose (in + x,
-free-running oscillators), so for them DC is reported only.
+silent tail and stay finite; regression cases (tests/cases/) may output DC (in + x,
+free-running oscillators) or NaN (log of a negative input) on purpose, as scsynth
+does, so for them both are reported only.
 """
 import numpy as np
 import pytest
@@ -66,7 +67,7 @@ def test_control_sweep(name, sig, record):
         denormals, run = int(denormal.sum()), longest_run(denormal)
         dc_tail = float(np.abs(tail.mean(axis=0)).max()) if np.isfinite(tail).all() else float("inf")
         peak = float(np.abs(finite).max()) if finite.size else float("nan")
-        ok = nonfinite == 0 and run < faustrun.BLOCK and (dc_tail <= DC_TAIL_MAX or name not in UNITS)
+        ok = run < faustrun.BLOCK and (name not in UNITS or (nonfinite == 0 and dc_tail <= DC_TAIL_MAX))
         record(layer=3, **{"def": name}, input=f"{sig} ({ctl or 'no controls'})", peak=peak, dc_tail=dc_tail,
                denormals=f"{denormals} (run {run})", nonfinite=nonfinite, result="pass" if ok else "FAIL")
         rows.append((ctl, ok, nonfinite, run, dc_tail))

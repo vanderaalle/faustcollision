@@ -20,8 +20,8 @@ def test_unmapped_ugen_names_the_class():
 
 
 def test_unmapped_operator_names_the_index():
-    g = graph(UGen(2, "BinaryOpUGen", "ar", 4, [Ref(1, 0), Const(2.0)], ["ar"]))  # '/', not in the table
-    with pytest.raises(TranslationError, match="special index 4"):
+    g = graph(UGen(2, "BinaryOpUGen", "ar", 60, [Ref(1, 0), Const(2.0)], ["ar"]))  # no such operator
+    with pytest.raises(TranslationError, match="special index 60"):
         translate(g, {})
 
 

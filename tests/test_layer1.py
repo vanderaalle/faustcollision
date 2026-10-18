@@ -11,7 +11,7 @@ DEFS = defs()
 
 
 def test_every_mapping_entry_has_a_case():
-    cases = {p.stem for p in (ROOT / "tests" / "cases").glob("*.scd")}
+    cases = {name for name, meta in DEFS if "/tests/cases/" in meta["source"]}
     missing = []
     for cls, e in load_table().items():
         for rec in (e["operators"].values() if e.get("kind") == "operator" else [e]):

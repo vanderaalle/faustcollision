@@ -212,9 +212,16 @@ def translate(sdef: SynthDef, meta: dict, table=None) -> Translation:
             if u.rate == "ar" and e.get("kr_interpolate") and isinstance(v, Ref) and ugens[v.ugen].rate == "kr":
                 return f"sc.kr2ar({x})"
             return x
-        body = template.format(**{k: arg(v) for k, v in args.items()})
-        if u.rate == "kr" and not e.get("self_hold") and any(isinstance(v, Ref) and ugens[v.ugen].rate == "ar" for v in u.inputs):
-            body = f"sc.krhold({body})" if n_out_of(e) == 1 else f"({body}) : par(i, {n_out_of(e)}, sc.krhold)"
+        # {seed}: a per-node constant, so random operators get independent streams
+        body = template.format(seed=u.index, **{k: arg(v) for k, v in args.items()})
+        if u.rate == "kr" and not e.get("self_hold"):
+            # A kr output changes once per block. Fed by audio, the value must come from the
+            # previous block (causality): krhold. Fed only by kr inputs (already per block),
+            # sample at the block start: a2k. For pure operators that is the identity; for
+            # random and stateful ones it gives one value per block, as in scsynth.
+            fed_by_audio = any(isinstance(v, Ref) and ugens[v.ugen].rate == "ar" for v in u.inputs)
+            hold = "sc.krhold" if fed_by_audio else "sc.a2k"
+            body = f"{hold}({body})" if n_out_of(e) == 1 else f"({body}) : par(i, {n_out_of(e)}, {hold})"
         node = f"u{u.index}"
         n_out = n_out_of(e)
         if n_out != len(u.output_rates):

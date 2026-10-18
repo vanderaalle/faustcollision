@@ -1,7 +1,7 @@
 // Headless sclang batch, run once per build:
 //   sclang translator/batch.scd <root> <buildDir> [no-render] [tolerant] <srcDir>...
 // e.g. sclang translator/batch.scd $PWD build defs tests/cases
-// For every <srcDir>/*.scd (each file evaluates to a SynthDef):
+// For every <srcDir>/*.scd (each file evaluates to a SynthDef or an Array of SynthDefs):
 //   <buildDir>/synthdefs/<name>.scsyndef   the binary the translator parses
 //   <buildDir>/meta/<name>.json            specs, output count, render jobs
 //   <buildDir>/nrt/<name>/<job>.wav        scsynth NRT render of each test signal
@@ -55,10 +55,8 @@ try {
 	if(signals.isEmpty) { Error("no signals in signals/; run signals/make_signals.py").throw };
 	[defDir, metaDir, nrtRoot].do(File.mkdir(_));
 
-	process = { |path|
-		var def = path.load;
+	process = { |path, def|
 		var md, specs, outs, numOutputs, settings, jobs, names, defaults, sigs, nrtDir;
-		if(def.isKindOf(SynthDef).not) { Error("% does not evaluate to a SynthDef".format(path)).throw };
 		md = def.metadata ? ();
 		specs = md[\specs] ? ();
 		outs = def.children.select { |u| u.isKindOf(Out) };  // LocalOut is not an output
@@ -120,12 +118,20 @@ try {
 	};
 
 	files.do { |path|
+		var run = {
+			var result = path.load;
+			var defs = if(result.isKindOf(SynthDef)) { [result] } { result };
+			if(defs.isKindOf(SequenceableCollection).not or: { defs.any { |d| d.isKindOf(SynthDef).not } }) {
+				Error("% does not evaluate to a SynthDef or an Array of SynthDefs".format(path)).throw
+			};
+			defs.do { |def| process.(path, def) };
+		};
 		if(tolerant) {
-			try { process.(path) } { |err|
+			try { run.value } { |err|
 				File.use(metaDir +/+ path.basename.splitext[0] ++ ".sclang_error", "w") { |f| f.write(err.errorString) };
 				"batch: % FAILED: %".format(path.basename, err.errorString).postln;
 			}
-		} { process.(path) }
+		} { run.value }
 	};
 	"batch: done".postln;
 	0.exit;

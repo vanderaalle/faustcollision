@@ -63,30 +63,724 @@ kr_interpolate = true
 name = "+"
 faust = "({a} + {b})"
 compare = "waveform"
-tol = 1e-6
+tol = 1e-06
 case = "case_BinaryOp_add"
 
 [BinaryOpUGen.operators.1]
 name = "-"
 faust = "({a} - {b})"
 compare = "waveform"
-tol = 1e-6
+tol = 1e-06
 case = "case_BinaryOp_sub"
 
 [BinaryOpUGen.operators.2]
 name = "*"
 faust = "({a} * {b})"
 compare = "waveform"
-tol = 1e-6
+tol = 1e-06
 case = "case_BinaryOp_mul"
+
+[BinaryOpUGen.operators.3]
+name = "div"
+# idiv_aa: floor(a / b) on floats
+faust = "floor({a} / {b})"
+compare = "waveform"
+tol = 1e-06
+case = "case_BinaryOp_div"
+
+[BinaryOpUGen.operators.4]
+name = "/"
+faust = "({a} / {b})"
+compare = "waveform"
+tol = 1e-06
+case = "case_BinaryOp_fdiv"
+
+[BinaryOpUGen.operators.5]
+name = "mod"
+faust = "sc.mod({a}, {b})"
+compare = "waveform"
+tol = 1e-06
+case = "case_BinaryOp_mod"
+
+[BinaryOpUGen.operators.6]
+name = "=="
+faust = "float({a} == {b})"
+compare = "waveform"
+tol = 1e-06
+case = "case_BinaryOp_eq"
+
+[BinaryOpUGen.operators.7]
+name = "!="
+faust = "float({a} != {b})"
+compare = "waveform"
+tol = 1e-06
+case = "case_BinaryOp_ne"
+
+[BinaryOpUGen.operators.8]
+name = "<"
+faust = "float({a} < {b})"
+compare = "waveform"
+tol = 1e-06
+case = "case_BinaryOp_lt"
+
+[BinaryOpUGen.operators.9]
+name = ">"
+faust = "float({a} > {b})"
+compare = "waveform"
+tol = 1e-06
+case = "case_BinaryOp_gt"
+
+[BinaryOpUGen.operators.10]
+name = "<="
+faust = "float({a} <= {b})"
+compare = "waveform"
+tol = 1e-06
+case = "case_BinaryOp_le"
+
+[BinaryOpUGen.operators.11]
+name = ">="
+faust = "float({a} >= {b})"
+compare = "waveform"
+tol = 1e-06
+case = "case_BinaryOp_ge"
+
+[BinaryOpUGen.operators.12]
+name = "min"
+faust = "min({a}, {b})"
+compare = "waveform"
+tol = 1e-06
+case = "case_BinaryOp_min"
+
+[BinaryOpUGen.operators.13]
+name = "max"
+faust = "max({a}, {b})"
+compare = "waveform"
+tol = 1e-06
+case = "case_BinaryOp_max"
+
+[BinaryOpUGen.operators.14]
+name = "bitAnd"
+faust = "float(int({a}) & int({b}))"
+compare = "waveform"
+tol = 1e-06
+case = "case_BinaryOp_bitAnd"
+
+[BinaryOpUGen.operators.15]
+name = "bitOr"
+faust = "float(int({a}) | int({b}))"
+compare = "waveform"
+tol = 1e-06
+case = "case_BinaryOp_bitOr"
+
+[BinaryOpUGen.operators.16]
+name = "bitXor"
+faust = "float(int({a}) xor int({b}))"
+compare = "waveform"
+tol = 1e-06
+case = "case_BinaryOp_bitXor"
+
+[BinaryOpUGen.operators.17]
+name = "lcm"
+faust = "sc.lcm({a}, {b})"
+compare = "waveform"
+tol = 1e-06
+case = "case_BinaryOp_lcm"
+
+[BinaryOpUGen.operators.18]
+name = "gcd"
+faust = "sc.gcd({a}, {b})"
+compare = "waveform"
+tol = 1e-06
+case = "case_BinaryOp_gcd"
+
+[BinaryOpUGen.operators.19]
+name = "round"
+faust = "sc.qround({a}, {b})"
+compare = "waveform"
+tol = 1e-06
+case = "case_BinaryOp_round"
+
+[BinaryOpUGen.operators.20]
+name = "roundUp"
+faust = "sc.qroundup({a}, {b})"
+compare = "waveform"
+tol = 1e-06
+case = "case_BinaryOp_roundUp"
+
+[BinaryOpUGen.operators.21]
+name = "trunc"
+faust = "sc.qtrunc({a}, {b})"
+compare = "waveform"
+tol = 1e-06
+case = "case_BinaryOp_trunc"
+
+[BinaryOpUGen.operators.22]
+name = "atan2"
+faust = "atan2({a}, {b})"
+compare = "waveform"
+tol = 1e-05
+case = "case_BinaryOp_atan2"
+
+[BinaryOpUGen.operators.23]
+name = "hypot"
+# scsynth: hypotf
+faust = "sqrt({a} * {a} + {b} * {b})"
+compare = "waveform"
+tol = 1e-05
+case = "case_BinaryOp_hypot"
+
+[BinaryOpUGen.operators.24]
+name = "hypotApx"
+faust = "sc.hypotx({a}, {b})"
+compare = "waveform"
+tol = 1e-06
+case = "case_BinaryOp_hypotApx"
 
 [BinaryOpUGen.operators.25]
 name = "pow"
-# SC's pow is sign-preserving: a < 0 gives -(|a| ** b).
-faust = "sc.spow({a}, {b})"
+# sign-preserving: a < 0 gives -(|a| ** b)
+faust = { ar = "sc.nspow({a}, {b})", kr = "sc.spow({a}, {b})" }
 compare = "waveform"
-tol = 1e-5
+tol = 1e-05
 case = "case_BinaryOp_pow"
+
+[BinaryOpUGen.operators.26]
+name = "leftShift"
+faust = "float(int({a}) << int({b}))"
+compare = "waveform"
+tol = 1e-06
+case = "case_BinaryOp_leftShift"
+
+[BinaryOpUGen.operators.27]
+name = "rightShift"
+faust = "float(int({a}) >> int({b}))"
+compare = "waveform"
+tol = 1e-06
+case = "case_BinaryOp_rightShift"
+
+[BinaryOpUGen.operators.28]
+name = "unsignedRightShift"
+# no case in the server dispatch: falls to add_aa (docs/sc-findings.md #5)
+faust = "({a} + {b})"
+compare = "waveform"
+tol = 1e-06
+case = "case_BinaryOp_unsignedRightShift"
+
+[BinaryOpUGen.operators.29]
+name = "fill"
+# no case in the server dispatch: falls to add_aa (docs/sc-findings.md #5)
+faust = "({a} + {b})"
+compare = "waveform"
+tol = 1e-06
+case = "case_BinaryOp_fill"
+
+[BinaryOpUGen.operators.30]
+name = "ring1"
+faust = "({a} * {b} + {a})"
+compare = "waveform"
+tol = 1e-06
+case = "case_BinaryOp_ring1"
+
+[BinaryOpUGen.operators.31]
+name = "ring2"
+faust = "({a} * {b} + {a} + {b})"
+compare = "waveform"
+tol = 1e-06
+case = "case_BinaryOp_ring2"
+
+[BinaryOpUGen.operators.32]
+name = "ring3"
+faust = "({a} * {a} * {b})"
+compare = "waveform"
+tol = 1e-06
+case = "case_BinaryOp_ring3"
+
+[BinaryOpUGen.operators.33]
+name = "ring4"
+faust = "({a} * {a} * {b} - {a} * {b} * {b})"
+compare = "waveform"
+tol = 1e-06
+case = "case_BinaryOp_ring4"
+
+[BinaryOpUGen.operators.34]
+name = "difsqr"
+faust = "({a} * {a} - {b} * {b})"
+compare = "waveform"
+tol = 1e-06
+case = "case_BinaryOp_difsqr"
+
+[BinaryOpUGen.operators.35]
+name = "sumsqr"
+faust = "({a} * {a} + {b} * {b})"
+compare = "waveform"
+tol = 1e-06
+case = "case_BinaryOp_sumsqr"
+
+[BinaryOpUGen.operators.36]
+name = "sqrsum"
+faust = "(({a} + {b}) * ({a} + {b}))"
+compare = "waveform"
+tol = 1e-06
+case = "case_BinaryOp_sqrsum"
+
+[BinaryOpUGen.operators.37]
+name = "sqrdif"
+faust = "(({a} - {b}) * ({a} - {b}))"
+compare = "waveform"
+tol = 1e-06
+case = "case_BinaryOp_sqrdif"
+
+[BinaryOpUGen.operators.38]
+name = "absdif"
+faust = "abs({a} - {b})"
+compare = "waveform"
+tol = 1e-06
+case = "case_BinaryOp_absdif"
+
+[BinaryOpUGen.operators.39]
+name = "thresh"
+faust = "select2({a} < {b}, {a}, 0.0)"
+compare = "waveform"
+tol = 1e-06
+case = "case_BinaryOp_thresh"
+
+[BinaryOpUGen.operators.40]
+name = "amclip"
+faust = "sc.amclip({a}, {b})"
+compare = "waveform"
+tol = 1e-06
+case = "case_BinaryOp_amclip"
+
+[BinaryOpUGen.operators.41]
+name = "scaleneg"
+faust = "select2({a} >= 0, {a} * {b}, {a})"
+# scaleneg_aa; the float/double sc_scaleneg specialisations (sclang, demand rate) compute -a*b (docs/sc-findings.md #11)
+compare = "waveform"
+tol = 1e-06
+case = "case_BinaryOp_scaleneg"
+
+[BinaryOpUGen.operators.42]
+name = "clip2"
+faust = "max(0 - {b}, min({b}, {a}))"
+compare = "waveform"
+tol = 1e-06
+case = "case_BinaryOp_clip2"
+
+[BinaryOpUGen.operators.43]
+name = "excess"
+faust = "({a} - max(0 - {b}, min({b}, {a})))"
+compare = "waveform"
+tol = 1e-06
+case = "case_BinaryOp_excess"
+
+[BinaryOpUGen.operators.44]
+name = "fold2"
+faust = "sc.fold({a}, 0 - {b}, {b})"
+compare = "waveform"
+tol = 1e-06
+case = "case_BinaryOp_fold2"
+
+[BinaryOpUGen.operators.45]
+name = "wrap2"
+faust = "sc.wrap({a}, 0 - {b}, {b})"
+compare = "waveform"
+tol = 1e-06
+case = "case_BinaryOp_wrap2"
+
+[BinaryOpUGen.operators.46]
+name = "firstArg"
+faust = "{a}"
+compare = "waveform"
+tol = 1e-06
+case = "case_BinaryOp_firstArg"
+
+[BinaryOpUGen.operators.47]
+name = "rrand"
+# audio rate draws frand2, not frand (docs/sc-findings.md #4); kr is correct
+faust = { ar = "sc.rrand_ar({seed}, {a}, {b})", kr = "sc.rrand({seed}, {a}, {b})" }
+compare = "statistics"
+tol = 1.5
+case = "case_BinaryOp_rrand"
+
+[BinaryOpUGen.operators.48]
+name = "exprand"
+faust = "sc.exprand({seed}, {a}, {b})"
+compare = "statistics"
+tol = 1.5
+case = "case_BinaryOp_exprand"
+
+[UnaryOpUGen]
+tier = "direct"
+kind = "operator"
+inputs = ["a"]
+# Transcendental operators: ar runs nova-simd's approximations (sc.n*), kr the C library;
+# the two differ on edge cases (log of 0 or negatives, asin/acos outside ±1, exp overflow,
+# abs in ampdb/cpsmidi/cpsoct). docs/sc-findings.md #10.
+
+[UnaryOpUGen.operators.0]
+name = "neg"
+faust = "(0 - {a})"
+compare = "waveform"
+tol = 1e-06
+case = "case_UnaryOp_neg"
+
+[UnaryOpUGen.operators.1]
+name = "not"
+faust = "(1 - float({a} > 0))"
+compare = "waveform"
+tol = 1e-06
+case = "case_UnaryOp_not"
+
+[UnaryOpUGen.operators.4]
+name = "bitNot"
+faust = "float(0 - int({a}) - 1)"
+compare = "waveform"
+tol = 1e-06
+case = "case_UnaryOp_bitNot"
+
+[UnaryOpUGen.operators.5]
+name = "abs"
+faust = "abs({a})"
+compare = "waveform"
+tol = 1e-06
+case = "case_UnaryOp_abs"
+
+[UnaryOpUGen.operators.6]
+name = "asFloat"
+# not in the server dispatch: thru (docs/sc-findings.md #6)
+faust = "{a}"
+compare = "waveform"
+tol = 1e-06
+case = "case_UnaryOp_asFloat"
+
+[UnaryOpUGen.operators.7]
+name = "asInteger"
+# not in the server dispatch: thru, no truncation (docs/sc-findings.md #6)
+faust = "{a}"
+compare = "waveform"
+tol = 1e-06
+case = "case_UnaryOp_asInteger"
+
+[UnaryOpUGen.operators.8]
+name = "ceil"
+faust = "ceil({a})"
+compare = "waveform"
+tol = 1e-06
+case = "case_UnaryOp_ceil"
+
+[UnaryOpUGen.operators.9]
+name = "floor"
+faust = "floor({a})"
+compare = "waveform"
+tol = 1e-06
+case = "case_UnaryOp_floor"
+
+[UnaryOpUGen.operators.10]
+name = "frac"
+faust = "({a} - floor({a}))"
+compare = "waveform"
+tol = 1e-06
+case = "case_UnaryOp_frac"
+
+[UnaryOpUGen.operators.11]
+name = "sign"
+faust = "float(({a} > 0) - ({a} < 0))"
+compare = "waveform"
+tol = 1e-06
+case = "case_UnaryOp_sign"
+
+[UnaryOpUGen.operators.12]
+name = "squared"
+faust = "({a} * {a})"
+compare = "waveform"
+tol = 1e-06
+case = "case_UnaryOp_squared"
+
+[UnaryOpUGen.operators.13]
+name = "cubed"
+faust = "({a} * {a} * {a})"
+compare = "waveform"
+tol = 1e-06
+case = "case_UnaryOp_cubed"
+
+[UnaryOpUGen.operators.14]
+name = "sqrt"
+# signed: -sqrt(-x) for x < 0
+faust = "sc.ssqrt({a})"
+compare = "waveform"
+tol = 1e-05
+case = "case_UnaryOp_sqrt"
+
+[UnaryOpUGen.operators.15]
+name = "exp"
+faust = { ar = "sc.nexp({a})", kr = "exp({a})" }
+compare = "waveform"
+tol = 1e-05
+case = "case_UnaryOp_exp"
+
+[UnaryOpUGen.operators.16]
+name = "reciprocal"
+# scsynth uses a 23-bit SSE Newton-Raphson approximation
+faust = "sc.recip({a})"
+compare = "waveform"
+tol = 1e-05
+case = "case_UnaryOp_reciprocal"
+
+[UnaryOpUGen.operators.17]
+name = "midicps"
+faust = { ar = "(440.0 * sc.npow(2.0, ({a} - 69.0) * 0.083333333333))", kr = "(440.0 * pow(2.0, ({a} - 69.0) * 0.083333333333))" }
+compare = "waveform"
+tol = 1e-05
+case = "case_UnaryOp_midicps"
+
+[UnaryOpUGen.operators.18]
+name = "cpsmidi"
+faust = { ar = "(sc.nlog2(abs({a} * 0.0022727272727)) * 12.0 + 69.0)", kr = "(ma.log2({a} * 0.0022727272727) * 12.0 + 69.0)" }
+compare = "waveform"
+tol = 1e-05
+case = "case_UnaryOp_cpsmidi"
+
+[UnaryOpUGen.operators.19]
+name = "midiratio"
+faust = { ar = "sc.npow(2.0, {a} * 0.083333333333)", kr = "pow(2.0, {a} * 0.083333333333)" }
+compare = "waveform"
+tol = 1e-05
+case = "case_UnaryOp_midiratio"
+
+[UnaryOpUGen.operators.20]
+name = "ratiomidi"
+faust = { ar = "(12.0 * sc.nlog2({a}))", kr = "(12.0 * ma.log2({a}))" }
+compare = "waveform"
+tol = 1e-05
+case = "case_UnaryOp_ratiomidi"
+
+[UnaryOpUGen.operators.21]
+name = "dbamp"
+faust = { ar = "sc.npow(10.0, {a} * 0.05)", kr = "pow(10.0, {a} * 0.05)" }
+compare = "waveform"
+tol = 1e-05
+case = "case_UnaryOp_dbamp"
+
+[UnaryOpUGen.operators.22]
+name = "ampdb"
+# no abs: NaN for negative input, as in scsynth
+faust = { ar = "(sc.nlog10(abs({a})) * 20.0)", kr = "(log10({a}) * 20.0)" }
+compare = "waveform"
+tol = 1e-05
+case = "case_UnaryOp_ampdb"
+
+[UnaryOpUGen.operators.23]
+name = "octcps"
+faust = { ar = "(440.0 * sc.npow(2.0, {a} - 4.75))", kr = "(440.0 * pow(2.0, {a} - 4.75))" }
+compare = "waveform"
+tol = 1e-05
+case = "case_UnaryOp_octcps"
+
+[UnaryOpUGen.operators.24]
+name = "cpsoct"
+faust = { ar = "(sc.nlog2(abs({a} * 0.0022727272727)) + 4.75)", kr = "(ma.log2({a} * 0.0022727272727) + 4.75)" }
+compare = "waveform"
+tol = 1e-05
+case = "case_UnaryOp_cpsoct"
+
+[UnaryOpUGen.operators.25]
+name = "log"
+faust = { ar = "sc.nlog({a})", kr = "log({a})" }
+compare = "waveform"
+tol = 1e-05
+case = "case_UnaryOp_log"
+
+[UnaryOpUGen.operators.26]
+name = "log2"
+# float version: no abs (docs/sc-findings.md #7)
+faust = { ar = "sc.nlog2({a})", kr = "ma.log2({a})" }
+compare = "waveform"
+tol = 1e-05
+case = "case_UnaryOp_log2"
+
+[UnaryOpUGen.operators.27]
+name = "log10"
+faust = { ar = "sc.nlog10({a})", kr = "log10(abs({a}))" }
+compare = "waveform"
+tol = 1e-05
+case = "case_UnaryOp_log10"
+
+[UnaryOpUGen.operators.28]
+name = "sin"
+faust = { ar = "sc.nsin({a})", kr = "sin({a})" }
+compare = "waveform"
+tol = 1e-05
+case = "case_UnaryOp_sin"
+
+[UnaryOpUGen.operators.29]
+name = "cos"
+faust = { ar = "sc.ncos({a})", kr = "cos({a})" }
+compare = "waveform"
+tol = 1e-05
+case = "case_UnaryOp_cos"
+
+[UnaryOpUGen.operators.30]
+name = "tan"
+faust = { ar = "sc.ntan({a})", kr = "tan({a})" }
+compare = "waveform"
+# near the poles, last-bit float differences are amplified
+tol = 1e-4
+case = "case_UnaryOp_tan"
+
+[UnaryOpUGen.operators.31]
+name = "asin"
+faust = { ar = "sc.nasin({a})", kr = "asin({a})" }
+compare = "waveform"
+tol = 1e-05
+case = "case_UnaryOp_asin"
+
+[UnaryOpUGen.operators.32]
+name = "acos"
+faust = { ar = "sc.nacos({a})", kr = "acos({a})" }
+compare = "waveform"
+tol = 1e-05
+case = "case_UnaryOp_acos"
+
+[UnaryOpUGen.operators.33]
+name = "atan"
+faust = { ar = "sc.natan({a})", kr = "atan({a})" }
+compare = "waveform"
+tol = 1e-05
+case = "case_UnaryOp_atan"
+
+[UnaryOpUGen.operators.34]
+name = "sinh"
+faust = "ma.sinh({a})"
+compare = "waveform"
+tol = 1e-05
+case = "case_UnaryOp_sinh"
+
+[UnaryOpUGen.operators.35]
+name = "cosh"
+faust = "ma.cosh({a})"
+compare = "waveform"
+tol = 1e-05
+case = "case_UnaryOp_cosh"
+
+[UnaryOpUGen.operators.36]
+name = "tanh"
+faust = { ar = "sc.ntanh({a})", kr = "ma.tanh({a})" }
+compare = "waveform"
+tol = 1e-05
+case = "case_UnaryOp_tanh"
+
+[UnaryOpUGen.operators.37]
+name = "rand"
+faust = "sc.rand({seed}, {a})"
+compare = "statistics"
+tol = 1.5
+case = "case_UnaryOp_rand"
+
+[UnaryOpUGen.operators.38]
+name = "rand2"
+faust = "sc.rand2({seed}, {a})"
+compare = "statistics"
+tol = 1.5
+case = "case_UnaryOp_rand2"
+
+[UnaryOpUGen.operators.39]
+name = "linrand"
+faust = "sc.linrand({seed}, {a})"
+compare = "statistics"
+tol = 1.5
+case = "case_UnaryOp_linrand"
+
+[UnaryOpUGen.operators.40]
+name = "bilinrand"
+faust = "sc.bilinrand({seed}, {a})"
+compare = "statistics"
+tol = 1.5
+case = "case_UnaryOp_bilinrand"
+
+[UnaryOpUGen.operators.41]
+name = "sum3rand"
+faust = "sc.sum3rand({seed}, {a})"
+compare = "statistics"
+tol = 1.5
+case = "case_UnaryOp_sum3rand"
+
+[UnaryOpUGen.operators.42]
+name = "distort"
+faust = "({a} / (1.0 + abs({a})))"
+compare = "waveform"
+tol = 1e-06
+case = "case_UnaryOp_distort"
+
+[UnaryOpUGen.operators.43]
+name = "softclip"
+# linear within ±0.5
+faust = "sc.softclip({a})"
+compare = "waveform"
+tol = 1e-06
+case = "case_UnaryOp_softclip"
+
+[UnaryOpUGen.operators.44]
+name = "coin"
+faust = "sc.coin({seed}, {a})"
+compare = "statistics"
+tol = 1.5
+case = "case_UnaryOp_coin"
+
+[UnaryOpUGen.operators.46]
+name = "silence"
+faust = "0.0"
+compare = "waveform"
+tol = 1e-06
+case = "case_UnaryOp_silence"
+
+[UnaryOpUGen.operators.47]
+name = "thru"
+faust = "{a}"
+compare = "waveform"
+tol = 1e-06
+case = "case_UnaryOp_thru"
+
+[UnaryOpUGen.operators.48]
+name = "rectWindow"
+faust = "sc.rectwindow({a})"
+compare = "waveform"
+tol = 1e-06
+case = "case_UnaryOp_rectWindow"
+
+[UnaryOpUGen.operators.49]
+name = "hanWindow"
+faust = "sc.hanwindow({a})"
+compare = "waveform"
+tol = 1e-05
+case = "case_UnaryOp_hanWindow"
+
+[UnaryOpUGen.operators.50]
+name = "welWindow"
+faust = "sc.welwindow({a})"
+compare = "waveform"
+tol = 1e-05
+case = "case_UnaryOp_welWindow"
+
+[UnaryOpUGen.operators.51]
+name = "triWindow"
+faust = "sc.triwindow({a})"
+compare = "waveform"
+tol = 1e-06
+case = "case_UnaryOp_triWindow"
+
+[UnaryOpUGen.operators.52]
+name = "ramp"
+faust = "sc.ramp({a})"
+compare = "waveform"
+tol = 1e-06
+case = "case_UnaryOp_ramp"
+
+[UnaryOpUGen.operators.53]
+name = "scurve"
+faust = "sc.scurve({a})"
+compare = "waveform"
+tol = 1e-06
+case = "case_UnaryOp_scurve"
 
 [MulAdd]
 tier = "direct"

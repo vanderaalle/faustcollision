@@ -69,9 +69,16 @@ METRICS = {"waveform": waveform, "envelope": envelope, "spectrum": spectrum, "st
 
 
 def score(mode, ref, test):
-    """Per-channel score, worst channel wins. Inputs are (samples, channels)."""
+    """Per-channel score, worst channel wins. Inputs are (samples, channels).
+    NaN or inf at the same sample in both renders count as agreement (scsynth's
+    log of a negative input is NaN, and so is the port's); in one render only, inf."""
     n = min(len(ref), len(test))
     ref, test = ref[:n].astype(np.float64), test[:n].astype(np.float64)
+    bad_r, bad_t = ~np.isfinite(ref), ~np.isfinite(test)
+    same = (bad_r & bad_t) & ((np.isnan(ref) & np.isnan(test)) | (ref == test))
+    if ((bad_r | bad_t) & ~same).any():
+        return float("inf")
+    ref, test = np.where(same, 0.0, ref), np.where(same, 0.0, test)
     worst = 0.0
     for c in range(ref.shape[1]):
         r, t = ref[:, c], test[:, c]
