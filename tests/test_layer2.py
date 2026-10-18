@@ -8,7 +8,8 @@ import pytest
 import soundfile as sf
 
 from tests import compare, faustrun
-from tests.conftest import BUILD, ROOT, defs, translation
+from tests import conftest
+from tests.conftest import ROOT, defs, translation
 
 JOBS = [(name, job) for name, meta in defs() for job in meta["jobs"]]
 
@@ -20,8 +21,8 @@ def test_fidelity(name, job, record):
         pytest.skip("translation failed (see layer 1)")
     x, _ = sf.read(ROOT / "signals" / f"{job['signal']}.wav", dtype="float32")
     ref, _ = sf.read(job["nrt"], dtype="float32", always_2d=True)
-    test = faustrun.render(BUILD / "faust" / f"{name}.dsp", x, settings=job["setting"])
-    out = BUILD / "renders" / name
+    test = faustrun.render(conftest.BUILD / "faust" / f"{name}.dsp", x, settings=job["setting"])
+    out = conftest.BUILD / "renders" / name
     out.mkdir(parents=True, exist_ok=True)
     sf.write(out / f"{job['tag']}.wav", test, faustrun.SR, subtype="FLOAT")
 

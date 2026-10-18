@@ -1,5 +1,5 @@
 // Headless sclang batch, run once per build:
-//   sclang translator/batch.scd <root> <buildDir> [no-render] [tolerant] <srcDir>...
+//   sclang translator/batch.scd <root> <buildDir> [no-render] [tolerant] [signals:<dir>] <srcDir>...
 // e.g. sclang translator/batch.scd $PWD build defs tests/cases
 // For every <srcDir>/*.scd (each file evaluates to a SynthDef or an Array of SynthDefs):
 //   <buildDir>/synthdefs/<name>.scsyndef   the binary the translator parses
@@ -13,7 +13,9 @@ var root = argv[0] ?? { "usage: sclang batch.scd <root> <buildDir> [no-render] [
 var build = root +/+ argv[1];
 var render = argv.includesEqual("no-render").not;
 var tolerant = argv.includesEqual("tolerant");
-var srcDirs = argv.drop(2).reject { |a| ["no-render", "tolerant"].includesEqual(a) };
+var sigArg = argv.detect { |a| a.beginsWith("signals:") };
+var sigDir = if(sigArg.notNil) { sigArg.drop(8) } { root +/+ "signals" };
+var srcDirs = argv.drop(2).reject { |a| ["no-render", "tolerant"].includesEqual(a) or: { a.beginsWith("signals:") } };
 var sampleRate = 48000;
 var defDir = build +/+ "synthdefs/";
 var metaDir = build +/+ "meta/";
@@ -44,7 +46,7 @@ settingTag = { |setting|
 
 try {
 	var files = srcDirs.collect { |d| (root +/+ d +/+ "*.scd").pathMatch }.flatten;
-	var signals = (root +/+ "signals/*.wav").pathMatch.collect { |path|
+	var signals = (sigDir +/+ "*.wav").pathMatch.collect { |path|
 		var sf = SoundFile.openRead(path) ?? { Error("cannot read " ++ path).throw };
 		var info = (name: path.basename.splitext[0], path: path, dur: sf.duration, sr: sf.sampleRate, chans: sf.numChannels);
 		sf.close;
@@ -52,7 +54,7 @@ try {
 		if(info.chans != 1) { Error("% is not mono".format(path)).throw };
 		info
 	};
-	if(signals.isEmpty) { Error("no signals in signals/; run signals/make_signals.py").throw };
+	if(signals.isEmpty) { Error("no signals in %; run signals/make_signals.py".format(sigDir)).throw };
 	[defDir, metaDir, nrtRoot].do(File.mkdir(_));
 
 	process = { |path, def|

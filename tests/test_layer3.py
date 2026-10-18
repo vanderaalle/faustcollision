@@ -15,9 +15,11 @@ import pytest
 import soundfile as sf
 
 from tests import faustrun
-from tests.conftest import BUILD, ROOT, defs, translation
+from tests import conftest
+from tests.conftest import ROOT, defs, translation
 
-UNITS = {p.stem for p in (ROOT / "defs").glob("*.scd")}
+# units (strict DC/finiteness): a project's defs/, or the library's examples/
+UNITS = {p.stem for d in ("defs", "examples") for p in (conftest.PROJECT / d).glob("*.scd")}
 
 SR = faustrun.SR
 TAIL = 2 * SR
@@ -60,7 +62,7 @@ def test_control_sweep(name, sig, record):
         if ctl is not None:
             sweep = spec["min"] + (spec["max"] - spec["min"]) * tri
             auto = {ctl: np.concatenate([sweep, np.full(TAIL, spec["default"])])}
-        y = faustrun.render(BUILD / "faust" / f"{name}.dsp", x, automation=auto)
+        y = faustrun.render(conftest.BUILD / "faust" / f"{name}.dsp", x, automation=auto)
         tail = y[-TAIL // 2:]
         nonfinite = int((~np.isfinite(y)).sum())
         finite = y[np.isfinite(y)]

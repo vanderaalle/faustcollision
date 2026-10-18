@@ -5,12 +5,15 @@ import pytest
 
 from translator.codegen import load_table
 from tests import faustrun
-from tests.conftest import BUILD, ROOT, defs, translation
+from tests import conftest
+from tests.conftest import ROOT, defs, translation
 
 DEFS = defs()
 
 
 def test_every_mapping_entry_has_a_case():
+    if conftest.PROJECT != ROOT:
+        pytest.skip("library check (run without --project)")
     cases = {name for name, meta in DEFS if "/tests/cases/" in meta["source"]}
     missing = []
     for cls, e in load_table().items():
@@ -22,12 +25,12 @@ def test_every_mapping_entry_has_a_case():
 
 @pytest.mark.parametrize("name,meta", DEFS, ids=[d[0] for d in DEFS])
 def test_translates_and_compiles(name, meta, record):
-    err = BUILD / "faust" / f"{name}.error"
+    err = conftest.BUILD / "faust" / f"{name}.error"
     if err.exists():
         record(layer=1, **{"def": name}, result="FAIL", detail=err.read_text().strip())
         pytest.fail(f"translation failed: {err.read_text().strip()}")
     t = translation(name)
-    dsp = BUILD / "faust" / f"{name}.dsp"
+    dsp = conftest.BUILD / "faust" / f"{name}.dsp"
     backend = "faust -json" if faustrun.faust_cli() else "libfaust (DawDreamer)"
     info = faustrun.describe_cli(dsp) if faustrun.faust_cli() else faustrun.describe_libfaust(dsp)
 

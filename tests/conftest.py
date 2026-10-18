@@ -1,5 +1,10 @@
-"""Shared fixtures: builds once per session (sclang runs once), collects results into report/."""
+"""Shared fixtures: builds once per session (sclang runs once), collects results into report/.
+
+    pytest                       the library's examples and regression cases
+    pytest --project=DIR         a project's defs/ (also: FC_PROJECT=DIR)
+"""
 import json
+import os
 import subprocess
 import sys
 from datetime import datetime
@@ -7,21 +12,30 @@ from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).resolve().parent.parent
-BUILD = ROOT / "build"
-REPORT = ROOT / "report"
+ROOT = Path(__file__).resolve().parent.parent      # the library: translator, signals, cases
+PROJECT = Path(os.environ.get("FC_PROJECT", ROOT)).resolve()
+BUILD = PROJECT / "build"
+REPORT = PROJECT / "report"
 RESULTS = []
 
 
 def pytest_addoption(parser):
     parser.addoption("--rebuild", action="store_true", help="rerun the sclang batch and the translator")
+    parser.addoption("--project", default=None, help="project directory with defs/ (default: the library)")
 
 
 def pytest_configure(config):
+    global PROJECT, BUILD, REPORT
+    if config.getoption("--project"):
+        PROJECT = Path(config.getoption("--project")).resolve()
+        BUILD, REPORT = PROJECT / "build", PROJECT / "report"
+    from tests import faustrun
+    faustrun.FAUST_DIR = BUILD / "faust"
+    cmd = [sys.executable, "-m", "translator.build", "--project", str(PROJECT)]
     if config.getoption("--rebuild") or not (BUILD / "meta").exists():
-        subprocess.run([sys.executable, "-m", "translator.build"], cwd=ROOT)  # failures surface in layer 1
+        subprocess.run(cmd, cwd=ROOT)  # failures surface in layer 1
     elif not (BUILD / "faust").exists():
-        subprocess.run([sys.executable, "-m", "translator.build", "--no-sclang"], cwd=ROOT)
+        subprocess.run(cmd + ["--no-sclang"], cwd=ROOT)
 
 
 def defs():
