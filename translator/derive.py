@@ -68,3 +68,30 @@ def gverb(c):
         out[f"tc{k}"], out[f"ts{k}"] = taps_ctor[k], taps_set[k]
         out[f"dl{k}"], out[f"dr{k}"] = dif["l"][k], dif["r"][k]
     return out
+
+
+
+def klank(c):
+    """OscUGens.cpp Klank_SetCoefs, run once in the constructor. scsynth mixes float and
+    double: freqscale/freqoffset times mRadiansPerSample (double) stored as float; R =
+    exp(log001 / (time * SR)) in double (log001 is a double), cost with the double cos of
+    a float w, stored as float. The two-pole frequency of a low partial is sensitive to one
+    ulp of b1, so the coefficients are computed here, exactly as there."""
+    rps = 2.0 * math.pi / SR
+    log001 = math.log(0.001)
+    fs = f32(f32(c["freqscale"]) * rps)
+    fo = f32(f32(c["freqoffset"]) * rps)
+    ds = f32(c["decayscale"])
+    b1s, b2s, a0s = [], [], []
+    for k in range(c["n"]):
+        w = f32(f32(f32(c[f"freq{k}"]) * fs) + fo)
+        time = f32(f32(c[f"ring{k}"]) * ds)
+        R = f32(0.0) if time == 0 else f32(math.exp(log001 / float(f32(time * f32(SR)))))
+        twoR = f32(f32(2.0) * R)
+        R2 = f32(R * R)
+        cost = f32(float(twoR) * math.cos(float(w)) / float(f32(f32(1.0) + R2)))
+        b1s.append(f32(twoR * cost))
+        b2s.append(-R2)
+        a0s.append(f32(float(f32(c[f"amp{k}"])) * 0.25))
+    return {k: ", ".join(repr(float(v)) for v in vs) for k, vs in
+            (("b1s", b1s), ("b2s", b2s), ("a0s", a0s))}

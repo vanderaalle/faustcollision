@@ -1471,3 +1471,16 @@ faust = { ar = "sc.gverb({in}, {revtime}, {damping}, {inputbw}, {drylevel}, {ear
 compare = "waveform"
 tol = 1e-4
 case = "case_GVerb"
+
+[Klank]
+tier = "direct"
+inputs = ["input", "freqscale", "freqoffset", "decayscale"]
+# scsynth computes the coefficients once, in the constructor (mixing float and double):
+# all but the input are constants, and the coefficients come from translator/derive.py
+variadic = { group = ["freq", "amp", "ring"], constant = true }
+constant_inputs = ["freqscale", "freqoffset", "decayscale"]
+derive = "klank"
+faust = { ar = "sc.klank({n}, {input}, ({b1s}), ({b2s}), ({a0s}))" }
+compare = "waveform"
+tol = 1e-5
+case = "case_Klank"

@@ -195,7 +195,10 @@ def translate(sdef: SynthDef, meta: dict, table=None) -> Translation:
             got = args[iname]
             if not (isinstance(got, Const) and math.isclose(got.value, want, rel_tol=1e-6, abs_tol=1e-9)):
                 raise TranslationError(f"{u.cls}: input '{iname}' must be the constant {want}, got {got}")
-        for iname in e.get("constant_inputs", []):
+        constant = list(e.get("constant_inputs", []))
+        if e.get("variadic", {}).get("constant"):  # the whole group is read once
+            constant += [k for k in args if k not in e.get("inputs", [])]
+        for iname in constant:
             if not isinstance(args[iname], Const):
                 raise TranslationError(f"{u.cls}: input '{iname}' must be a constant (scsynth reads it once)")
         for iname in e.get("kr_inputs", []):
@@ -234,7 +237,10 @@ def translate(sdef: SynthDef, meta: dict, table=None) -> Translation:
         fmt = {k: (f"w_{k}" if k in wires else arg(k, v)) for k, v in args.items()}
         if e.get("derive"):  # constructor-time structure, computed here (translator/derive.py)
             from . import derive
-            fmt.update(getattr(derive, e["derive"])({k: args[k].value for k in e.get("constant_inputs", [])}))
+            consts = {k: args[k].value for k in constant}
+            if e.get("variadic"):
+                consts["n"] = (len(u.inputs) - len(fixed)) // len(e["variadic"]["group"])
+            fmt.update(getattr(derive, e["derive"])(consts))
         if e.get("variadic"):
             group = e["variadic"]["group"]
             n = (len(u.inputs) - len(fixed)) // len(group)

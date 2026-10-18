@@ -1219,3 +1219,33 @@ with {
     outl = gvdif(dl3, 0.625, gvdif(dl2, 0.625, gvdif(dl1, 0.75, wsum))) + xd;
     outr = gvdif(dr3, 0.625, gvdif(dr2, 0.625, gvdif(dr1, 0.75, wsum))) + xd;
 };
+
+//------------------------------------------------------------------------------
+// Klank (OscUGens.cpp): n two-pole resonators y = in + b1 y1 + b2 y2 (float, state zapped
+// at block end), summed as a0 y in scsynth's order (the n % 4 last partials first
+// each group of four, left to right), then out = s - s[n-2]. The coefficients b1, b2, a0
+// are computed once in scsynth's constructor, in mixed float/double arithmetic:
+// translator/derive.py computes them at translation time.
+//------------------------------------------------------------------------------
+klank(n, x, b1s, b2s, a0s) = s - s@2
+with {
+    tk(k, list) = list : ba.selector(k, n);
+    term(k) = tk(k, a0s) * y
+    with {
+        b1 = tk(k, b1s);
+        b2 = tk(k, b2s);
+        y = (\(f1, f2).(zz(y0), zz(f1), y0 with { y0 = x + b1 * f1 + b2 * f2; })) ~ (_, _) : !, !, _;
+        zz(v) = select2(blockend, v, zap(v));
+    };
+    imax = int(n / 4);
+    r = n - 4 * imax;
+    b = 4 * imax;
+    remf(0) = 0.0;
+    remf(1) = term(b);
+    remf(2) = fadd(term(b), term(b + 1));
+    remf(3) = fadd(fadd(term(b), term(b + 1)), term(b + 2));
+    grp(g) = fadd(fadd(fadd(term(4 * g), term(4 * g + 1)), term(4 * g + 2)), term(4 * g + 3));
+    sumg(0) = remf(r);
+    sumg(g) = fadd(sumg(g - 1), grp(g - 1));
+    s = sumg(imax);
+};

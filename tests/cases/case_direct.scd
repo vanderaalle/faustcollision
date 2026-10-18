@@ -119,6 +119,11 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 		metadata: (specs: (room: spec.(0, 1, 0.5, \lin)))),
 	SynthDef(\case_GVerb, { |revtime = 3| Out.ar(0, GVerb.ar(in.value, 10, revtime, 0.5, 0.5, 15, 1, 0.7, 0.5, 300) * 0.5) },
 		metadata: (specs: (revtime: spec.(0.5, 10, 3)))),
+	// Klank: 3 partials (remainder only), 6 partials (remainder + one group), scaled/offset
+	SynthDef(\case_Klank, { Out.ar(0, [
+		Klank.ar(`[[200, 671, 1153], [1, 0.5, 0.3], [1, 0.5, 0.25]], in.value),
+		Klank.ar(`[[110, 220, 330, 440, 557, 1201], nil, [0.3, 0.6, 0.2, 1, 0.4, 0.05]], in.value, 1.5, 7, 0.5)
+	] * 0.1) }),
 	// Noise: statistics only (scsynth's generator is seeded per server). Each at ar and kr.
 	// Rates and densities stay >= 100/s: a statistical comparison needs ~1000 random events
 	// per render (LFNoise2 at 20 Hz over 10 s varies ±2.4 dB from seed to seed).
