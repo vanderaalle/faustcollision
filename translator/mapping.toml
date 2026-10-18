@@ -4,9 +4,13 @@
 #   tier     direct | approximate | handwritten   (memorandum, translator section)
 #   kind     ugen (default) | control | input | output | operator
 #   inputs   SC input names, in binary order; templates refer to them as {name}
-#   faust    template, or a table by rate: { ar = "...", kr = "..." }
+#   faust    template, or a table by rate: { ar = "...", kr = "..." }; a key "kr<kr" (unit rate <
+#            rate of the first input) takes precedence when scsynth picks a different calc function
 #   outputs  number of outputs the template yields (default 1)
 #   require  inputs the port ignores: they must be these constants, else the translation fails
+#   constant_inputs  inputs scsynth reads once at construction: must be constants
+#   kr_inputs        inputs that must not be audio rate
+#   self_hold        kr template already samples per block (no automatic sc.krhold)
 #   compare  how a graph using this entry is checked against scsynth, loosest wins:
 #            waveform < envelope < spectrum < statistics
 #   tol      threshold for that comparison: waveform = relative RMS error,
@@ -122,7 +126,8 @@ inputs = ["in", "attackTime", "releaseTime"]
 # coefficients, so its times are 1/blocksize of the stated ones; the port reproduces that.
 # .ar is sample-exact. .kr runs one block late (sc.krhold): with the default 10 ms times the
 # value is |in| at a block edge, so at bass frequencies 10 ms envelopes differ by ~2 dB.
-faust = { ar = "sc.amplitude({attackTime}, {releaseTime}, {in})", kr = "sc.amplitude_kr({attackTime}, {releaseTime}, {in})" }
+# With a kr input it is a true control-rate follower: one update per block (Amplitude_next).
+faust = { ar = "sc.amplitude({attackTime}, {releaseTime}, {in})", kr = "sc.amplitude_kr({attackTime}, {releaseTime}, {in})", "kr<kr" = "sc.amplitude_krkr({attackTime}, {releaseTime}, {in})" }
 compare = "envelope"
 tol = 2.5
 case = "case_Amplitude"
@@ -139,3 +144,34 @@ faust = { kr = "sc.pitch({initFreq}, {minFreq}, {maxFreq}, {ampThreshold}, {in})
 compare = "statistics"
 tol = 6.0
 case = "case_Pitch"
+
+[DC]
+tier = "direct"
+inputs = ["in"]
+# DC_Ctor reads its input once; a signal there would be frozen at its first sample.
+constant_inputs = ["in"]
+faust = { ar = "{in}", kr = "{in}" }
+compare = "waveform"
+tol = 1e-6
+case = "case_DC"
+
+[K2A]
+tier = "direct"
+inputs = ["in"]
+# LFUGens.cpp: ramps linearly to the new kr value across the block, i.e. sc.kr2ar.
+kr_interpolate = true
+kr_inputs = ["in"]
+faust = { ar = "{in}" }
+compare = "waveform"
+tol = 1e-6
+case = "case_K2A"
+
+[A2K]
+tier = "direct"
+inputs = ["in"]
+# LFUGens.cpp: the first sample of each block. Causal, so exact (sc.a2k).
+self_hold = true
+faust = { kr = "sc.a2k({in})" }
+compare = "waveform"
+tol = 1e-6
+case = "case_A2K"

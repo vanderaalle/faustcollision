@@ -189,8 +189,19 @@ def translate(sdef: SynthDef, meta: dict, table=None) -> Translation:
             got = args[iname]
             if not (isinstance(got, Const) and math.isclose(got.value, want, rel_tol=1e-6, abs_tol=1e-9)):
                 raise TranslationError(f"{u.cls}: input '{iname}' must be the constant {want}, got {got}")
+        for iname in e.get("constant_inputs", []):
+            if not isinstance(args[iname], Const):
+                raise TranslationError(f"{u.cls}: input '{iname}' must be a constant (scsynth reads it once)")
+        for iname in e.get("kr_inputs", []):
+            v = args[iname]
+            if isinstance(v, Ref) and ugens[v.ugen].rate == "ar":
+                raise TranslationError(f"{u.cls}: input '{iname}' must not be audio rate")
         template = rec["faust"]
         if isinstance(template, dict):
+            first = u.inputs[0] if u.inputs else None
+            in_rate = ugens[first.ugen].rate if isinstance(first, Ref) else "ir"
+            if f"{u.rate}<{in_rate}" in template:
+                template = {u.rate: template[f"{u.rate}<{in_rate}"]}
             if u.rate not in template:
                 raise TranslationError(f"{u.cls}.{u.rate} is not mapped (only {', '.join(template)})")
             template = template[u.rate]
@@ -202,7 +213,7 @@ def translate(sdef: SynthDef, meta: dict, table=None) -> Translation:
                 return f"sc.kr2ar({x})"
             return x
         body = template.format(**{k: arg(v) for k, v in args.items()})
-        if u.rate == "kr" and any(isinstance(v, Ref) and ugens[v.ugen].rate == "ar" for v in u.inputs):
+        if u.rate == "kr" and not e.get("self_hold") and any(isinstance(v, Ref) and ugens[v.ugen].rate == "ar" for v in u.inputs):
             body = f"sc.krhold({body})" if n_out_of(e) == 1 else f"({body}) : par(i, {n_out_of(e)}, sc.krhold)"
         node = f"u{u.index}"
         n_out = n_out_of(e)

@@ -15,6 +15,7 @@ blocksize = 64;
 // whole block before the consumer runs; a causal port cannot, so krhold takes
 // the value at the end of the previous block: kr paths run exactly one block late.
 krhold(x) = ba.sAndH(ba.time % blocksize == 0, x@1);
+a2k(x) = ba.sAndH(ba.time % blocksize == 0, x);  // A2K: first sample of each block
 kr2ar(x) = p + (x - p) * (ba.time % blocksize) / blocksize
 with { p = select2(ba.time < blocksize, x@blocksize, x); };  // first block: no ramp, as in scsynth
 
@@ -32,6 +33,15 @@ with {
 // audio block, so the effective times are divided by the block size.
 // (The per-block hold is added by the code generator, as for every kr UGen.)
 amplitude_kr(att, rel, x) = amplitude(att / blocksize, rel / blocksize, x);
+
+// Amplitude.kr of a kr input: one update per block, coefficients at the control
+// rate (Amplitude_next with inNumSamples = 1). Output already changes once per block.
+amplitude_krkr(att, rel, x) = abs(x) : (step ~ _)
+with {
+    coef(t) = select2(t == 0, exp(log(0.1) / (t * ma.SR / blocksize)), 0);
+    upd(prev, v) = select2(v < prev, v + (prev - v) * coef(att), v + (prev - v) * coef(rel));
+    step(prev, v) = select2(ba.time % blocksize == 0, prev, upd(prev, v));
+};
 
 // MoogFF: port of server/plugins/MoogFF.cpp (Fontana 2007). Four TDF one-pole
 // sections b0 (1 + z^-1) / (1 + a1 z^-1) with the delay-free feedback loop

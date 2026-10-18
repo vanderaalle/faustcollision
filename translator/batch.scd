@@ -1,17 +1,24 @@
 // Headless sclang batch, run once per build:
-//   sclang translator/batch.scd <root>
-// For every defs/*.scd and tests/cases/*.scd (each file evaluates to a SynthDef):
-//   build/synthdefs/<name>.scsyndef   the binary the translator parses
-//   build/meta/<name>.json            specs, output count, render jobs
-//   build/nrt/<name>/<job>.wav        scsynth NRT render of each test signal
+//   sclang translator/batch.scd <root> <buildDir> [no-render] [tolerant] <srcDir>...
+// e.g. sclang translator/batch.scd $PWD build defs tests/cases
+// For every <srcDir>/*.scd (each file evaluates to a SynthDef):
+//   <buildDir>/synthdefs/<name>.scsyndef   the binary the translator parses
+//   <buildDir>/meta/<name>.json            specs, output count, render jobs
+//   <buildDir>/nrt/<name>/<job>.wav        scsynth NRT render of each test signal
 // Render settings per def: all controls at default, then each spec'd control at min and max.
+// tolerant: a file that fails is recorded in <buildDir>/meta/<file>.sclang_error and skipped.
 (
-var root = thisProcess.argv[0] ?? { "usage: sclang batch.scd <root>".error; 1.exit };
+var argv = thisProcess.argv;
+var root = argv[0] ?? { "usage: sclang batch.scd <root> <buildDir> [no-render] [tolerant] <srcDir>...".error; 1.exit };
+var build = root +/+ argv[1];
+var render = argv.includesEqual("no-render").not;
+var tolerant = argv.includesEqual("tolerant");
+var srcDirs = argv.drop(2).reject { |a| ["no-render", "tolerant"].includesEqual(a) };
 var sampleRate = 48000;
-var defDir = root +/+ "build/synthdefs/";
-var metaDir = root +/+ "build/meta/";
-var nrtRoot = root +/+ "build/nrt/";
-var json, settingTag;
+var defDir = build +/+ "synthdefs/";
+var metaDir = build +/+ "meta/";
+var nrtRoot = build +/+ "nrt/";
+var json, settingTag, process;
 
 json = { |x|
 	case
@@ -36,7 +43,7 @@ settingTag = { |setting|
 };
 
 try {
-	var files = (root +/+ "defs/*.scd").pathMatch ++ (root +/+ "tests/cases/*.scd").pathMatch;
+	var files = srcDirs.collect { |d| (root +/+ d +/+ "*.scd").pathMatch }.flatten;
 	var signals = (root +/+ "signals/*.wav").pathMatch.collect { |path|
 		var sf = SoundFile.openRead(path) ?? { Error("cannot read " ++ path).throw };
 		var info = (name: path.basename.splitext[0], path: path, dur: sf.duration, sr: sf.sampleRate, chans: sf.numChannels);
@@ -48,13 +55,13 @@ try {
 	if(signals.isEmpty) { Error("no signals in signals/; run signals/make_signals.py").throw };
 	[defDir, metaDir, nrtRoot].do(File.mkdir(_));
 
-	files.do { |path|
+	process = { |path|
 		var def = path.load;
 		var md, specs, outs, numOutputs, settings, jobs, names, defaults, sigs, nrtDir;
 		if(def.isKindOf(SynthDef).not) { Error("% does not evaluate to a SynthDef".format(path)).throw };
 		md = def.metadata ? ();
 		specs = md[\specs] ? ();
-		outs = def.children.select { |u| u.isKindOf(AbstractOut) };
+		outs = def.children.select { |u| u.isKindOf(Out) };  // LocalOut is not an output
 		if(outs.size != 1) { Error("%: expected exactly one Out, found %".format(def.name, outs.size)).throw };
 		numOutputs = outs[0].inputs.size - 1;
 
@@ -91,10 +98,10 @@ try {
 				score.writeOSCFile(osc);
 				cmd = "scsynth -N % % % % WAV float -i 1 -o % -m 65536 > /dev/null".format(
 					osc.shellQuote, sig.path.shellQuote, wav.shellQuote, sampleRate, numOutputs);
-				status = cmd.systemCmd;
+				status = if(render) { cmd.systemCmd } { 0 };
 				if(status != 0) { Error("scsynth NRT failed (%) for %".format(status, tag)).throw };
 				File.delete(osc);
-				jobs.add((tag: tag, signal: sig.name, setting: setting, nrt: wav));
+				if(render) { jobs.add((tag: tag, signal: sig.name, setting: setting, nrt: wav)) };
 			}
 		};
 
@@ -110,6 +117,15 @@ try {
 			)));
 		};
 		"batch: % (% renders)".format(def.name, jobs.size).postln;
+	};
+
+	files.do { |path|
+		if(tolerant) {
+			try { process.(path) } { |err|
+				File.use(metaDir +/+ path.basename.splitext[0] ++ ".sclang_error", "w") { |f| f.write(err.errorString) };
+				"batch: % FAILED: %".format(path.basename, err.errorString).postln;
+			}
+		} { process.(path) }
 	};
 	"batch: done".postln;
 	0.exit;

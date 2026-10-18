@@ -27,7 +27,7 @@ def run_sclang():
     for d in ("synthdefs", "meta", "nrt"):
         shutil.rmtree(BUILD / d, ignore_errors=True)
     env = dict(os.environ, QT_QPA_PLATFORM="offscreen")
-    proc = subprocess.run(["sclang", str(ROOT / "translator" / "batch.scd"), str(ROOT)],
+    proc = subprocess.run(["sclang", str(ROOT / "translator" / "batch.scd"), str(ROOT), "build", "defs", "tests/cases"],
                           env=env, capture_output=True, text=True, timeout=1800)
     lines = [l for l in proc.stdout.splitlines() if l.startswith(("batch:", "ERROR", "ERROR:"))
              and "nonexistent class 'Document'" not in l]
