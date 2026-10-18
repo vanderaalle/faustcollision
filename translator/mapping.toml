@@ -1539,3 +1539,27 @@ self_hold = true
 compare = "waveform"
 tol = 1e-6
 case = "case_SinOscFB"
+
+[VarSaw]
+tier = "direct"
+inputs = ["freq", "iphase", "width"]
+# double phase on float pairs; width read once per block, applied at each wrap.
+# kr inputs are already constant across the block, so next_a covers next_k.
+constant_inputs = ["iphase"]
+faust = { ar = "sc.varsaw_a({freq}, {iphase}, {width})", kr = "sc.varsaw_kr({freq}, {iphase}, {width})" }
+self_hold = true
+compare = "waveform"
+tol = 1e-6
+case = "case_VarSaw"
+
+[SyncSaw]
+tier = "direct"
+inputs = ["syncFreq", "sawFreq"]
+# two double phases on float pairs; the per-sample form covers the four calc functions.
+# Measured: exact with constant inputs; 6.3e-7 with the master frequency from Line.kr (the
+# phase integrates Line's own 1.6e-7 floor); a slave phase on pairs ~1.3e-7.
+faust = { ar = "sc.syncsaw_aa({syncFreq}, {sawFreq})", kr = "sc.syncsaw_kr({syncFreq}, {sawFreq})" }
+self_hold = true
+compare = "waveform"
+tol = 1e-6
+case = "case_SyncSaw"

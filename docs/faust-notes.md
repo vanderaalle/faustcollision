@@ -72,3 +72,10 @@ denormal; feeding back a zapped state requires routing the zapped value into `~`
 
 **`ffunction` is the escape hatch** for libm functions the compiler cannot see into
 (`fmaf`, `copysignf`, `expm1f`); available in the LLVM JIT and in C++ output.
+
+**`x * (c / SR)` is rewritten as `x * c / SR`**, one rounding of the exact quotient, where
+scsynth multiplies by the float `c / SR` (two roundings). Use the opaque
+`fmul(a, b) = fmaf(a, b, 0.0)` for products by a rounded constant (`sc.lib`).
+
+**In a function call, `f(a, x : _, !)` passes three arguments** (`a`, `x : _`, `!`): the
+comma splits first. Parenthesise: `f(a, (x : _, !))`.

@@ -26,6 +26,10 @@ and run `translator.build --project DIR` / `pytest --project=DIR` on their own `
   by kr inputs are sampled at the block start (`sc.a2k`); BinaryOpUGen and K2A ramp kr
   inputs across the block like scsynth (`sc.kr2ar`).
 - Constructor samples (most UGens compute one sample in the constructor) are modelled per UGen.
+- Not modelled: the constructor-time value of an input. Where scsynth reads an input in the
+  constructor (initial state, ramp start), the port uses its first-block value. They differ
+  when the input comes from a UGen whose constructor sample differs from its first block
+  (LF oscillators, XLine, VarSaw...). Regression cases feed such inputs from Line or constants.
 - Test signals start with 100 ms of silence; comparisons skip the first block.
 - Double-precision state in scsynth: float pairs (phase), exact integer math (increments,
   counters), closed forms (envelope segments), or a documented float floor.

@@ -156,6 +156,19 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 		SinOscFB.ar(SinOsc.ar(2).range(100, 300), in.value * 4), SinOscFB.ar(3000, 1.4),
 		K2A.ar(SinOscFB.kr(4.2, LFTri.kr(0.2).range(0, 1.5)))
 	] * 0.5) }),
+	// VarSaw: constant, kr and audio-rate frequency, moving width, initial phase, kr.
+	// Inputs scsynth reads in the constructor come from Line (see README, constructor values)
+	SynthDef(\case_VarSaw, { Out.ar(0, [
+		VarSaw.ar(220), VarSaw.ar(LFTri.kr(0.3).range(50, 900), 0.3, Line.kr(0, 1, 6)),
+		VarSaw.ar(SinOsc.ar(3).range(100, 300), 1.4, 0.1), VarSaw.ar(4321.7, 0, 0.93),
+		K2A.ar(VarSaw.kr(5.5, 0.2, Line.kr(0.2, 0.8, 8)))
+	] * 0.5) }),
+	// SyncSaw: the four rate combinations and control rate
+	SynthDef(\case_SyncSaw, { Out.ar(0, [
+		SyncSaw.ar(110, 377), SyncSaw.ar(Line.kr(50, 300, 8), SinOsc.ar(0.5).range(400, 1200)),
+		SyncSaw.ar(SinOsc.ar(2).range(100, 200), Line.kr(300, 900, 9)), SyncSaw.ar(1234.5, 2999),
+		K2A.ar(SyncSaw.kr(3, Line.kr(5, 13, 7)))
+	] * 0.5) }),
 	// Noise: statistics only (scsynth's generator is seeded per server). Each at ar and kr.
 	// Rates and densities stay >= 100/s: a statistical comparison needs ~1000 random events
 	// per render (LFNoise2 at 20 Hz over 10 s varies ±2.4 dB from seed to seed).

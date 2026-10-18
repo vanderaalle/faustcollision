@@ -1365,3 +1365,80 @@ with {
 sinoscfb(freq, fb) = sinoscfb_clk(iphase(int(dinc(a2k(freq), 29))), a2k(fb), 1, ba.time % blocksize == 0, 1.0 / blocksize);
 sinoscfb_kr(freq, fb) = sinoscfb_clk(kphase, a2k(fb), krclk, krclk, 1.0)
 with { kphase = (+(int(dinc(a2k(freq), 35)) * krclk) ~ _) : mem; };
+
+//------------------------------------------------------------------------------
+// More float-pair (double) arithmetic: products and quotients by a float, comparisons.
+//------------------------------------------------------------------------------
+dfast(s, e) = h, fsub(e, fsub(h, s)) with { h = fadd(s, e); };      // renormalise s + e
+dmulf(h, l, x) = dfast(p, fmaf(l, x, fmaf(h, x, 0.0 - p))) with { p = h * x; };
+ddivf(h, l, x) = dfast(q, fadd(fmaf(0.0 - q, x, h), l) / x) with { q = h / x; };
+dmulr(h, l, x) = fadd(p, fmaf(l, x, fmaf(h, x, 0.0 - p))) with { p = h * x; };  // (float)((h + l) * x)
+// a * b, one rounding, opaque: Faust rewrites x * (c / SR) as x * c / SR, which rounds once
+// where scsynth multiplies by the rounded float c / SR (docs/faust-notes.md)
+fmul(a, b) = fmaf(a, b, 0.0);
+twosum(a, b) = s, fadd(fsub(a, fsub(s, bb)), fsub(b, bb)) with { s = fadd(a, b); bb = fsub(s, a); };
+drsub(c, h, l) = s, fsub(e, l) with { s = twosum(c, 0.0 - h) : _, !; e = twosum(c, 0.0 - h) : !, _; };  // c - (h, l)
+
+//------------------------------------------------------------------------------
+// VarSaw (LFUGens.cpp:1029): double phase, a triangle/saw with duty read at each wrap
+// (the block's value, clipped to 0.001..0.999), z = phase * 2/duty or (1 - phase) *
+// 2/(1 - duty) (double products, rounded), out z - 1. No constructor sample; the phase
+// starts at iphase. inc: the float increment freq * sampledur (per sample or per block).
+// clk: the steps (1, or once per block at kr).
+//------------------------------------------------------------------------------
+varsaw_clk(inc, width, ip, clk) = (\(h, l, d).(step(h, l, d))) ~ (_, _, _) : !, !, !, _ : ba.sAndH(clk)
+with {
+    st(prev, init) = select2(ba.time == 0, prev, init);
+    clipd(x) = max(0.001, min(0.999, x));
+    w = a2k(width);
+    step(h, l, d) = select2(clk, h0, h2), select2(clk, l0, l2), select2(clk, d0, d1), z - 1.0
+    with {
+        h0 = st(h, initv(ip)); l0 = st(l, 0.0); d0 = st(d, clipd(w));
+        wr = dge(h0, l0, 1.0);
+        h1 = select2(wr, h0, (dsubc(h0, l0, 1.0) : _, !));
+        l1 = select2(wr, l0, (dsubc(h0, l0, 1.0) : !, _));
+        d1 = select2(wr, d0, clipd(w));
+        omh = drsub(1.0, h1, l1) : _, !;   // 1 - phase
+        oml = drsub(1.0, h1, l1) : !, _;
+        z = select2(dlt(h1, l1, d1), dmulr(omh, oml, 2.0 / (1.0 - d1)), dmulr(h1, l1, 2.0 / d1));
+        h2 = dadd(h1, l1, inc) : _, !;
+        l2 = dadd(h1, l1, inc) : !, _;
+    };
+};
+varsaw_a(freq, ip, width) = varsaw_clk(fmul(freq, float(1.0 / ma.SR)), width, ip, 1);
+varsaw_kr(freq, ip, width) = varsaw_clk(fmul(a2k(freq), float(blocksize / ma.SR)), width, ip, krclk);
+
+//------------------------------------------------------------------------------
+// SyncSaw (LFUGens.cpp:1093): two double phases in [-1, 1); out = (float)phase2 before the
+// step; on a master wrap phase2 = (phase1 + 1) * f2 / f1 - 1 (double). The constructor
+// runs one step (next_kk) and keeps the phases: its step uses the first-sample increments
+// here (scsynth: the inputs' constructor values). f1, f2: float increments (freq * 2 * sampledur).
+//------------------------------------------------------------------------------
+syncsaw_clk(f1, f2, clk) = (\(a, b, c, d).(step(a, b, c, d))) ~ (_, _, _, _) : !, !, !, !, _ : ba.sAndH(clk)
+with {
+    st(prev, init) = select2(ba.time == 0, prev, init);
+    // one scsynth iteration: (p1, p2) -> (p1', p2', z)
+    iter(a, b, c, d) = a2h, a2l, c3h, c3l, fadd(c, d)
+    with {
+        c1h = dadd(c, d, f2) : _, !; c1l = dadd(c, d, f2) : !, _;
+        w2 = dge(c1h, c1l, 1.0);
+        c2h = select2(w2, c1h, (dsubc(c1h, c1l, 2.0) : _, !));
+        c2l = select2(w2, c1l, (dsubc(c1h, c1l, 2.0) : !, _));
+        a1h = dadd(a, b, f1) : _, !; a1l = dadd(a, b, f1) : !, _;
+        w1 = dge(a1h, a1l, 1.0);
+        a2h = select2(w1, a1h, (dsubc(a1h, a1l, 2.0) : _, !));
+        a2l = select2(w1, a1l, (dsubc(a1h, a1l, 2.0) : !, _));
+        // (phase1 + 1) * f2 / f1 - 1
+        r = (a2h, a2l) : daddB(1.0) : \(h, l).(dmulf(h, l, f2)) : \(h, l).(ddivf(h, l, f1)) : daddB(-1.0);
+        c3h = select2(w1, c2h, (r : _, !));
+        c3l = select2(w1, c2l, (r : !, _));
+    };
+    // the constructor's step from (0, 0)
+    c0 = iter(0.0, 0.0, 0.0, 0.0);
+    step(a, b, c, d) = (st(a, c0 : ba.selector(0, 5)), st(b, c0 : ba.selector(1, 5)),
+                        st(c, c0 : ba.selector(2, 5)), st(d, c0 : ba.selector(3, 5)))
+        <: (_, _, _, _), iter : \(a0, b0, c0_, d0, a1, b1, c1, d1, z).(
+            select2(clk, a0, a1), select2(clk, b0, b1), select2(clk, c0_, c1), select2(clk, d0, d1), z);
+};
+syncsaw_aa(f1, f2) = syncsaw_clk(fmul(f1, float(2.0 / ma.SR)), fmul(f2, float(2.0 / ma.SR)), 1);
+syncsaw_kr(f1, f2) = syncsaw_clk(fmul(a2k(f1), float(2.0 * blocksize / ma.SR)), fmul(a2k(f2), float(2.0 * blocksize / ma.SR)), krclk);

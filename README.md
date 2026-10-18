@@ -55,12 +55,19 @@ reproducers; drafts of upstream issues in `docs/issues/`). Faust pitfalls met al
 ## Status
 
 Covered: arithmetic and all unary/binary operators (at ar and kr, including scsynth's
-nova-simd approximations at audio rate), oscillators (SinOsc, Saw, Pulse, LF*, Impulse),
-noise, filters (LPF/HPF/RLPF/RHPF/BPF/BRF, resonators, one/two-pole/zero, lags, decays),
-delays, combs and allpasses, EnvGen, Line/XLine, dynamics, FreeVerb/FreeVerb2/GVerb, Pan2,
-Latch, Amplitude, MoogFF, Klank, PitchShift, LocalIn/LocalOut (feedback); Pitch as a
-substitute tracker. Unmapped UGens are a translation error naming the class: nothing is
-translated by guesswork. Excluded by design: buffers, buses, demand rate, FFT.
+nova-simd approximations at audio rate), oscillators (SinOsc, FSinOsc, SinOscFB, Saw,
+Pulse, VarSaw, SyncSaw, LF*, Impulse), noise, filters (LPF/HPF/RLPF/RHPF/BPF/BRF,
+resonators, one/two-pole/zero, lags, decays), delays, combs and allpasses, EnvGen,
+Line/XLine, dynamics, FreeVerb/FreeVerb2/GVerb, Pan2, Latch, Amplitude, MoogFF, Klank,
+PitchShift, LocalIn/LocalOut (feedback); Pitch as a substitute tracker. Unmapped UGens are
+a translation error naming the class: nothing is translated by guesswork. Excluded by
+design: buffers, buses, demand rate, FFT.
+
+Known limitation: where scsynth reads an input in the constructor (an initial phase or
+duty, the start of a ramp), the port uses the input's first-block value. The two differ
+when that input is itself a UGen whose constructor sample differs from its first block (an
+LF oscillator, for instance): the first cycle differs and, for an accumulating phase, the
+offset persists.
 
 ## License
 
