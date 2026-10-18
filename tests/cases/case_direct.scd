@@ -111,6 +111,9 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 		Compander.ar(in.value, in.value, thresh, 1, 0.3, 0.01, 0.1),          // compressor
 		Compander.ar(in.value, in.value, thresh, 3, 1, 0.005, 0.05)]) },      // gate/expander
 		metadata: (specs: (thresh: spec.(0.02, 0.8, 0.2)))),
+	// Reverb
+	SynthDef(\case_FreeVerb, { |room = 0.5| Out.ar(0, [FreeVerb.ar(in.value, 0.5, room, 0.5), FreeVerb.ar(in.value, 1, 0.9, 0.1)]) },
+		metadata: (specs: (room: spec.(0, 1, 0.5, \lin)))),
 	// Noise: statistics only (scsynth's generator is seeded per server). Each at ar and kr.
 	// Rates and densities stay >= 100/s: a statistical comparison needs ~1000 random events
 	// per render (LFNoise2 at 20 Hz over 10 s varies ±2.4 dB from seed to seed).

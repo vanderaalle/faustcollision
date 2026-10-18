@@ -1076,3 +1076,34 @@ with {
     gbz = select2(abs(gb) < 1e-15, select2(abs(gb) > 1e15, gb, 1.0), 0.0);
     g = select2(m < t, select2(sa == 1, pow(m / t, sa - 1.0), 1.0), select2(sb == 1, gbz, 1.0));
 };
+
+//------------------------------------------------------------------------------
+// FreeVerb (ReverbUGens.cpp, itself generated from Faust in 2005): 8 lowpass-feedback
+// combs and 4 allpasses with fixed lengths in samples (not scaled to SR). Sums keep
+// scsynth's grouping (fadd: no reassociation). The constructor sample is not modelled
+// (it only matters if the input does not start with silence).
+//------------------------------------------------------------------------------
+fvclip(v) = max(0.0, min(1.0, a2k(v)));
+// comb of length L: c[n] = w[n - L], w = 0.015 in + room lp, lp[n] = d1 c[n-1] + d2 lp[n-1]
+fvcomb(L, x, room, d1, d2) = (\(fc).(w(fc) @ L)) ~ _
+with { w(fc) = (0.015 * x) + room * ((\(flp).((d1 * fc) + (d2 * flp))) ~ _); };
+// allpass of length L on x: T[n] = w[n - L], w[n] = 0.5 T[n-1] + x[n] (x given as a sum
+// to add in scsynth's order), out = T - x
+freeverb(x, mix, room, damp) = (1.0 - m) * x + m * r0
+with {
+    m = fvclip(mix);
+    r5 = 0.7 + 0.28 * fvclip(room);
+    d2 = 0.4 * fvclip(damp);
+    d1 = 1.0 - d2;
+    c4 = fvcomb(1617, x, r5, d1, d2); c6 = fvcomb(1557, x, r5, d1, d2);
+    c8 = fvcomb(1491, x, r5, d1, d2); c10 = fvcomb(1422, x, r5, d1, d2);
+    c12 = fvcomb(1277, x, r5, d1, d2); c14 = fvcomb(1116, x, r5, d1, d2);
+    c16 = fvcomb(1188, x, r5, d1, d2); c18 = fvcomb(1356, x, r5, d1, d2);
+    f8 = fadd(c16, c18);
+    // allpass 556: written ((0.5 T' + c4) + (c6 + c8)) + ((c10 + c12) + (c14 + f8)),
+    // output T - (((c4 + c6) + (c8 + c10)) + ((c12 + c14) + f8))
+    t3 = (\(fT).(fadd(fadd(fadd(0.5 * fT, c4), fadd(c6, c8)), fadd(fadd(c10, c12), fadd(c14, f8))) @ 556)) ~ _;
+    r3 = fsub(t3, fadd(fadd(fadd(c4, c6), fadd(c8, c10)), fadd(fadd(c12, c14), f8)));
+    ap(L, xin) = fsub(t, xin) with { t = (\(fT).(fadd(0.5 * fT, xin) @ L)) ~ _; };
+    r0 = ap(225, ap(341, ap(441, r3)));
+};

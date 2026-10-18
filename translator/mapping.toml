@@ -1440,3 +1440,12 @@ faust = { ar = "sc.compander({in}, {control}, {thresh}, {slopeBelow}, {slopeAbov
 compare = "envelope"
 tol = 1.0
 case = "case_Compander"
+
+[FreeVerb]
+tier = "direct"
+inputs = ["in", "mix", "room", "damp"]
+# ReverbUGens.cpp: fixed comb/allpass lengths in samples, as scsynth
+faust = { ar = "sc.freeverb({in}, {mix}, {room}, {damp})" }
+compare = "waveform"
+tol = 1e-5
+case = "case_FreeVerb"
