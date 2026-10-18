@@ -1249,3 +1249,50 @@ with {
     sumg(g) = fadd(sumg(g - 1), grp(g - 1));
     s = sumg(imax);
 };
+
+//------------------------------------------------------------------------------
+// PitchShift (DelayUGens.cpp:4573): four read heads over a delay line, each a grain of
+// framesize samples whose delay moves by -(ratio - 1) per sample under a triangle window.
+// Every framesize/4 samples (counter, from the constructor) the next head (stage) restarts:
+// delay = framesize (ratio - 1) + 2 (2 if ratio < 1), window 0 rising by 2/framesize, and
+// the head two stages back starts falling. Delays and windows are float accumulators, so
+// they are recursions here. The ratio is read once per block (ZIN0), when a head restarts.
+// The buffer is written after the reads: delay k reads x[n-k] (k = 0 wraps to N, the
+// buffer size); scsynth's start-up branch (next_z) equals reading a zeroed buffer.
+// fs (framesize), N, slope: translator/derive.py. Dispersions (random) are not ported.
+//------------------------------------------------------------------------------
+pitchshift(fs, N, slope, ratio, x) = fadd(fadd(fadd(head(0), head(1)), head(2)), head(3)) * 0.5
+with {
+    q = int(fs / 4);
+    n = ba.time;
+    trig = (n >= q) & (n % q == 0);
+    stage = (int(n / q) - 1) & 3;
+    p1 = max(0.0, min(4.0, a2k(ratio))) - 1.0;
+    ss = 0.0 - p1;
+    sp = select2(p1 < 0.0, float(fs) * p1 + 2.0, 2.0);
+    mask = N - 1;
+    tap(k) = x : de.delay(N + 1, (k & mask) + 1);  // the sample k + 1 behind the write
+    interp(d) = d1 + frac * (d2 - d1)
+    with {
+        k = int(d);
+        frac = d - float(k);
+        d1 = tap(k - 1);
+        d2 = tap(k);
+    };
+    // constructor: delays 2 with slope 1, windows 0.5, 1, 0.5, 0 with slopes -s, -s, s, s
+    r0(0) = 0.5; r0(1) = 1.0; r0(2) = 0.5; r0(3) = 0.0;
+    rs0(h) = select2(h < 2, slope, 0.0 - slope);
+    head(h) = (\(pd, pds, pr, prs).(state(pd, pds, pr, prs))) ~ (_, _, _, _) : !, !, !, !, _
+    with {
+        st = select2(ba.time == 0, _, _);
+        on = trig & (stage == h);
+        off = trig & (stage == ((h + 2) & 3));
+        state(pd, pds, pr, prs) = d, ds, r + rs, rs, interp(d) * r
+        with {
+            ds = select2(on, st(pds, 1.0), ss);
+            d = select2(on, st(pd, 2.0), sp) + ds;
+            rs = select2(on, select2(off, st(prs, rs0(h)), 0.0 - slope), slope);
+            r = select2(on, st(pr, r0(h)), 0.0);
+        };
+    };
+};

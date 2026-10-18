@@ -1484,3 +1484,15 @@ faust = { ar = "sc.klank({n}, {input}, ({b1s}), ({b2s}), ({a0s}))" }
 compare = "waveform"
 tol = 1e-5
 case = "case_Klank"
+
+[PitchShift]
+tier = "direct"
+inputs = ["in", "windowSize", "pitchRatio", "pitchDispersion", "timeDispersion"]
+constant_inputs = ["windowSize"]
+# the dispersions draw scsynth's random numbers: not ported
+require = { pitchDispersion = 0.0, timeDispersion = 0.0 }
+derive = "pitchshift"
+faust = { ar = "sc.pitchshift({fs}, {N}, {slope}, {pitchRatio}, {in})" }
+compare = "waveform"
+tol = 1e-6
+case = "case_PitchShift"

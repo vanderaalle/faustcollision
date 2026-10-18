@@ -124,6 +124,14 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 		Klank.ar(`[[200, 671, 1153], [1, 0.5, 0.3], [1, 0.5, 0.25]], in.value),
 		Klank.ar(`[[110, 220, 330, 440, 557, 1201], nil, [0.3, 0.6, 0.2, 1, 0.4, 0.05]], in.value, 1.5, 7, 0.5)
 	] * 0.1) }),
+	// PitchShift: up, down, a short window, a ratio moving at kr and at ar
+	SynthDef(\case_PitchShift, { Out.ar(0, [
+		PitchShift.ar(in.value, 0.2, 1.5),
+		PitchShift.ar(in.value, 0.05, 0.7),
+		PitchShift.ar(in.value, 0.0011, 2.3),
+		PitchShift.ar(in.value, 0.1, LFTri.kr(0.7).range(0.5, 2)),
+		PitchShift.ar(in.value, 0.1, SinOsc.ar(3).range(0.25, 4.5))
+	]) }),
 	// Noise: statistics only (scsynth's generator is seeded per server). Each at ar and kr.
 	// Rates and densities stay >= 100/s: a statistical comparison needs ~1000 random events
 	// per render (LFNoise2 at 20 Hz over 10 s varies ±2.4 dB from seed to seed).

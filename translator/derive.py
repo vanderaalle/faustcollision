@@ -95,3 +95,15 @@ def klank(c):
         a0s.append(f32(float(f32(c[f"amp{k}"])) * 0.25))
     return {k: ", ".join(repr(float(v)) for v in vs) for k, vs in
             (("b1s", b1s), ("b2s", b2s), ("a0s", a0s))}
+
+
+def pitchshift(c):
+    """DelayUGens.cpp PitchShift_Ctor: window size clamped to 3 samples; framesize =
+    ((long)(winsize * SR) + 2) & ~3 (double); slope = 2.f / framesize; buffer = next power
+    of two of ceil(winsize * SR * 3 + 3) + 64."""
+    win = f32(c["windowSize"])
+    if float(win) < 3.0 / SR:
+        win = f32(3.0 / SR)
+    fs = (int(float(win) * SR) + 2) & ~3
+    size = int(math.ceil(float(win) * SR * 3.0 + 3.0)) + 64
+    return {"fs": fs, "N": 1 << (size - 1).bit_length(), "slope": repr(float(f32(f32(2.0) / f32(fs))))}
