@@ -4,6 +4,9 @@ Called by the code generator for mapping entries with `derive = "<name>"`; the i
 named in the entry's constant_inputs arrive as floats. Each function emulates the
 constructor's float32/double arithmetic exactly and returns extra template fields.
 The sample rate is fixed at translation time (SR below).
+
+NumPy 2 computes float32 * Python float in float32. C's float * double is a double
+product: write float(f32(x)) * d, then round with f32().
 """
 import math
 
@@ -79,8 +82,8 @@ def klank(c):
     ulp of b1, so the coefficients are computed here, exactly as there."""
     rps = 2.0 * math.pi / SR
     log001 = math.log(0.001)
-    fs = f32(f32(c["freqscale"]) * rps)
-    fo = f32(f32(c["freqoffset"]) * rps)
+    fs = f32(float(f32(c["freqscale"])) * rps)
+    fo = f32(float(f32(c["freqoffset"])) * rps)
     ds = f32(c["decayscale"])
     b1s, b2s, a0s = [], [], []
     for k in range(c["n"]):
@@ -107,3 +110,25 @@ def pitchshift(c):
     fs = (int(float(win) * SR) + 2) & ~3
     size = int(math.ceil(float(win) * SR * 3.0 + 3.0)) + 64
     return {"fs": fs, "N": 1 << (size - 1).bit_length(), "slope": repr(float(f32(f32(2.0) / f32(fs))))}
+
+
+def _pair(v):
+    hi = f32(v)
+    return repr(float(hi)), repr(float(f32(v - float(hi))))
+
+
+def fsinosc(c):
+    """OscUGens.cpp FSinOsc_Ctor: float w = freq * radiansPerSample (a double product);
+    b1 = 2 cos(w), y1 = sin(iphase - w), y2 = sin(iphase - 2w), with cos and sin of a float
+    argument resolving to cosf and sinf (measured: the double versions do not match).
+    Fields for both rates (kr: radians per control period), as float pairs."""
+    out = {}
+    for rate, sr in (("ar", SR), ("kr", SR / 64)):
+        w = f32(float(f32(c["freq"])) * (2.0 * math.pi / sr))
+        iphase = f32(c["iphase"])
+        vals = {"b": 2.0 * float(f32(math.cos(float(w)))),
+                "y1": float(f32(math.sin(float(f32(iphase - w))))),
+                "y2": float(f32(math.sin(float(f32(iphase - f32(f32(2.0) * w))))))}
+        for k, v in vals.items():
+            out[f"{k}h_{rate}"], out[f"{k}l_{rate}"] = _pair(v)
+    return out

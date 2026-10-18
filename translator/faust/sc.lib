@@ -1307,3 +1307,34 @@ with {
 //------------------------------------------------------------------------------
 localin(d, fb) = select2(ba.time < blocksize, fb@(blocksize - 1), a2k(d));
 localin_unwritten(d, fb) = a2k(d);
+
+//------------------------------------------------------------------------------
+// FSinOsc (OscUGens.cpp:1065): the double-precision recursion y0 = b1 y1 - y2, here on
+// float pairs (hi, lo): ~48 bits instead of 53, so the float output differs by an ulp only
+// where a double lands near a float rounding boundary. Output (float)y0. b1 and the initial
+// y1, y2 (from the constructor's float w and iphase) come from translator/derive.py. The
+// constructor's sample is not kept: the first block recomputes it. kr: one step per block.
+//------------------------------------------------------------------------------
+// y0 = b y1 - y2 on pairs (TwoProd with fmaf, TwoSum, then renormalised)
+ddrec(bh, bl, y1h, y1l, y2h, y2l) = h, fsub(e2, fsub(h, s))
+with {
+    ph = bh * y1h;
+    pl = fmaf(bh, y1l, fmaf(bl, y1h, fmaf(bh, y1h, 0.0 - ph)));
+    s = fsub(ph, y2h);
+    bb = fsub(s, ph);
+    e = fadd(fsub(ph, fsub(s, bb)), fsub(0.0 - y2h, bb));
+    e2 = fsub(fadd(e, pl), y2l);
+    h = fadd(s, e2);
+};
+fsinosc_clk(bh, bl, y1h, y1l, y2h, y2l, clk) = (\(a, b, c, d).(step(a, b, c, d))) ~ (_, _, _, _) : \(p, q, r, t).(fadd(p, q))
+with {
+    st(prev, init) = select2(ba.time == 0, prev, init);
+    step(a, b, c, d) = select2(clk, h1, h0), select2(clk, l1, l0), select2(clk, h2, h1), select2(clk, l2, l1)
+    with {
+        h1 = st(a, y1h); l1 = st(b, y1l); h2 = st(c, y2h); l2 = st(d, y2l);
+        h0 = ddrec(bh, bl, h1, l1, h2, l2) : _, !;
+        l0 = ddrec(bh, bl, h1, l1, h2, l2) : !, _;
+    };
+};
+fsinosc(bh, bl, y1h, y1l, y2h, y2l) = fsinosc_clk(bh, bl, y1h, y1l, y2h, y2l, 1);
+fsinosc_kr(bh, bl, y1h, y1l, y2h, y2l) = fsinosc_clk(bh, bl, y1h, y1l, y2h, y2l, krclk);

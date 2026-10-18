@@ -145,6 +145,11 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 		LocalOut.kr((c * 1.07 + 0.01) % 1);
 		Out.ar(0, [fb[0], x, fb[1], fb[2], K2A.ar(c)])
 	}, metadata: (startBlock: 1)),
+	// FSinOsc: audio and control rate, phases, low and high frequencies
+	SynthDef(\case_FSinOsc, { Out.ar(0, [
+		FSinOsc.ar(440), FSinOsc.ar(31.7, 1.2), FSinOsc.ar(9876.5, -0.5), FSinOsc.ar(0.3, pi/2),
+		K2A.ar(FSinOsc.kr(3.3, 0.4))
+	] * 0.5) }),
 	// Noise: statistics only (scsynth's generator is seeded per server). Each at ar and kr.
 	// Rates and densities stay >= 100/s: a statistical comparison needs ~1000 random events
 	// per render (LFNoise2 at 20 Hz over 10 s varies ±2.4 dB from seed to seed).
