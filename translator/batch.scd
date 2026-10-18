@@ -97,7 +97,12 @@ try {
 				cmd = "scsynth -N % % % % WAV float -i 1 -o % -m 65536 > /dev/null".format(
 					osc.shellQuote, sig.path.shellQuote, wav.shellQuote, sampleRate, numOutputs);
 				status = if(render) { cmd.systemCmd } { 0 };
-				if(status != 0) { Error("scsynth NRT failed (%) for %".format(status, tag)).throw };
+				if(status != 0) {
+					// scsynth occasionally aborts (seen once on an operator case); retry once, loudly
+					"batch: scsynth NRT failed (%) for % %, retrying".format(status, def.name, tag).postln;
+					status = cmd.systemCmd;
+				};
+				if(status != 0) { Error("scsynth NRT failed (%) for % %".format(status, def.name, tag)).throw };
 				File.delete(osc);
 				if(render) { jobs.add((tag: tag, signal: sig.name, setting: setting, nrt: wav)) };
 			}

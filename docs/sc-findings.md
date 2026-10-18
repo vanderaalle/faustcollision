@@ -22,6 +22,7 @@ not yet confirmed by a render. Kind: **bug?** (looks unintended), **undocumented
 | 10 | `UnaryOpUGen` (transcendental) | ar and kr run different maths: nova-simd vs C library | undocumented | measured, source |
 | 11 | `scaleneg` (sclang, demand rate) | returns −a·b for a < 0 instead of a·b | bug? | measured |
 | 12 | `UnaryOpUGen` `reciprocal` | 1/0 is NaN, not inf, at both rates | undocumented | measured, source |
+| 13 | `K2A` (first block) | ramps from the kr source's constructor output | convention | measured |
 
 ## 1. `Amplitude.kr` with an audio-rate input releases 64× too fast
 
@@ -151,3 +152,13 @@ the estimate is inf and the step multiplies inf by 0, so the result is NaN, not 
 
 - Source: `include/plugin_interface/SC_InlineUnaryOp.h:238` (kr), nova-simd
   `vec_reciprocal_newton` (ar).
+
+## 13. `K2A`'s first block ramps from the constructor output
+
+`K2A` (and an audio-rate `BinaryOpUGen` with a kr input) initialises its previous value
+from what the kr source wrote during construction. Sources whose constructor sample
+differs from their first block (the LF oscillators, which advance their phase in the
+constructor) give a ramp across the first block: `K2A.ar(LFSaw.kr(3, -0.5))` starts at
+−0.5 and reaches the block-0 value at sample 63. The port starts at the block-0 value.
+
+- Test policy: comparisons skip the first 64 samples (`tests/compare.py`, `SKIP`).

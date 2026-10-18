@@ -13,8 +13,10 @@ BLOCK = 64
 ROOT = Path(__file__).resolve().parent.parent
 FAUST_DIR = ROOT / "build" / "faust"
 # The Daisy target's flags: single precision, denormals flushed to zero (bitmask).
-# Layer 3 checks outputs under exactly these flags.
-FAUST_FLAGS = ["-single", "-ftz", "2"]
+# Layer 3 checks outputs under exactly these flags. -inpl: DawDreamer passes the same
+# buffer for input and output; without it, an output written first is read back as
+# the input by later outputs.
+FAUST_FLAGS = ["-single", "-ftz", "2", "-inpl"]
 
 
 def faust_cli():

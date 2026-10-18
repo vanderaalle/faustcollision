@@ -16,7 +16,8 @@
 #   tol      threshold for that comparison: waveform = relative RMS error,
 #            others = mean absolute dB difference (see tests/compare.py)
 #   case     regression case in tests/cases/ (one per entry, or per operator)
-#   kr_interpolate  at audio rate, kr inputs are ramped across the block (sc.kr2ar);
+#   kr_interpolate  at audio rate, kr inputs are ramped across the block (sc.kr2ar): true for
+#            all inputs, or a list of input names;
 #            otherwise they are read once per block, as most scsynth UGens do
 #
 # Rates: every kr UGen with an audio input is held per 64-sample block (sc.krhold).
@@ -869,3 +870,73 @@ faust = { kr = "sc.a2k({in})" }
 compare = "waveform"
 tol = 1e-6
 case = "case_A2K"
+
+[SinOsc]
+tier = "direct"
+inputs = ["freq", "phase"]
+# 8192-point interpolated wavetable, 32-bit phase (OscUGens.cpp). The increment is
+# (int32)(double * freq) for kr/constant freq, a float product for audio-rate freq.
+kr_interpolate = ["phase"]
+faust = { ar = "sc.sinosc_d({freq}, {phase})", "ar<ar" = "sc.sinosc_f({freq}, {phase})", kr = "sc.sinosc_kr({freq}, {phase})" }
+compare = "waveform"
+# table built from float sin() here, double sin() cast to float in scsynth
+tol = 1e-6
+case = "case_SinOsc"
+
+[LFSaw]
+tier = "direct"
+inputs = ["freq", "iphase"]
+# double phase (LFUGens.cpp), emulated as a float pair; the constructor's step is kept.
+constant_inputs = ["iphase"]
+faust = { ar = "sc.lfsaw({freq}, {iphase})", "ar<ar" = "sc.lfsaw_ar({freq}, {iphase})", kr = "sc.lfsaw_kr({freq}, {iphase})" }
+compare = "waveform"
+tol = 1e-6
+case = "case_LFSaw"
+
+[LFTri]
+tier = "direct"
+inputs = ["freq", "iphase"]
+constant_inputs = ["iphase"]
+faust = { ar = "sc.lftri({freq}, {iphase})", kr = "sc.lftri_kr({freq}, {iphase})" }
+compare = "waveform"
+tol = 1e-6
+case = "case_LFTri"
+
+[LFPar]
+tier = "direct"
+inputs = ["freq", "iphase"]
+constant_inputs = ["iphase"]
+faust = { ar = "sc.lfpar({freq}, {iphase})", kr = "sc.lfpar_kr({freq}, {iphase})" }
+compare = "waveform"
+tol = 1e-6
+case = "case_LFPar"
+
+[LFCub]
+tier = "direct"
+inputs = ["freq", "iphase"]
+constant_inputs = ["iphase"]
+faust = { ar = "sc.lfcub({freq}, {iphase})", kr = "sc.lfcub_kr({freq}, {iphase})" }
+compare = "waveform"
+tol = 1e-6
+case = "case_LFCub"
+
+[LFPulse]
+tier = "direct"
+inputs = ["freq", "iphase", "width"]
+# width is read once per block and taken at the next wrap
+constant_inputs = ["iphase"]
+faust = { ar = "sc.lfpulse({freq}, {iphase}, {width})", kr = "sc.lfpulse_kr({freq}, {iphase}, {width})" }
+compare = "waveform"
+tol = 1e-6
+case = "case_LFPulse"
+
+[Impulse]
+tier = "direct"
+inputs = ["freq", "phase"]
+# double phase; wrap tested with the previous increment's sign (LFUGens.cpp, 3.13).
+# A modulated phase offset (Impulse_next_*k/a) is not ported yet.
+constant_inputs = ["phase"]
+faust = { ar = "sc.impulse({freq}, {phase})", "ar<ar" = "sc.impulse_ar({freq}, {phase})", kr = "sc.impulse_kr({freq}, {phase})" }
+compare = "waveform"
+tol = 1e-6
+case = "case_Impulse"

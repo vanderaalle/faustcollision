@@ -207,13 +207,15 @@ def translate(sdef: SynthDef, meta: dict, table=None) -> Translation:
             template = template[u.rate]
         use(key, rec, e["tier"])
 
-        def arg(v):
+        def arg(name, v):
             x = expr(v)
-            if u.rate == "ar" and e.get("kr_interpolate") and isinstance(v, Ref) and ugens[v.ugen].rate == "kr":
+            interp = e.get("kr_interpolate")
+            if u.rate == "ar" and (interp is True or (isinstance(interp, list) and name in interp)) \
+                    and isinstance(v, Ref) and ugens[v.ugen].rate == "kr":
                 return f"sc.kr2ar({x})"
             return x
         # {seed}: a per-node constant, so random operators get independent streams
-        body = template.format(seed=u.index, **{k: arg(v) for k, v in args.items()})
+        body = template.format(seed=u.index, **{k: arg(k, v) for k, v in args.items()})
         if u.rate == "kr" and not e.get("self_hold"):
             # A kr output changes once per block. Fed by audio, the value must come from the
             # previous block (causality): krhold. Fed only by kr inputs (already per block),

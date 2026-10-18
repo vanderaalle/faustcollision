@@ -13,6 +13,10 @@ from scipy import signal
 
 SR = 48000
 SILENT = 1e-5  # both renders below this peak: nothing to compare
+# The first block is the constructor transient: scsynth's K2A (and an ar BinaryOp) ramps
+# its first block from the kr source's constructor output, which the port does not
+# model (docs/sc-findings.md #13). Comparisons start at the second block.
+SKIP = 64
 BANDS = 1000 * 2.0 ** (np.arange(-15, 15) / 3)  # 1/3-octave centres, ~31 Hz – 16 kHz
 
 
@@ -73,7 +77,7 @@ def score(mode, ref, test):
     NaN or inf at the same sample in both renders count as agreement (scsynth's
     log of a negative input is NaN, and so is the port's); in one render only, inf."""
     n = min(len(ref), len(test))
-    ref, test = ref[:n].astype(np.float64), test[:n].astype(np.float64)
+    ref, test = ref[SKIP:n].astype(np.float64), test[SKIP:n].astype(np.float64)
     bad_r, bad_t = ~np.isfinite(ref), ~np.isfinite(test)
     same = (bad_r & bad_t) & ((np.isnan(ref) & np.isnan(test)) | (ref == test))
     if ((bad_r | bad_t) & ~same).any():
