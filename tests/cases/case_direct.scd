@@ -91,6 +91,17 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 	// Lines: ar and kr, rising and falling, a duration shorter than the render
 	SynthDef(\case_Line, { Out.ar(0, [Line.ar(-0.5, 0.8, 0.7), Line.ar(1, 0, 0.0123), K2A.ar(Line.kr(0, 1, 0.5))]) }),
 	SynthDef(\case_XLine, { Out.ar(0, [XLine.ar(0.01, 1, 0.7), XLine.ar(1, 0.001, 0.3), K2A.ar(XLine.kr(1, 0.1, 0.5))]) }),
+	// EnvGen: all shapes, audio-rate and kr gates, release node with loop, .kr
+	SynthDef(\case_EnvGen, {
+		var trig = Impulse.kr(1.5);
+		Out.ar(0, [
+			EnvGen.ar(Env([0.01, 1, 0.3, 0.8, 0.01], [0.05, 0.1, 0.15, 0.2], [\exp, \sin, \wel, \sqr]), trig),
+			EnvGen.ar(Env([0, 1, 0.5, 0.7, 0.2, 0], [0.03, 0.1, 0.1, 0.05, 0.2], [\cub, \step, \hold, 3, -4]), trig),
+			EnvGen.ar(Env.perc(0.005, 0.2), in.value > 0.1),
+			EnvGen.ar(Env([0, 1, 0.2, 0], [0.05, 0.1, 0.2], \lin, 2, 0), LFPulse.kr(0.7, 0, 0.6), 0.8, 0.1, 1.5),
+			K2A.ar(EnvGen.kr(Env.perc(0.01, 0.3, 1, -2), trig))
+		] * 0.5)
+	}),
 	// Noise: statistics only (scsynth's generator is seeded per server). Each at ar and kr.
 	// Rates and densities stay >= 100/s: a statistical comparison needs ~1000 random events
 	// per render (LFNoise2 at 20 Hz over 10 s varies ±2.4 dB from seed to seed).

@@ -903,7 +903,7 @@ allpass_ar(kind, x, maxdt, dt, dect) = allpassx(kind, x, dsampm(dt, maxdt, mind(
 // constructor applies the first step, so the output is start + slope (k + 1) for
 // k < counter, then end. doneAction must be 0 (mapping): freeing the synth has no meaning here.
 initv(x) = ba.sAndH(ba.time == 0, x);
-lnc(dur, sr) = max(1, int(initv(dur) * sr + 0.5));
+lnc(dur, sr) = max(1, int(tmul05(initv(dur), sr)));   // (int)(dur * SR + .5f), double
 line_sr(start, end, dur, sr, k) = select2(k < c, float(initv(end)), initv(start) + (initv(end) - initv(start)) / float(c) * float(k + 1))
 with { c = lnc(dur, sr); };
 line(start, end, dur) = line_sr(start, end, dur, ma.SR, ba.time);
@@ -911,6 +911,118 @@ line_kr(start, end, dur) = line_sr(start, end, dur, ma.SR / blocksize, int(ba.ti
 // XLine: start * growth^(k + 1), growth = (end / start)^(1 / counter); counter 0 gives end
 // (written with exp/log: pow(pow(a, 1/c), k) with c from a held value crashes the libfaust JIT)
 xline_sr(start, end, dur, sr, k) = select2((k < c) & (c > 0), e, s * exp(log(e / s) * float(k + 1) / float(c)))
-with { s = initv(start); e = initv(end); c = int(initv(dur) * sr + 0.5); };
+with { s = initv(start); e = initv(end); c = int(tmul05(initv(dur), sr)); };
 xline(start, end, dur) = xline_sr(start, end, dur, ma.SR, ba.time);
 xline_kr(start, end, dur) = xline_sr(start, end, dur, ma.SR / blocksize, int(ba.time / blocksize));
+
+// (int)(f * s) and (int)(f * s + 0.5) computed in double by scsynth, for float f >= 0 and
+// integer-valued s: the float product p plus its exact error e (fmaf) decide the truncation.
+// (A float product alone turns 0.03 * 48000 = 1439.99997 into 1440.)
+tmul(f, s) = select2((e < 0) & (p == t), select2(t + 1.0 - p <= e, t, t + 1.0), t - 1.0)
+with { p = f * s; e = fmaf(f, s, 0.0 - p); t = floor(p); };
+tmul05(f, s) = select2((e < 0) & (q == t), select2(t + 1.0 - q <= e, t, t + 1.0), t - 1.0)
+with { p = f * s; e = fmaf(f, s, 0.0 - p); q = p + 0.5; t = floor(q); };
+
+//------------------------------------------------------------------------------
+// EnvGen (LFUGens.cpp). A state machine of 12 variables:
+//   stage, counter, level, shape, p, a2, b1, k, ph, endLevel, released, prevGate.
+// Stage data arrive as parallel lists (levels, times, shapes, curves) of n stages.
+// gchk: 1 where the gate is checked (block start for a kr gate, every sample for an
+// audio gate, every step at kr); sr: the unit's sample rate; clk: where it steps.
+// Shapes: 0 step, 1 linear, 2 exponential, 3 sine, 4 welch, 5 curve, 6 squared,
+// 7 cubed, 8 hold, 9999 sustain. Counters are floats; 1e9 stands for INT_MAX.
+// scsynth runs each segment as a double-precision recursion (level += grow,
+// level *= grow, a resonator for sine and welch, ...); in float those drift (the
+// sine resonator's 2 cos(pi / count) is 2 - 4e-7 for a 0.1 s segment), so each
+// shape is evaluated in closed form from k, the sample index within the segment.
+//------------------------------------------------------------------------------
+envgen(n, gate, ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves, sr, gchk, clk) =
+    machine(12, step, init, 1, clk)
+with {
+    INF = 1e9;
+    NOTSTARTED = 1e9;
+    sel(i, list) = list : ba.selectn(n, max(0, min(n - 1, int(i))));
+    lev(i) = sel(i, levels); tim(i) = sel(i, times); shp(i) = sel(i, shapes); crv(i) = sel(i, curves);
+    i0 = initv(ilev) * initv(ls) + initv(lb);
+    init = NOTSTARTED, 0.0, select2(int(initv(shp(0))) == 8, i0, initv(lev(0))), 8.0,
+           0.0, 0.0, 0.0, 0.0, 0.0, i0, 0.0, 0.0;
+    nz(d) = select2(d == 0, d, 1.0);
+
+    // level of shape sh at index k from the segment parameters
+    shapelev(sh, lv, p, a2, b1, k, ph) =
+        select2(sh == 1, select2(sh == 2, select2((sh == 3) | (sh == 4), select2(sh == 5,
+            select2(sh == 6, select2(sh == 7, lv, cb(max(a2 + p * k, 0.0))), sq(a2 + p * k)),
+            a2 - b1 * exp(p * k)),
+            a2 + b1 * cos(p * k + ph)),
+            a2 * exp(p * k)),
+            a2 + p * k)
+    with { sq(y) = y * y; cb(y) = y * y * y; };
+
+    // EnvGen_initSegment for stage st (fdur >= 0: forced duration)
+    // -> (counter, level, shape, p, a2, b1, ph, endLevel)
+    initseg(st, fdur, lv, sh, el) = c, lev2, sh3, p, a2, b1, ph, endL
+    with {
+        l0 = select2(sh == 8, lv, el);                 // after a hold, start from the previous end
+        endL = lev(st) * ls + lb;
+        dur = select2(fdur >= 0, tim(st) * ts, fdur);
+        c = max(1.0, tmul(dur, sr));
+        sh2 = select2(c == 1, shp(st), 1);
+        sh3 = select2((sh2 == 5) & (abs(crv(st)) < 0.001), sh2, 1);
+        up = endL >= l0;
+        ya = select2(sh3 == 7, sqrt(l0), pow(l0, 1.0 / 3.0));
+        yb = select2(sh3 == 7, sqrt(endL), pow(endL, 1.0 / 3.0));
+        a1 = (endL - l0) / nz(1.0 - exp(crv(st)));
+        p = select2(sh3 == 1, select2(sh3 == 2, select2(sh3 == 3, select2(sh3 == 4, select2(sh3 == 5,
+                (yb - ya) / c,                           // squared, cubed
+                crv(st) / c),                            // curve
+                ma.PI * 0.5 / c),                        // welch
+                ma.PI / c),                              // sine
+                log(endL / nz(l0)) / c),                 // exponential
+                (endL - l0) / c);                        // linear
+        a2 = select2(sh3 == 3, select2(sh3 == 4, select2(sh3 == 5, select2((sh3 == 6) | (sh3 == 7), l0, ya), l0 + a1),
+                 select2(up, endL, l0)), (endL + l0) * 0.5);
+        b1 = select2(sh3 == 3, select2(sh3 == 4, select2(sh3 == 5, 0.0, a1), select2(up, l0 - endL, endL - l0)),
+                 0.0 - (endL - l0) * 0.5);
+        ph = select2((sh3 == 4) & up, 0.0, 0.0 - ma.PI * 0.5);
+        lev2 = select2(sh3 == 0, select2(sh3 == 8, l0, el), endL);
+    };
+
+    step(st, cn, lv, sh, p, a2, b1, k, ph, el, rl, pg) = out, st3, cn3 - 1, lv4, sh3, p3, a23, b13, k3 + 1, ph3, el3, rl1, pg1
+    with {
+        g = gate;
+        trig = gchk & (pg <= 0) & (g > 0);
+        forced = gchk & (1 - trig) & (g <= -1) & (pg > -1);
+        relz = gchk & (1 - trig) & (1 - forced) & (pg > 0) & (g <= 0) & (reln >= 0) & (rl == 0);
+        pg1 = select2(gchk, pg, g);
+        st1 = select2(trig, select2(forced, select2(relz, st, reln - 1), n - 1), -1);
+        rl1 = select2(trig, select2(forced | relz, rl, 1), 0);
+        cn1 = select2(trig | relz, cn, 0);
+        fs = initseg(st1, 0.0 - g - 1.0, lv, sh, el);   // forced release: last stage, duration -gate - 1
+        need = (1 - forced) & (cn1 <= 0);
+        done = st1 + 1 >= n;
+        sus = (1 - done) & (st1 + 1 == reln) & (rl1 == 0);
+        lp = sus & (loopn >= 0) & (loopn < n);
+        nst = select2(lp, st1 + 1, loopn);
+        ns = initseg(nst, -1.0, lv, sh, el);
+        nseg = need & (1 - done) & ((1 - sus) | lp);
+        hold = need & sus & (1 - lp);
+        fin = need & done;
+        newseg = forced | nseg;
+        pick(i, d) = select2(forced, select2(nseg, d, ns : ba.selector(i, 8)), fs : ba.selector(i, 8));
+        st3 = select2(nseg, st1, nst);
+        cn3 = select2(fin | hold, pick(0, cn1), INF);
+        lv3 = select2(fin | hold, pick(1, lv), el);
+        sh3 = select2(fin, select2(hold, pick(2, sh), 9999), 0);
+        p3 = pick(3, p); a23 = pick(4, a2); b13 = pick(5, b1); ph3 = pick(6, ph); el3 = pick(7, el);
+        k3 = select2(newseg, k, 0.0);
+        out = lv3;
+        lv4 = shapelev(sh3, lv3, p3, a23, b13, k3 + 1, ph3);
+    };
+};
+envgen_ak(n, gate, ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves) =
+    envgen(n, a2k(gate), ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves, ma.SR, krclk, 1);
+envgen_aa(n, gate, ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves) =
+    envgen(n, gate, ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves, ma.SR, 1, 1);
+// (the machine's output between steps already shows the next state: hold it per block)
+envgen_kr(n, gate, ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves) =
+    envgen(n, a2k(gate), ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves, ma.SR / blocksize, 1, krclk) : a2k;

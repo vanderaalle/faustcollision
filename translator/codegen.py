@@ -94,6 +94,12 @@ def translate(sdef: SynthDef, meta: dict, table=None) -> Translation:
 
     def input_names(u, e):
         names = e.get("inputs", [])
+        if e.get("variadic"):  # trailing inputs in groups (EnvGen: level, time, shape, curve)
+            group = e["variadic"]["group"]
+            extra = len(u.inputs) - len(names)
+            if extra < 0 or extra % len(group):
+                raise TranslationError(f"{u.cls}: {extra} trailing inputs do not form groups of {len(group)}")
+            return names + [f"{g}{k}" for k in range(extra // len(group)) for g in group]
         if len(names) != len(u.inputs):
             raise TranslationError(f"{u.cls}: binary has {len(u.inputs)} inputs, table lists {len(names)}")
         return names
@@ -223,8 +229,15 @@ def translate(sdef: SynthDef, meta: dict, table=None) -> Translation:
         # {seed}: a per-node constant, so random operators get independent streams.
         # Signal arguments enter as wires of a lambda: Faust re-expands a named expression at
         # every use inside the library function, which can make compilation explode.
-        wires = {k: arg(k, v) for k, v in args.items() if isinstance(v, Ref)}
+        fixed = set(e.get("inputs", []))
+        wires = {k: arg(k, v) for k, v in args.items() if isinstance(v, Ref) and k in fixed}
         fmt = {k: (f"w_{k}" if k in wires else arg(k, v)) for k, v in args.items()}
+        if e.get("variadic"):
+            group = e["variadic"]["group"]
+            n = (len(u.inputs) - len(fixed)) // len(group)
+            fmt["n"] = n
+            for g in group:  # {levels}, {times}, ...: a Faust parallel list of the group's inputs
+                fmt[g + "s"] = ", ".join(arg(f"{g}{k}", args[f"{g}{k}"]) for k in range(n))
         body = template.format(seed=u.index, **fmt)
         if wires:
             body = f"({', '.join(wires.values())}) : \\({', '.join('w_' + k for k in wires)}).({body})"
