@@ -124,7 +124,27 @@ def translate(sdef: SynthDef, meta: dict, table=None) -> Translation:
     if out.cls != "Out":
         raise TranslationError(f"unsupported output UGen {out.cls}")
 
-    # Live UGens: reachable from Out's signal inputs. In's bus (and Out's) are not followed.
+    # LocalIn/LocalOut: one feedback bus per rate. LocalIn outputs what the LocalOuts of its
+    # rate wrote in the previous block (summed in graph order); a LocalOut placed before its
+    # LocalIn would feed back within the block, which is not supported.
+    local_in, local_outs = {}, {"ar": [], "kr": []}
+    for u in ugens:
+        kind = entry_of(u).get("kind")
+        if kind == "localin":
+            if u.rate in local_in:
+                raise TranslationError(f"a second LocalIn.{u.rate} (scsynth outputs zeros for it)")
+            local_in[u.rate] = u
+        elif kind == "localout":
+            src = local_in.get(u.rate)
+            if src is None:
+                raise TranslationError(f"LocalOut.{u.rate} before (or without) a LocalIn.{u.rate}")
+            if len(u.inputs) != len(src.output_rates):
+                raise TranslationError(f"LocalOut.{u.rate} has {len(u.inputs)} channels, LocalIn "
+                                       f"{len(src.output_rates)} (scsynth ignores it)")
+            local_outs[u.rate].append(u)
+
+    # Live UGens: reachable from Out's signal inputs (and from the LocalOuts of a live
+    # LocalIn). In's bus (and Out's) are not followed.
     live, stack = set(), [r.ugen for r in out.inputs[1:] if isinstance(r, Ref)]
     while stack:
         i = stack.pop()
@@ -132,8 +152,11 @@ def translate(sdef: SynthDef, meta: dict, table=None) -> Translation:
             continue
         live.add(i)
         u = ugens[i]
+        if entry_of(u).get("kind") == "localin":
+            stack += [r.ugen for lo in local_outs[u.rate] for r in lo.inputs if isinstance(r, Ref)]
         if entry_of(u).get("kind") != "input":
             stack += [r.ugen for r in u.inputs if isinstance(r, Ref)]
+    feedback = [u for u in local_in.values() if u.index in live and local_outs[u.rate]]
 
     names, lines, controls, entries, channels = {}, [], {}, {}, {}
     control_outputs = set()
@@ -171,6 +194,19 @@ def translate(sdef: SynthDef, meta: dict, table=None) -> Translation:
                     raise TranslationError(f"control output {u.special + k} has no name")
                 names[(u.index, k)] = cname
                 control_outputs.add((u.index, k))
+            continue
+        if kind == "localout":
+            if any(v.rate == u.rate for v in feedback):
+                use(u.cls, e, e["tier"])
+            continue
+        if kind == "localin":
+            use(u.cls, e, e["tier"])
+            for k, d in enumerate(u.inputs):
+                names[(u.index, k)] = f"u{u.index}_{k}"
+                # without a LocalOut the bus is never written: the default, every block
+                src = f"fb{u.index}_{k}" if local_outs[u.rate] else "0.0"
+                fn = "sc.localin" if local_outs[u.rate] else "sc.localin_unwritten"
+                lines.append(f"    u{u.index}_{k} = {fn}({expr(d)}, {src});")
             continue
         if kind == "input":
             if u.cls != "In":
@@ -291,5 +327,19 @@ def translate(sdef: SynthDef, meta: dict, table=None) -> Translation:
         head.append(f'{cname} = hslider("{cname}{scale}", {default!r}, {lo!r}, {hi!r}, {(hi - lo) / 10000!r});')
     proc = f"process({', '.join(ins)})" if ins else "process"
     body = [f"{proc} = {', '.join(results)}", "with {", *lines, "};"] if lines else [f"{proc} = {', '.join(results)};"]
+    if feedback:
+        # The graph inside a recursion: its first outputs, the LocalOut sums, come back
+        # (one sample later) as the fb wires; sc.localin delays them to one block.
+        fbs, sums = [], []
+        for u in feedback:
+            for k in range(len(u.output_rates)):
+                fbs.append(f"fb{u.index}_{k}")
+                terms = [expr(lo.inputs[k]) for lo in local_outs[u.rate]]
+                s = terms[0]
+                for t in terms[1:]:
+                    s = f"sc.fadd({s}, {t})"
+                sums.append(s)
+        body = [f"process = (\\({', '.join(fbs + ins)}).(({', '.join(sums + results)})",
+                "with {", *lines, f"}})) ~ si.bus({len(fbs)}) : si.block({len(fbs)}), si.bus({len(results)});"]
     code = "\n".join(head + [""] + body + [""])
     return Translation(sdef.name, code, len(ins), len(results), controls, list(entries.values()))

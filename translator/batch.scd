@@ -20,7 +20,7 @@ var sampleRate = 48000;
 var defDir = build +/+ "synthdefs/";
 var metaDir = build +/+ "meta/";
 var nrtRoot = build +/+ "nrt/";
-var json, settingTag, process;
+var json, settingTag, shift, process;
 
 json = { |x|
 	case
@@ -57,6 +57,20 @@ try {
 	if(signals.isEmpty) { Error("no signals in %; run signals/make_signals.py".format(sigDir)).throw };
 	[defDir, metaDir, nrtRoot].do(File.mkdir(_));
 
+	// Copy a float WAV with n leading zero frames added (n > 0) or n frames dropped (n < 0).
+	shift = { |src, dst, n|
+		var f = SoundFile.openRead(src), ch = f.numChannels, data, out;
+		data = FloatArray.newClear(f.numFrames * ch);
+		f.readData(data);
+		f.close;
+		out = if(n > 0) { FloatArray.newClear(n * ch) ++ data } { data.copyRange(n.neg * ch, data.size - 1) };
+		f = SoundFile.new.headerFormat_("WAV").sampleFormat_("float").numChannels_(ch).sampleRate_(sampleRate);
+		if(f.openWrite(dst).not) { Error("cannot write %".format(dst)).throw };
+		f.writeData(out);
+		f.close;
+		dst
+	};
+
 	process = { |path, def|
 		var md, specs, outs, numOutputs, settings, jobs, names, defaults, sigs, nrtDir;
 		md = def.metadata ? ();
@@ -89,15 +103,21 @@ try {
 				var osc = nrtDir +/+ tag ++ ".osc";
 				var wav = nrtDir +/+ tag ++ ".wav";
 				var args = setting.asKeyValuePairs;
+				// startBlock: n starts the synth n blocks into the render (input shifted, output
+				// trimmed to match), i.e. not in the server's first block (sc-findings 19)
+				var pad = (md[\startBlock] ? 0) * 64;
+				// NRT runs the commands up to the end of the current block (SC_World.cpp:689)
+				var t0 = if(pad > 0) { (pad + 0.5) / sampleRate } { 0.0 };
+				var input = if(pad > 0) { shift.(sig.path, nrtDir +/+ tag ++ ".in.wav", pad) } { sig.path };
 				var score = Score([
 					[0.0, ['/d_recv', def.asBytes]],
-					[0.0, ['/s_new', def.name, 1000, 0, 0] ++ args],
-					[sig.dur, ['/c_set', 0, 0]]
+					[t0, ['/s_new', def.name, 1000, 0, 0] ++ args],
+					[sig.dur + (pad / sampleRate), ['/c_set', 0, 0]]
 				]);
 				var cmd, status;
 				score.writeOSCFile(osc);
 				cmd = "scsynth -N % % % % WAV float -i 1 -o % -m 65536 > /dev/null".format(
-					osc.shellQuote, sig.path.shellQuote, wav.shellQuote, sampleRate, numOutputs);
+					osc.shellQuote, input.shellQuote, wav.shellQuote, sampleRate, numOutputs);
 				status = if(render) { cmd.systemCmd } { 0 };
 				if(status != 0) {
 					// scsynth occasionally aborts (seen once on an operator case); retry once, loudly
@@ -106,6 +126,10 @@ try {
 				};
 				if(status != 0) { Error("scsynth NRT failed (%) for % %".format(status, def.name, tag)).throw };
 				File.delete(osc);
+				if(pad > 0) {
+					File.delete(input);
+					if(render) { shift.(wav, wav, pad.neg) };
+				};
 				if(render) { jobs.add((tag: tag, signal: sig.name, setting: setting, nrt: wav)) };
 			}
 		};

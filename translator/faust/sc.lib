@@ -1296,3 +1296,14 @@ with {
         };
     };
 };
+
+//------------------------------------------------------------------------------
+// LocalIn (IOUGens.cpp:1462): the bus the LocalOuts of its rate wrote in the previous block
+// (fb arrives one sample late from the recursion the code generator builds around the
+// graph); in the synth's first block, the default (its first sample: Fill(IN0)). Without
+// a LocalOut the bus is never written and the default is output every block.
+// (A synth started in the server's first block reads the uninitialised bus instead:
+// sc-findings 19. That is not modelled.)
+//------------------------------------------------------------------------------
+localin(d, fb) = select2(ba.time < blocksize, fb@(blocksize - 1), a2k(d));
+localin_unwritten(d, fb) = a2k(d);

@@ -1496,3 +1496,19 @@ faust = { ar = "sc.pitchshift({fs}, {N}, {slope}, {pitchRatio}, {in})" }
 compare = "waveform"
 tol = 1e-6
 case = "case_PitchShift"
+
+# LocalIn/LocalOut: one feedback bus per rate, one block of delay (codegen.py builds the
+# recursion; LocalOuts of a rate are summed in graph order)
+[LocalIn]
+tier = "direct"
+kind = "localin"
+compare = "waveform"
+tol = 1e-6
+case = "case_LocalIn"
+
+[LocalOut]
+tier = "direct"
+kind = "localout"
+compare = "waveform"
+tol = 1e-6
+case = "case_LocalIn"

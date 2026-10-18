@@ -58,9 +58,9 @@ Covered: arithmetic and all unary/binary operators (at ar and kr, including scsy
 nova-simd approximations at audio rate), oscillators (SinOsc, Saw, Pulse, LF*, Impulse),
 noise, filters (LPF/HPF/RLPF/RHPF/BPF/BRF, resonators, one/two-pole/zero, lags, decays),
 delays, combs and allpasses, EnvGen, Line/XLine, dynamics, FreeVerb/FreeVerb2/GVerb, Pan2,
-Latch, Amplitude, MoogFF; Pitch as a substitute tracker. Unmapped UGens are a translation
-error naming the class: nothing is translated by guesswork. Excluded by design: buffers,
-buses, demand rate, FFT.
+Latch, Amplitude, MoogFF, Klank, PitchShift, LocalIn/LocalOut (feedback); Pitch as a
+substitute tracker. Unmapped UGens are a translation error naming the class: nothing is
+translated by guesswork. Excluded by design: buffers, buses, demand rate, FFT.
 
 ## License
 

@@ -29,6 +29,7 @@ not yet confirmed by a render. Kind: **bug?** (looks unintended), **undocumented
 | 15 | `APF` | not an allpass: +28 dB at its frequency, +38 dB at 100 Hz (indexing errors in the unrolled loop) | bug? | measured, source |
 | 17 | `AllpassC` (start-up) | outputs 0 for the first delay length; AllpassN/L output -fb * in there | bug? | measured, source |
 | 18 | `EnvGen` (audio-rate gate) | forced release (gate <= -1) during a segment corrupts the new segment and shortens it | bug? | measured, source |
+| 19 | `LocalIn` (server's first block) | outputs its uninitialised bus instead of the default when the synth starts at block 0 (e.g. NRT time 0) | bug? | measured, source |
 | 16 | `Ramp` | reads the input one sample past the segment; past the buffer end at a block boundary | bug? | source |
 
 ## 1. `Amplitude.kr` with an audio-rate input releases 64× too fast
@@ -257,3 +258,27 @@ within 2.7e-7; other shape pairs are not reproduced.
 
 - Source: `server/plugins/LFUGens.cpp` `check_gate` (forced branch), `EnvGen_perform`
   (write-back after the loop), `EnvGen_next_aa`.
+
+## 19. `LocalIn` ignores its default in the server's first block
+
+`LocalIn` outputs its bus when a `LocalOut` touched it in this block or the previous one
+(`diff = mBufCounter - touched`, 0 or 1), otherwise its `default` input. The constructor
+sets `touched = -1`, so a synth whose first block is `mBufCounter == 0` (the server's very
+first block, e.g. an NRT score with `/s_new` at time 0) gets `diff == 1`: it copies the bus,
+which nothing has written: `RTAlloc`ed memory, not cleared. The default is never output.
+In a running server (or from block 1 on in NRT) `diff >= 2` and the default is used, as
+documented. Both the audio and the control-rate `LocalIn` are affected.
+
+Measured: `LocalIn.ar(3, [0.5, 0.1, -0.2])` and `LocalIn.kr(1, 0.1)` in an NRT render with
+`/s_new` at time 0 output 0 in the first block (the fresh memory happened to be zero);
+started in block 1, they output the defaults. A server that reuses that memory would
+output stale data. FaustCollision ports the documented behaviour; its NRT reference for
+`case_LocalIn` starts the synth in block 1 (`startBlock` metadata in `translator/batch.scd`).
+
+Also: a second `LocalIn` of the same rate in a SynthDef outputs zeros (`ClearUnitOutputs`),
+and a `LocalOut` whose channel count differs from the `LocalIn`'s is silently ignored; the
+translator rejects both.
+
+- Source: `server/plugins/IOUGens.cpp` `LocalIn_Ctor`, `LocalIn_next_a`, `LocalOut_next_a`;
+  `server/scsynth/SC_World.cpp` (NRT loop: `mBufCounter` starts at 0; commands run up to the
+  end of the current block).

@@ -132,6 +132,19 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 		PitchShift.ar(in.value, 0.1, LFTri.kr(0.7).range(0.5, 2)),
 		PitchShift.ar(in.value, 0.1, SinOsc.ar(3).range(0.25, 4.5))
 	]) }),
+	// LocalIn/LocalOut (one per rate per SynthDef: a second LocalIn outputs zeros): audio
+	// feedback through a filter, two LocalOuts summed, defaults in the first block, and a
+	// control-rate loop. Started in block 1: in the server's first block, LocalIn reads
+	// its uninitialised bus instead of the default (sc-findings 19).
+	SynthDef(\case_LocalIn, {
+		var fb = LocalIn.ar(3, [0.5, 0.1, -0.2]);
+		var x = LPF.ar(in.value + (fb[0] * 0.7), 2000);
+		var c = LocalIn.kr(1, 0.1);
+		LocalOut.ar([x, fb[2] * 0.6, in.value]);
+		LocalOut.ar([0, 0.25 * fb[1], fb[1] * 0.3]);
+		LocalOut.kr((c * 1.07 + 0.01) % 1);
+		Out.ar(0, [fb[0], x, fb[1], fb[2], K2A.ar(c)])
+	}, metadata: (startBlock: 1)),
 	// Noise: statistics only (scsynth's generator is seeded per server). Each at ar and kr.
 	// Rates and densities stay >= 100/s: a statistical comparison needs ~1000 random events
 	// per render (LFNoise2 at 20 Hz over 10 s varies ±2.4 dB from seed to seed).
