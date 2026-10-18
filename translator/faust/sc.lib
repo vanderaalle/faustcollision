@@ -425,3 +425,96 @@ with {
     r = p + (c - p) * float(j + 1) / blocksize;
 };
 impulse_kr(freq, off) = impulse_core(freq * float(blocksize / ma.SR), off, krclk);
+
+//------------------------------------------------------------------------------
+// Noise (server/plugins/NoiseUGens.cpp). scsynth's generator (taus88, SC_RGen.h) is
+// seeded per server, so only distributions can be compared. These ports use
+// xorshift32 per node (seeded by the code generator) and the same bit-to-float
+// conversions as RGen: frand 0..1, frand2 -1..1, frand8 -0.125..0.125, fcoin ±1.
+//------------------------------------------------------------------------------
+lsr(x, k) = (x >> k) & ((1 << (32 - k)) - 1);   // logical shift right on int32
+xorshift(x) = x3 with { x1 = x xor (x << 13); x2 = x1 xor lsr(x1, 17); x3 = x2 xor (x2 << 5); };
+// a stream of 32-bit words, one per sample, independent per seed
+trand(seed) = (\(fb).(xorshift(select2(ba.time == 0, fb, s0))) ~ _)
+with { s0 = int(seed) * 747796405 + 2891336453; };
+frand(seed) = float(lsr(trand(seed), 9)) / 8388608.0;
+frand2(seed) = float(lsr(trand(seed), 9)) / 4194304.0 - 1.0;
+frand8(seed) = float(lsr(trand(seed), 9)) / 33554432.0 - 0.125;
+fcoin(seed) = select2(trand(seed) < 0, 1.0, -1.0);
+
+// A state machine of N state variables. stepB: N states -> (out, N states), one sample of
+// the scsynth loop; initB: the constructor's initial state (N signals, read at time 0).
+// ctor = 1 when the constructor runs one iteration before the first block.
+// clk: 1 where it steps (every sample at ar, block starts at kr).
+machine(N, stepB, initB, ctor, clk) = (core ~ si.bus(N)) : (si.block(N), _)
+with {
+    first = ba.time == 0;
+    init = initB <: si.bus(N), (stepB : !, si.bus(N)) : ro.interleave(N, 2) : par(i, N, select2(ctor));
+    core = (si.bus(N), init) : ro.interleave(N, 2) : par(i, N, select2(first))
+         : (si.bus(N) <: si.bus(N), stepB)
+         : route(2 * N + 1, 2 * N + 1, par(i, N, (i + 1, 2 * i + 1), (N + 2 + i, 2 * i + 2)), (N + 1, 2 * N + 1))
+         : (par(i, N, select2(clk)), _);
+};
+
+whitenoise(seed) = frand2(seed);
+clipnoise(seed) = fcoin(seed);
+// GrayNoise: flip one random bit of a 32-bit counter
+graynoise_clk(seed, clk) = machine(1, \(c).(float(c2) * 4.65661287308e-10, c2 with { c2 = c xor (1 << (trand(seed) & 31)); }), 0, 1, clk);
+// BrownNoise: z += frand8, folded into ±1; starts at frand2, no constructor step
+brownnoise_clk(seed, clk) = machine(1, \(z).(z3, z3 with { z2 = z + frand8(seed); z3 = select2(z2 > 1, select2(z2 < -1, z2, -2 - z2), 2 - z2); }),
+                                    frand2(seed + 1), 0, clk);
+// Dust / Dust2: frand below density * sampledur. density is read once per block.
+dust(seed, density, sdur) = select2(z < th, 0.0, z * select2(th > 0, 0.0, 1.0 / th))
+with { z = frand(seed); th = a2k(density) * sdur; };
+dust2(seed, density, sdur) = select2(z < th, 0.0, z * select2(th > 0, 0.0, 2.0 / th) - 1.0)
+with { z = frand(seed); th = a2k(density) * sdur; };
+
+// LFNoise0/1/2: a new random level every SR / freq samples (freq read per block).
+nseg(freq, sr, minlen) = max(minlen, int(sr / max(a2k(freq), 0.001)));
+lfnoise0_clk(seed, freq, sr, clk) = machine(2, step, (0, 0.0), 1, clk)
+with {
+    step = \(c, lv).(select2(c <= 0, lv, frand2(seed)),
+                     select2(c <= 0, c, nseg(freq, sr, 1)) - 1,
+                     select2(c <= 0, lv, frand2(seed)));
+};
+lfnoise1_clk(seed, freq, sr, clk) = machine(3, step, (0, frand2(seed + 1), 0.0), 1, clk)
+with {
+    step = \(c, lv, sl).(lv,
+                         c2 - 1,
+                         lv + sl2,
+                         sl2
+                         with { re = c <= 0; c2 = select2(re, c, nseg(freq, sr, 1));
+                                sl2 = select2(re, sl, (frand2(seed) - lv) / float(c2)); });
+};
+lfnoise2_clk(seed, freq, sr, clk) = machine(6, step, (0, 0.0, 0.0, 0.0, frand2(seed + 1), frand2(seed + 1) * 0.5), 1, clk)
+with {
+    // state: counter, level, slope, curve, nextvalue, nextmidpt
+    step = \(c, lv, sl, cu, nv, nm).(lv2, c2 - 1, lv2 + sl3, sl3, cu2, nv2, nm2
+        with {
+            re = c <= 0;
+            nv2 = select2(re, nv, frand2(seed));
+            lv2 = select2(re, lv, nm);
+            nm2 = select2(re, nm, (nv2 + nv) * 0.5);
+            c2 = select2(re, c, nseg(freq, sr, 2));
+            n = float(c2);
+            cu2 = select2(re, cu, 2.0 * (nm2 - lv2 - n * sl) / (n * n + n));
+            sl3 = sl + cu2;
+        });
+};
+
+// PinkNoise: Voss-McCartney with 16 dice; the die is chosen by the trailing zeros of a
+// random word (Magnus Jonsson). Output bits (total + rand) | 0x40000000 read as a float.
+ctz(x) = sum(j, 31, (x & ((1 << (j + 1)) - 1)) == 0);
+pinkout(v) = select2(v < 8388608, 1.0 + float(v - 8388608) / 2097152.0, float(v) / 4194304.0 - 1.0);
+pinknoise_clk(seed, clk) = machine(17, step, (initdice, inittotal), 1, clk)
+with {
+    initdice = lsr(trand(seed * 31 + 101), 13), lsr(trand(seed * 31 + 102), 13), lsr(trand(seed * 31 + 103), 13), lsr(trand(seed * 31 + 104), 13), lsr(trand(seed * 31 + 105), 13), lsr(trand(seed * 31 + 106), 13), lsr(trand(seed * 31 + 107), 13), lsr(trand(seed * 31 + 108), 13), lsr(trand(seed * 31 + 109), 13), lsr(trand(seed * 31 + 110), 13), lsr(trand(seed * 31 + 111), 13), lsr(trand(seed * 31 + 112), 13), lsr(trand(seed * 31 + 113), 13), lsr(trand(seed * 31 + 114), 13), lsr(trand(seed * 31 + 115), 13), lsr(trand(seed * 31 + 116), 13);
+    inittotal = initdice :> _;
+    step = \(d0, d1, d2, d3, d4, d5, d6, d7, d8, d9, d10, d11, d12, d13, d14, d15, tot).(pinkout(tot2 + lsr(trand(seed + 1), 13)), select2(k == 0, d0, nr), select2(k == 1, d1, nr), select2(k == 2, d2, nr), select2(k == 3, d3, nr), select2(k == 4, d4, nr), select2(k == 5, d5, nr), select2(k == 6, d6, nr), select2(k == 7, d7, nr), select2(k == 8, d8, nr), select2(k == 9, d9, nr), select2(k == 10, d10, nr), select2(k == 11, d11, nr), select2(k == 12, d12, nr), select2(k == 13, d13, nr), select2(k == 14, d14, nr), select2(k == 15, d15, nr), tot2
+        with {
+            counter = trand(seed);
+            nr = lsr(counter, 13);
+            k = ctz(counter) & 15;
+            tot2 = tot + nr - ba.selectn(16, k, d0, d1, d2, d3, d4, d5, d6, d7, d8, d9, d10, d11, d12, d13, d14, d15);
+        });
+};

@@ -36,7 +36,8 @@ def longest_run(mask):
 
 
 def inputs():
-    sigs = {p.stem: sf.read(p, dtype="float32")[0] for p in sorted((ROOT / "signals").glob("*.wav"))}
+    # silence.wav is a long render for statistical comparisons; dc and impulse cover it here
+    sigs = {p.stem: sf.read(p, dtype="float32")[0] for p in sorted((ROOT / "signals").glob("*.wav")) if p.stem != "silence"}
     sigs["dc"] = np.full(SR, 0.5, dtype=np.float32)
     sigs["fullscale"] = np.clip(sigs["sweep"] * 2.0, -1, 1) if "sweep" in sigs else np.ones(SR, np.float32)
     return sigs

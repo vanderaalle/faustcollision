@@ -5,7 +5,9 @@ envelope    10 ms RMS envelopes, mean |dB difference| over frames above -60 dBFS
 spectrum    STFT (4096/1024) in 1/3-octave bands, mean |dB difference| over cells within
             60 dB of the reference maximum. Phase-insensitive, time-resolved.
 statistics  long-term (Welch) spectrum in 1/3-octave bands, mean |dB difference| within
-            60 dB of the reference maximum; at least the overall level difference in dB.
+            60 dB of the reference maximum; at least the level difference of the total
+            power in those bands (31 Hz – 16 kHz): below them, the mean and slowest parts of
+            1/f-type noise over a few seconds are mostly chance.
             For noise UGens and trackers, where only distributions can agree.
 """
 import numpy as np
@@ -61,11 +63,13 @@ def spectrum(ref, test):
 
 
 def statistics(ref, test):
-    bands = []
+    bands, totals = [], []
     for x in (ref, test):
         f, p = signal.welch(x, SR, nperseg=8192)
-        bands.append(_db(_band_power(f, p)))
-    level = abs(_db(np.mean(ref ** 2)) - _db(np.mean(test ** 2)))
+        b = _band_power(f, p)
+        bands.append(_db(b))
+        totals.append(_db(b.sum()))
+    level = abs(totals[0] - totals[1])
     return max(_masked_mean(*bands), float(level))
 
 

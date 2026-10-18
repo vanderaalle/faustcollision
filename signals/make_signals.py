@@ -3,6 +3,7 @@
     impulse   one unit sample at 0.1 s, then silence
     sweep     exponential sine sweep 20 Hz – 20 kHz, -6 dBFS
     noise     white noise, -12 dBFS RMS, fixed seed
+    silence   10 s of zeros: a long render for generators compared on statistics
     bass_di   SYNTHETIC placeholder for a bass DI: additive plucked-string notes
               B0 E1 A1 D2 G2 C3. Replace with a real recording when available.
               (Karplus-Strong was tried first: SC's Pitch does not lock onto it.)
@@ -67,8 +68,12 @@ def bass_di(note_dur=1.0, level_db=-6.0):
     return x / np.max(np.abs(x)) * 10 ** (level_db / 20)
 
 
+def silence(dur=10.0):
+    return np.zeros(int(dur * SR))
+
+
 if __name__ == "__main__":
-    for name, fn in [("impulse", impulse), ("sweep", sweep), ("noise", noise), ("bass_di", bass_di)]:
+    for name, fn in [("impulse", impulse), ("sweep", sweep), ("noise", noise), ("bass_di", bass_di), ("silence", silence)]:
         x = np.concatenate([np.zeros(PREROLL), fn()])
         sf.write(HERE / f"{name}.wav", x.astype(np.float32), SR, subtype="FLOAT")
         print(f"signals/{name}.wav")

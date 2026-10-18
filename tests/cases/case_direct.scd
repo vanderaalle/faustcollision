@@ -33,5 +33,19 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 		metadata: (specs: (freq: spec.(0.5, 5000, 440)), signals: [\impulse])),
 	SynthDef(\case_Impulse_ar, { Out.ar(0, Impulse.ar(in.value * 300 + 400) * 0.5) }),
 	SynthDef(\case_Impulse_kr, { |freq = 3| Out.ar(0, K2A.ar(Impulse.kr(freq))) }, metadata: (specs: (freq: spec.(0.1, 300, 3)), signals: [\impulse])),
-]
+	// Noise: statistics only (scsynth's generator is seeded per server). Each at ar and kr.
+	// Rates and densities stay >= 100/s: a statistical comparison needs ~1000 random events
+	// per render (LFNoise2 at 20 Hz over 10 s varies ±2.4 dB from seed to seed).
+] ++ [\WhiteNoise, \ClipNoise, \GrayNoise, \PinkNoise, \BrownNoise].collect { |u|
+	[SynthDef(("case_" ++ u).asSymbol, { Out.ar(0, u.asClass.ar * 0.5) }, metadata: (signals: [\silence])),
+	 SynthDef(("case_" ++ u ++ "_kr").asSymbol, { Out.ar(0, K2A.ar(u.asClass.kr) * 0.5) }, metadata: (signals: [\silence]))]
+}.flatten ++ [\Dust, \Dust2].collect { |u|
+	[SynthDef(("case_" ++ u).asSymbol, { |density = 200| Out.ar(0, u.asClass.ar(density) * 0.5) },
+		metadata: (specs: (density: spec.(100, 5000, 200)), signals: [\silence])),
+	 SynthDef(("case_" ++ u ++ "_kr").asSymbol, { Out.ar(0, K2A.ar(u.asClass.kr(100)) * 0.5) }, metadata: (signals: [\silence]))]
+}.flatten ++ [\LFNoise0, \LFNoise1, \LFNoise2].collect { |u|
+	[SynthDef(("case_" ++ u).asSymbol, { |freq = 500| Out.ar(0, u.asClass.ar(freq) * 0.5) },
+		metadata: (specs: (freq: spec.(100, 5000, 500)), signals: [\silence])),
+	 SynthDef(("case_" ++ u ++ "_kr").asSymbol, { Out.ar(0, K2A.ar(u.asClass.kr(100)) * 0.5) }, metadata: (signals: [\silence]))]
+}.flatten
 )

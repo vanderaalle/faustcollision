@@ -940,3 +940,87 @@ faust = { ar = "sc.impulse({freq}, {phase})", "ar<ar" = "sc.impulse_ar({freq}, {
 compare = "waveform"
 tol = 1e-6
 case = "case_Impulse"
+
+# Noise (NoiseUGens.cpp): same algorithms and bit-to-float conversions as scsynth, own
+# random generator per node (xorshift32, seeded by the code generator): compared on
+# spectral statistics.
+
+[WhiteNoise]
+tier = "direct"
+inputs = []
+faust = { ar = "sc.whitenoise({seed})", kr = "sc.whitenoise({seed})" }
+compare = "statistics"
+tol = 1.5
+case = "case_WhiteNoise"
+
+[ClipNoise]
+tier = "direct"
+inputs = []
+faust = { ar = "sc.clipnoise({seed})", kr = "sc.clipnoise({seed})" }
+compare = "statistics"
+tol = 1.5
+case = "case_ClipNoise"
+
+[GrayNoise]
+tier = "direct"
+inputs = []
+faust = { ar = "sc.graynoise_clk({seed}, 1)", kr = "sc.graynoise_clk({seed}, sc.krclk)" }
+compare = "statistics"
+tol = 1.5
+case = "case_GrayNoise"
+
+[PinkNoise]
+tier = "direct"
+inputs = []
+faust = { ar = "sc.pinknoise_clk({seed}, 1)", kr = "sc.pinknoise_clk({seed}, sc.krclk)" }
+compare = "statistics"
+tol = 1.5
+case = "case_PinkNoise"
+
+[BrownNoise]
+tier = "direct"
+inputs = []
+faust = { ar = "sc.brownnoise_clk({seed}, 1)", kr = "sc.brownnoise_clk({seed}, sc.krclk)" }
+compare = "statistics"
+tol = 1.5
+case = "case_BrownNoise"
+
+[Dust]
+tier = "direct"
+inputs = ["density"]
+faust = { ar = "sc.dust({seed}, {density}, 1.0 / ma.SR)", kr = "sc.dust({seed}, {density}, float(sc.blocksize) / ma.SR)" }
+compare = "statistics"
+tol = 1.5
+case = "case_Dust"
+
+[Dust2]
+tier = "direct"
+inputs = ["density"]
+faust = { ar = "sc.dust2({seed}, {density}, 1.0 / ma.SR)", kr = "sc.dust2({seed}, {density}, float(sc.blocksize) / ma.SR)" }
+compare = "statistics"
+tol = 1.5
+case = "case_Dust2"
+
+[LFNoise0]
+tier = "direct"
+inputs = ["freq"]
+faust = { ar = "sc.lfnoise0_clk({seed}, {freq}, ma.SR, 1)", kr = "sc.lfnoise0_clk({seed}, {freq}, ma.SR / sc.blocksize, sc.krclk)" }
+compare = "statistics"
+tol = 1.5
+case = "case_LFNoise0"
+
+[LFNoise1]
+tier = "direct"
+inputs = ["freq"]
+faust = { ar = "sc.lfnoise1_clk({seed}, {freq}, ma.SR, 1)", kr = "sc.lfnoise1_clk({seed}, {freq}, ma.SR / sc.blocksize, sc.krclk)" }
+compare = "statistics"
+tol = 1.5
+case = "case_LFNoise1"
+
+[LFNoise2]
+tier = "direct"
+inputs = ["freq"]
+faust = { ar = "sc.lfnoise2_clk({seed}, {freq}, ma.SR, 1)", kr = "sc.lfnoise2_clk({seed}, {freq}, ma.SR / sc.blocksize, sc.krclk)" }
+compare = "statistics"
+tol = 1.5
+case = "case_LFNoise2"
