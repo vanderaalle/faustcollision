@@ -150,6 +150,12 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 		FSinOsc.ar(440), FSinOsc.ar(31.7, 1.2), FSinOsc.ar(9876.5, -0.5), FSinOsc.ar(0.3, pi/2),
 		K2A.ar(FSinOsc.kr(3.3, 0.4))
 	] * 0.5) }),
+	// SinOscFB: constant, kr and audio-rate feedback and frequency; control rate
+	SynthDef(\case_SinOscFB, { Out.ar(0, [
+		SinOscFB.ar(220, 0.8), SinOscFB.ar(LFTri.kr(0.3).range(50, 900), Line.kr(0, 2.5, 4)),
+		SinOscFB.ar(SinOsc.ar(2).range(100, 300), in.value * 4), SinOscFB.ar(3000, 1.4),
+		K2A.ar(SinOscFB.kr(4.2, LFTri.kr(0.2).range(0, 1.5)))
+	] * 0.5) }),
 	// Noise: statistics only (scsynth's generator is seeded per server). Each at ar and kr.
 	// Rates and densities stay >= 100/s: a statistical comparison needs ~1000 random events
 	// per render (LFNoise2 at 20 Hz over 10 s varies ±2.4 dB from seed to seed).

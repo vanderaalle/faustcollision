@@ -1525,3 +1525,17 @@ self_hold = true
 compare = "waveform"
 tol = 1e-6
 case = "case_FSinOsc"
+
+[SinOscFB]
+tier = "direct"
+inputs = ["freq", "feedback"]
+# both inputs are read once per block (ZIN0). The feedback ramp starts from the feedback
+# input's constructor value in scsynth, from its first-block value here: they differ when
+# the input comes from a UGen with a constructor sample (an LF oscillator), and at high
+# feedback the difference can persist for seconds (measured with LFSaw.kr: ~2 s). Exact
+# for constant, control, Line and audio-rate inputs.
+faust = { ar = "sc.sinoscfb({freq}, {feedback})", kr = "sc.sinoscfb_kr({freq}, {feedback})" }
+self_hold = true
+compare = "waveform"
+tol = 1e-6
+case = "case_SinOscFB"

@@ -1338,3 +1338,30 @@ with {
 };
 fsinosc(bh, bl, y1h, y1l, y2h, y2l) = fsinosc_clk(bh, bl, y1h, y1l, y2h, y2l, 1);
 fsinosc_kr(bh, bl, y1h, y1l, y2h, y2l) = fsinosc_clk(bh, bl, y1h, y1l, y2h, y2l, krclk);
+
+//------------------------------------------------------------------------------
+// SinOscFB (OscUGens.cpp SinOscFB_next_kk): out = lookupi1(phase + (int32)(fb * prev)).
+// The phase increment is SinOsc's (double product, truncated); fb (feedback * radtoinc, a
+// double product stored as float) ramps to each block's value as a float accumulator
+// (CALCSLOPE: (next - fb) / blocksize, from the accumulated fb). The constructor runs one
+// sample (prev = lookupi1(0)) and resets the phase. kr: one step per block, slope factor 1.
+//------------------------------------------------------------------------------
+// (float)(x * radtoinc) with radtoinc a double: hi/lo split of the constant, TwoProd
+radtoinc_h = 85445656.0;
+radtoinc_l = 3.4470539540052414;  // 8192 * 65536 / (2 pi) - radtoinc_h
+fbinc(x) = fadd(p, fmaf(x, radtoinc_l, fmaf(x, radtoinc_h, 0.0 - p))) with { p = x * radtoinc_h; };
+sinoscfb_clk(phase, fbin, clk, blk, sf) = (\(f, s, p).(step(f, s, p))) ~ (_, _, _) : !, !, _
+with {
+    tgt = fbinc(fbin);
+    st(prev, init) = select2(ba.time == 0, prev, init);
+    step(f, s, p) = select2(clk, fc, fadd(fc, sl)), sl, select2(clk, pc, out)
+    with {
+        fc = st(f, tgt);
+        pc = st(p, lookupi1(0));
+        sl = select2(blk, st(s, 0.0), (tgt - fc) * sf);
+        out = lookupi1(phase + int(fc * pc));
+    };
+};
+sinoscfb(freq, fb) = sinoscfb_clk(iphase(int(dinc(a2k(freq), 29))), a2k(fb), 1, ba.time % blocksize == 0, 1.0 / blocksize);
+sinoscfb_kr(freq, fb) = sinoscfb_clk(kphase, a2k(fb), krclk, krclk, 1.0)
+with { kphase = (+(int(dinc(a2k(freq), 35)) * krclk) ~ _) : mem; };
