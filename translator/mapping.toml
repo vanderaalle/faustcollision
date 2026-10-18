@@ -1409,3 +1409,34 @@ faust = { ar = "sc.envgen_ak({n}, {gate}, {levelScale}, {levelBias}, {timeScale}
 compare = "waveform"
 tol = 1e-5
 case = "case_EnvGen"
+
+# Dynamics (FilterUGens.cpp)
+
+[Limiter]
+tier = "direct"
+inputs = ["in", "level", "dur"]
+# lookahead by a 2 * dur delay: causal, so exact; dur sizes the buffer
+constant_inputs = ["dur"]
+faust = { ar = "sc.limiter({in}, {level}, {dur})" }
+compare = "waveform"
+tol = 1e-5
+case = "case_Limiter"
+
+[Normalizer]
+tier = "direct"
+inputs = ["in", "level", "dur"]
+constant_inputs = ["dur"]
+faust = { ar = "sc.normalizer({in}, {level}, {dur})" }
+compare = "waveform"
+tol = 1e-5
+case = "case_Normalizer"
+
+[Compander]
+tier = "approximate"
+inputs = ["in", "control", "thresh", "slopeBelow", "slopeAbove", "clampTime", "relaxTime"]
+# scsynth's gain for a block depends on the control signal up to the block's end; the
+# causal port is one block late (as Amplitude.kr)
+faust = { ar = "sc.compander({in}, {control}, {thresh}, {slopeBelow}, {slopeAbove}, {clampTime}, {relaxTime})" }
+compare = "envelope"
+tol = 1.0
+case = "case_Compander"

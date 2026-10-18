@@ -1026,3 +1026,53 @@ envgen_aa(n, gate, ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves)
 // (the machine's output between steps already shows the next state: hold it per block)
 envgen_kr(n, gate, ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves) =
     envgen(n, a2k(gate), ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves, ma.SR / blocksize, 1, krclk) : a2k;
+
+//------------------------------------------------------------------------------
+// Dynamics (FilterUGens.cpp).
+//------------------------------------------------------------------------------
+// ceil(f * s) in double (see tmul)
+tceil(f, s) = select2((t == p) & (fmaf(f, s, 0.0 - p) == 0.0), t + 1.0, t) with { p = f * s; t = tmul(f, s); };
+
+// Limiter / Normalizer: the input is delayed by 2B samples, B = ceil(dur SR); every B
+// samples a new level target from the peak of the last two segments, reached by a
+// linear ramp (level += slope, in float as in scsynth). Silent until two segments have
+// passed. The constructor processes the first sample, shifting the segment grid by one.
+// target(maxval, amp) -> level
+dynlim(target, x, amp, dur) = out
+with {
+    B = int(tceil(dur, ma.SR));                  // dur is a constant (mapping)
+    sf = float(1.0 / float(B));
+    a = a2k(amp);
+    // state: pos, level, slope, curmax, prevmax
+    step = \(pos, lv, sl, cm, pm).(lv, p2, lv2, sl2, cm2, pm2
+        with {
+            lv1 = lv + sl;
+            cm1 = max(cm, abs(x));
+            flip = pos + 1 >= B;
+            m2 = max(pm, cm1);
+            p2 = select2(flip, pos + 1, 0);
+            lv2 = lv1;
+            // times float(1 / B) as scsynth does (the compiler would divide by B instead)
+            sl2 = select2(flip, sl, fmaf(target(m2, a) - lv1, sf, 0.0));
+            cm2 = select2(flip, cm1, 0.0);
+            pm2 = select2(flip, pm, cm1);
+        });
+    level = machine(5, step, (0, 1.0, 0.0, 0.0, 0.0), 1, 1);
+    dx = select2(ba.time == 2 * B - 1, x @ max(0, min(2 * B, 2 * dlymax(dur))), x @ max(0, min(2 * B - 1, 2 * dlymax(dur))));
+    out = select2(ba.time >= 2 * B - 1, 0.0, level * dx);
+};
+limiter(x, amp, dur) = dynlim(\(m, a).(select2(m > a, 1.0, a / m)), x, amp, dur);
+normalizer(x, amp, dur) = dynlim(\(m, a).(select2(m <= 0.00001, a / m, 100000.0 * a)), x, amp, dur);
+
+// Compander. scsynth runs the peak follower over the whole block, takes the gain for the
+// block's end, and ramps to it across the same block: each output uses up to 63 samples
+// of future control signal. Causal port (approximate): the gain target comes from the
+// follower at the end of the previous block, so the gain curve is exactly one block late.
+compander(x, ctl, thr, below, above, clampt, relaxt) = x * kr2ar(krhold(g))
+with {
+    m = amplitude(a2k(clampt), a2k(relaxt), ctl);
+    t = a2k(thr); sb = a2k(below); sa = a2k(above);
+    gb = pow(m / t, sb - 1.0);
+    gbz = select2(abs(gb) < 1e-15, select2(abs(gb) > 1e15, gb, 1.0), 0.0);
+    g = select2(m < t, select2(sa == 1, pow(m / t, sa - 1.0), 1.0), select2(sb == 1, gbz, 1.0));
+};

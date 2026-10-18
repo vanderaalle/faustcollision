@@ -102,6 +102,15 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 			K2A.ar(EnvGen.kr(Env.perc(0.01, 0.3, 1, -2), trig))
 		] * 0.5)
 	}),
+	// Dynamics
+	SynthDef(\case_Limiter, { |level = 0.3| Out.ar(0, [Limiter.ar(in.value, level, 0.01), Limiter.ar(in.value * 2, 0.5, 0.003)]) },
+		metadata: (specs: (level: spec.(0.05, 1, 0.3)))),
+	SynthDef(\case_Normalizer, { |level = 0.5| Out.ar(0, Normalizer.ar(in.value, level, 0.01)) },
+		metadata: (specs: (level: spec.(0.05, 1, 0.5)))),
+	SynthDef(\case_Compander, { |thresh = 0.2| Out.ar(0, [
+		Compander.ar(in.value, in.value, thresh, 1, 0.3, 0.01, 0.1),          // compressor
+		Compander.ar(in.value, in.value, thresh, 3, 1, 0.005, 0.05)]) },      // gate/expander
+		metadata: (specs: (thresh: spec.(0.02, 0.8, 0.2)))),
 	// Noise: statistics only (scsynth's generator is seeded per server). Each at ar and kr.
 	// Rates and densities stay >= 100/s: a statistical comparison needs ~1000 random events
 	// per render (LFNoise2 at 20 Hz over 10 s varies ±2.4 dB from seed to seed).
