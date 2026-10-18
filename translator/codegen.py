@@ -232,6 +232,9 @@ def translate(sdef: SynthDef, meta: dict, table=None) -> Translation:
         fixed = set(e.get("inputs", []))
         wires = {k: arg(k, v) for k, v in args.items() if isinstance(v, Ref) and k in fixed}
         fmt = {k: (f"w_{k}" if k in wires else arg(k, v)) for k, v in args.items()}
+        if e.get("derive"):  # constructor-time structure, computed here (translator/derive.py)
+            from . import derive
+            fmt.update(getattr(derive, e["derive"])({k: args[k].value for k in e.get("constant_inputs", [])}))
         if e.get("variadic"):
             group = e["variadic"]["group"]
             n = (len(u.inputs) - len(fixed)) // len(group)

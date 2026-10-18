@@ -14,8 +14,8 @@ def graph(*ugens):
 
 
 def test_unmapped_ugen_names_the_class():
-    g = graph(UGen(2, "GVerb", "ar", 0, [Ref(1, 0)], ["ar"]))
-    with pytest.raises(TranslationError, match="unmapped UGen class GVerb"):
+    g = graph(UGen(2, "Gendy1", "ar", 0, [Ref(1, 0)], ["ar"]))
+    with pytest.raises(TranslationError, match="unmapped UGen class Gendy1"):
         translate(g, {})
 
 

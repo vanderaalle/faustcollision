@@ -1458,3 +1458,16 @@ faust = { ar = "sc.freeverb2({in}, {in2}, {mix}, {room}, {damp})" }
 compare = "waveform"
 tol = 1e-5
 case = "case_FreeVerb2"
+
+[GVerb]
+tier = "direct"
+inputs = ["in", "roomsize", "revtime", "damping", "inputbw", "spread", "drylevel", "earlyreflevel", "taillevel", "maxroomsize"]
+outputs = 2
+# roomsize, spread and maxroomsize fix the delay structure (computed by translator/derive.py
+# for 48 kHz, as scsynth's constructor does); the other parameters are read per block
+constant_inputs = ["roomsize", "spread", "maxroomsize"]
+derive = "gverb"
+faust = { ar = "sc.gverb({in}, {revtime}, {damping}, {inputbw}, {drylevel}, {earlyreflevel}, {taillevel}, {fdnsize}, {lc0}, {lc1}, {lc2}, {lc3}, {ls0}, {ls1}, {ls2}, {ls3}, {tc0}, {tc1}, {tc2}, {tc3}, {ts0}, {ts1}, {ts2}, {ts3}, {dl0}, {dl1}, {dl2}, {dl3}, {dr1}, {dr2}, {dr3})" }
+compare = "waveform"
+tol = 1e-4
+case = "case_GVerb"

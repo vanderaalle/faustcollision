@@ -1112,3 +1112,94 @@ freeverb2(l, r, mix, room, damp) =
     (1.0 - m) * l + m * fvwet(l + r, r5, d1, d2, 1617, 1557, 1491, 1422, 1277, 1116, 1188, 1356, 556, 441, 341, 225),
     (1.0 - m) * r + m * fvwet(l + r, r5, d1, d2, 1640, 1580, 1514, 1445, 1300, 1139, 1211, 1379, 579, 464, 364, 248)
 with { m = a2k(mix); r5 = 0.7 + 0.28 * a2k(room); d2 = 0.4 * a2k(damp); d1 = 1.0 - d2; };
+
+//------------------------------------------------------------------------------
+// GVerb (ReverbUGens.cpp): input damper and diffuser, a 4-line feedback delay network
+// with dampers and a Hadamard-type matrix, early taps, and 3 output diffusers per side.
+// Integer structure (lc*/ls*: FDN lengths at construction / after the first parameter
+// update; tc*/ts*: tap positions; dl*/dr*: diffuser sizes; fdnsize) is computed by the
+// translator (translator/derive.py). Parameters are read per block; when any differs from
+// the unit's values, scsynth recomputes gains (with the quirk that the FDN gains ramp from
+// the intermediate value -alpha_old^len to -alpha_new^len, overshooting by that step) and
+// ramps the levels across the block. At construction bandwidth and levels are 0, so the
+// first block always updates when they are not.
+//------------------------------------------------------------------------------
+gvzap(x) = zap(x);
+gvftz(x) = select2(abs(x) < 3.851859888774472e-34, x, 0.0);   // exponent bits < 0x08000000
+// allpass diffuser of size s: w = x - coef b, y = b + coef w, b = w delayed by s
+gvdif(s, coef, x) = (\(fb).(gvzap(w), y with { b = fb @ (s - 1); w = gvftz(x - b * coef); y = b + w * coef; })) ~ _ : !, _;
+gvdamp(d, x) = (\(fdl).(gvzap(y), y with { y = x * (1.0 - d) + fdl * d; })) ~ _ : !, _;
+gvmat(d0, d1, d2, d3) = 0.5 * fsub(fsub(fadd(d0, d1), d2), d3), 0.5 * fadd(fsub(fsub(d0, d1), d2), d3),
+                        0.5 * fadd(fsub(fsub(d1, d0), d2), d3), 0.5 * fadd(fadd(fadd(d0, d1), d2), d3);
+
+gverb(x0, rt, dmp, ibw, dry, early, tail, fdnsize, lc0, lc1, lc2, lc3, ls0, ls1, ls2, ls3,
+      tc0, tc1, tc2, tc3, ts0, ts1, ts2, ts3, dl0, dl1, dl2, dl3, dr1, dr2, dr3) = outl, outr
+with {
+    x = select2(x0 != x0, x0, 0.0);                       // NaN input -> 0
+    j = float(ba.time % blocksize);
+    first = ba.time < blocksize;
+    // per-block parameters and the unit's stored values (constructor: bandwidth, levels 0)
+    P(v) = a2k(v);
+    prev(v, c0) = select2(first, P(v)@blocksize, c0);
+    chg = (P(rt) != prev(rt, initv(rt))) | (P(dmp) != prev(dmp, initv(dmp))) | (P(ibw) != prev(ibw, 0.0))
+        | (P(dry) != prev(dry, 0.0)) | (P(early) != prev(early, 0.0)) | (P(tail) != prev(tail, 0.0));
+    ever = (\(f).(max(f, float(chg)))) ~ _;               // a parameter update has happened
+    lens(c, s) = int(select2(ever > 0, c, s));
+    L0 = lens(lc0, ls0); L1 = lens(lc1, ls1); L2 = lens(lc2, ls2); L3 = lens(lc3, ls3);
+    T0 = lens(tc0, ts0); T1 = lens(tc1, ts1); T2 = lens(tc2, ts2); T3 = lens(tc3, ts3);
+    // alpha: per update powf(0.001, (float)(1 / (SR revtime)))
+    // (exp/log instead of pow: nested pow on derived signals crashes the libfaust JIT)
+    alpha0 = exp(log(0.001) / float(ma.SR * initv(rt)));
+    alphaNew = exp(log(0.001) * float(1.0 / (ma.SR * P(rt))));
+    alpha = (\(fa).(select2(krclk & chg, select2(ba.time == 0, fa, alpha0), alphaNew))) ~ _;
+    alphaPrev = select2(first, alpha@blocksize, alpha0);
+    // FDN gain i of length len: on update, from -alphaPrev^len to -alpha^len, ramp started at
+    // the new value (scsynth); end of block = new + 64 slope, kept until the next update
+    fgain(len, lc) = (\(fe).(select2(krclk, fe, select2(chg, select2(ba.time == 0, fe, g0), nw + 64.0 * sl)), cur
+        with {
+            g0 = 0.0 - exp(float(lc) * log(alpha0));
+            tmp = 0.0 - exp(float(len) * log(alphaPrev));
+            nw = 0.0 - exp(float(len) * log(alpha));
+            sl = (nw - tmp) / blocksize;
+            held = ba.sAndH(krclk, select2(ba.time == 0, fe, g0));
+            cur = select2(chg, held, nw + sl * j);
+        })) ~ _ : !, _;
+    // tap gain: on update, alphaPrev^tap, ramp from the previous end value
+    tgain(tp, tc) = (\(fe).(select2(krclk, fe, select2(chg, select2(ba.time == 0, fe, t0), nw + 64.0 * sl)), cur
+        with {
+            t0 = exp(float(tc) * log(alpha0));
+            old = select2(ba.time == 0, fe, t0);
+            nw = exp(float(tp) * log(alphaPrev));
+            sl = (nw - ba.sAndH(krclk, old)) / blocksize;
+            held = ba.sAndH(krclk, old);
+            cur = select2(chg, held, nw + sl * j);
+        })) ~ _ : !, _;
+    // levels: ramp from the stored value to the new one across an updating block
+    lev(v) = select2(chg, P(v), o + (P(v) - o) / blocksize * j) with { o = prev(v, 0.0); };
+    dryl = lev(dry); earlyl = lev(early); taill = lev(tail);
+    // input damper (damping 1 - bandwidth after the first update, 1 before) and diffuser
+    z = gvdif(dl0, 0.75, gvdamp(1.0 - select2(ever > 0, 0.0, P(ibw)), x));
+    tz = gvzap(z);
+    tapd(t) = tz @ max(1, min(t, 44000));
+    u0 = tgain(T0, tc0) * tapd(T0); u1 = tgain(T1, tc1) * tapd(T1);
+    u2 = tgain(T2, tc2) * tapd(T2); u3 = tgain(T3, tc3) * tapd(T3);
+    rd(fw, L) = fw @ max(0, min(L - 1, fdnsize));
+    dmpd = P(dmp);
+    fdn = (\(fw0, fw1, fw2, fw3).(
+              gvzap(u0 + f0), gvzap(u1 + f1), gvzap(u2 + f2), gvzap(u3 + f3), d0, d1, d2, d3
+              with {
+                  d0 = gvdamp(dmpd, fgain(L0, lc0) * rd(fw0, L0));
+                  d1 = gvdamp(dmpd, fgain(L1, lc1) * rd(fw1, L1));
+                  d2 = gvdamp(dmpd, fgain(L2, lc2) * rd(fw2, L2));
+                  d3 = gvdamp(dmpd, fgain(L3, lc3) * rd(fw3, L3));
+                  f0 = gvmat(d0, d1, d2, d3) : _, !, !, !;
+                  f1 = gvmat(d0, d1, d2, d3) : !, _, !, !;
+                  f2 = gvmat(d0, d1, d2, d3) : !, !, _, !;
+                  f3 = gvmat(d0, d1, d2, d3) : !, !, !, _;
+              })) ~ (_, _, _, _) : (!, !, !, !, _, _, _, _);
+    s(k, a) = taill * a + earlyl * k;
+    wsum = fdn : \(d0, d1, d2, d3).(fadd(fadd(fsub(fadd(s(u0, d0), 0.0), s(u1, d1)), s(u2, d2)) - s(u3, d3), x * earlyl));
+    xd = x * dryl;
+    outl = gvdif(dl3, 0.625, gvdif(dl2, 0.625, gvdif(dl1, 0.75, wsum))) + xd;
+    outr = gvdif(dr3, 0.625, gvdif(dr2, 0.625, gvdif(dr1, 0.75, wsum))) + xd;
+};

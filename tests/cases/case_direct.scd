@@ -116,6 +116,8 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 		metadata: (specs: (room: spec.(0, 1, 0.5, \lin)))),
 	SynthDef(\case_FreeVerb2, { |room = 0.5| Out.ar(0, FreeVerb2.ar(in.value, in.value * -0.5, 0.5, room, 0.5)) },
 		metadata: (specs: (room: spec.(0, 1, 0.5, \lin)))),
+	SynthDef(\case_GVerb, { |revtime = 3| Out.ar(0, GVerb.ar(in.value, 10, revtime, 0.5, 0.5, 15, 1, 0.7, 0.5, 300) * 0.5) },
+		metadata: (specs: (revtime: spec.(0.5, 10, 3)))),
 	// Noise: statistics only (scsynth's generator is seeded per server). Each at ar and kr.
 	// Rates and densities stay >= 100/s: a statistical comparison needs ~1000 random events
 	// per render (LFNoise2 at 20 Hz over 10 s varies ±2.4 dB from seed to seed).
