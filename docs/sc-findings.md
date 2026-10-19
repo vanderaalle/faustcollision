@@ -42,6 +42,7 @@ not yet confirmed by a render. Kind: **bug?** (looks unintended), **undocumented
 | 28 | `Resonz.kr`, `Ringz.kr`, `TwoPole.kr`, `TwoZero.kr`, `APF.kr`, `MidEQ.kr`, `OneZero.kr` | coefficient changes apply one block late; `APF.kr` passes its input through | undocumented | measured, source |
 | 29 | `SubsampleOffset` | 0.5, not 0, for a synth scheduled exactly on a sample; 0 for an untimestamped command | convention | measured, source |
 | 30 | `Lag3UD` | the third stage picks its up/down time by comparing stages 1 and 2, not its own input and state | bug? | measured, source |
+| 31 | `TWindex` (normalize 0, weights summing below 1) | returns n + 2 (outside the array) for the missing probability | undocumented | measured, source |
 
 ## 1. `Amplitude.kr` with an audio-rate input releases 64× too fast
 
@@ -531,3 +532,17 @@ Measured (NRT, `Lag3UD.ar(LFPulse.ar(7, 0, 0.3) + (LFNoise0.ar(40) * 0.3), 0.005
 - Source: `server/plugins/FilterUGens.cpp` `Lag3UD_next` (`if (y1a > y1b) { y1c = y1b + b1u
   * (y1c - y1b); }`). Fix: `if (y1b > y1c)`.
 - Translation: reproduced (`sc.lag3ud`).
+
+## 31. `TWindex` returns n + 2 when the weights sum to less than 1
+
+With `normalize = 0`, a draw r = frand() in [0, 1) is compared with the running sum of the
+weights; if no partial sum reaches r, `TWindex_chooseNewIndex` returns its initial value,
+`mNumInputs`, which is n + 2 for n weights (the trigger and normalize inputs count): an
+index outside the array, with the missing probability. The help says the weights
+"should sum to 1.0" without stating this; `Select` would clip it to the last element.
+
+Measured (NRT, `TWindex.ar(Impulse.ar(200), [0.2, 0.3, 0.3], 0)`, 10 s): indices 0, 1, 2
+with 0.18 / 0.30 / 0.30 of the triggers, and index 5 with 0.22.
+
+- Source: `server/plugins/OscUGens.cpp` `TWindex_chooseNewIndex` (`int32 index = maxindex;`).
+- Translation: reproduced (`sc.twindex_clk`).

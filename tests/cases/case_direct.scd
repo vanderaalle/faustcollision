@@ -174,6 +174,11 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 		metadata: (specs: (freq: spec.(0.5, 250, 20)))),
 	SynthDef(\case_Blip_kr, { |freq = 20| Out.ar(0, K2A.ar(Blip.kr(freq, 3 + (5 * (Line.kr(0, 1, 2) > 0.5)))) * 0.3) },
 		metadata: (specs: (freq: spec.(0.5, 250, 20)))),
+	// TWindex (statistics): normalized weights, unnormalized ones summing to 0.8 (n + 2 when no
+	// weight is reached), audio and kr triggers at 200/s
+	SynthDef(\case_TWindex, { var t = Impulse.ar(200), k = Impulse.kr(200);
+		Out.ar(0, [TWindex.ar(t, [1, 3, 2, 4], 1), TWindex.ar(t, [0.2, 0.3, 0.3], 0), K2A.ar(TWindex.kr(k, [0.5, 0.25, 0.25]))] * 0.2) },
+		metadata: (signals: [\silence])),
 	SynthDef(\case_Formlet, { |freq = 1000| Out.ar(0, Formlet.ar(in.value, freq, 0.005, 0.1) * 0.5) },
 		metadata: (specs: (freq: spec.(50, 12000, 1000)))),
 	// Lags and decays: knob-swept time, input signal (impulse/steps from the test signals)

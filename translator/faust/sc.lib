@@ -2922,3 +2922,23 @@ with {
     core = \(n2, pn2, sc, psc, xf, p).(select2(blit_t(p, n2), select2(xf, a, xa), 1.0)
     with { a = fmul(fsub(blit_r(p, n2), 1.0), sc); xa = fmul(fsub(blit_r(p, pn2), 1.0), psc); });
 };
+
+//------------------------------------------------------------------------------
+// TWindex (OscUGens.cpp:520-600): on a trigger rise, draw r = frand * maxSum (maxSum = sum of
+// the weights if normalize == 1, else 1) and output the first k with w0 + ... + wk >= r
+// (sequential float sums); none found gives mNumInputs = n + 2. The constructor draws the
+// first index and sets the previous trigger to 1 (a trigger high at the start does not
+// fire). Weights and normalize read at each draw.
+//------------------------------------------------------------------------------
+twindex_clk(seed, n, trig, norm, ws, clk) = machine(2, step, (1.0, pick(frand(seed + 7))), 0, clk)
+with {
+    w(k) = ws : ba.selector(k, n);
+    cum(k) = sum(j, k + 1, w(j));
+    // the first k with cum(k) >= r = the number of k with cum(k) < r (the sums do not
+    // decrease for non-negative weights); n of them: none reached, n + 2
+    pick(u) = select2(c == n, float(c), float(n + 2)) with {
+        r = u * select2(norm == 1, 1.0, cum(n - 1));
+        c = sum(k, n, int(cum(k) < r));
+    };
+    step = \(pt, v).((v1, trig, v1) with { v1 = select2((pt <= 0.0) & (trig > 0.0), v, pick(frand(seed))); });
+};

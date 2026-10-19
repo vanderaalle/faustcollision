@@ -13,7 +13,7 @@ Median, Select, Sanitize, Linen, DetectSilence; Lag, Lag2, Lag3, LagUD, Decay, D
 Integrator, Slew at kr; Lag2UD, Lag3UD (sc-findings 30); AmpComp, AmpCompA; VarLag (sc-findings 26); IEnvGen (sc-findings 27; hold shape rejected); Ramp
 (sc-findings 16: the boundary over-read is not reproduced); MantissaMask, Hasher; LFClipNoise,
 LFDNoise0/1/3, LFDClipNoise, TRand, TIRand, TExpRand, CoinGate (statistics); Saw, Pulse, Blip
-at kr (sc-findings 25 reproduced).
+at kr (sc-findings 25 reproduced); TWindex (sc-findings 31).
 Filters at kr (LPF ... LeakDC, sc-findings 28 timing); delays, combs, allpasses, Delay1/2 at kr.
 SampleRate, SampleDur, ControlRate, ControlDur, RadiansPerSample, SubsampleOffset (sc-findings 29).
 Census failures fixed: kr UGens fed by audio read the block's first sample (a2k; krhold
@@ -25,7 +25,7 @@ Rejected with an explanation (tier "rejected"): T2K, Peak.kr of audio.
 Each step has a prepared plan (and, where noted, code) in docs/plans/: apply, build, test,
 set tolerances from the measured floors, full suite, commit, bump vairi.
 1. Small remaining classes (census, unmapped): MoogFF.kr (plans/moogff-kr.md: a Faust miscompilation to understand first).
-2. TWindex (plans/random.md); chaos oscillators, DynKlank, grains, Pluck,
+2. Chaos oscillators, DynKlank, grains, Pluck,
    Hilbert/FreqShift, ambisonic panners: lower priority.
 3. Issue drafts: docs/issues/ covers 4, 5, 11, 15, 17-28, 30; file them upstream.
 

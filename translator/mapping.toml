@@ -2572,3 +2572,15 @@ faust = { ar = "sc.coingate_clk({seed}, {prob}, {in}, 1)", kr = "(sc.coingate_cl
 compare = "statistics"
 tol = 1.5
 case = "case_random2"
+
+[TWindex]
+tier = "direct"
+inputs = ["in", "normalize"]
+# weights per draw (non-negative assumed: the index is counted, not searched); none
+# reached gives n + 2 (C's mNumInputs); statistics (RNG streams)
+variadic = { group = ["w"] }
+self_hold = true
+faust = { ar = "sc.twindex_clk({seed}, {n}, {in}, {normalize}, ({ws}), 1)", kr = "(sc.twindex_clk({seed}, {n}, {in}, {normalize}, ({ws}), sc.krclk) : ba.sAndH(sc.krclk))" }
+compare = "statistics"
+tol = 1.5
+case = "case_TWindex"
