@@ -2584,3 +2584,17 @@ faust = { ar = "sc.twindex_clk({seed}, {n}, {in}, {normalize}, ({ws}), 1)", kr =
 compare = "statistics"
 tol = 1.5
 case = "case_TWindex"
+
+[Pluck]
+tier = "direct"
+inputs = ["in", "trig", "maxdelaytime", "delaytime", "decaytime", "coef"]
+constant_inputs = ["maxdelaytime"]
+# reads `in` per sample (no checkInputs): audio only (sc-findings 21); calc by trig/coef rates
+ar_inputs = ["in"]
+template_by = "pluck_calc"
+# measured 1.9e-7 .. 1.03e-5, worst at a 1 ms delay (~48 samples) with a 2 s decay: rounding
+# accumulated over thousands of feedback passes; tol twice that
+faust = { ar_kk = "sc.pluck_g(0, 0, {in}, {trig}, {maxdelaytime}, {delaytime}, {decaytime}, {coef})", ar_ak = "sc.pluck_g(1, 0, {in}, {trig}, {maxdelaytime}, {delaytime}, {decaytime}, {coef})", ar_ka = "sc.pluck_g(0, 1, {in}, {trig}, {maxdelaytime}, {delaytime}, {decaytime}, {coef})", ar_aa = "sc.pluck_g(1, 1, {in}, {trig}, {maxdelaytime}, {delaytime}, {decaytime}, {coef})" }
+compare = "waveform"
+tol = 2.1e-5
+case = "case_Pluck"

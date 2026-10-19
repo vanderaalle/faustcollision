@@ -2942,3 +2942,34 @@ with {
     };
     step = \(pt, v).((v1, trig, v1) with { v1 = select2((pt <= 0.0) & (trig > 0.0), v, pick(frand(seed))); });
 };
+
+//------------------------------------------------------------------------------
+// Pluck (DelayUGens.cpp:189, Pluck_next_*): Karplus-Strong: a cubic-interpolated delay tap
+// (as CombC), one-pole lowpass onepole = (1 - |coef|) value + coef last, buffer write
+// in * gate + feedback * onepole, out = onepole. A trigger rise (per block: kr trig; per
+// sample: ar) lets (long)(delaytime * SR + .5f) samples of the input in. Delay time ramps
+// with the slope added before the sample, feedback and a kr coef after it; an ar coef is
+// read per sample. Unwritten taps read 0 (the start-up variant gives the same output).
+//------------------------------------------------------------------------------
+rampafter(c) = select2(n == p, p + (n - p) / blocksize * float(ba.time % blocksize), n)
+with { n = a2k(c); p = select2(ba.time < blocksize, n@blocksize, n); };
+pluck_g(trigar, coefar, x, trig, maxdt, dt, dect, coef) = (\(fw, fl, fc).(loop(fw, fl, fc))) ~ (_, _, _) : !, !, !, _
+with {
+    d = dsampm_k(dt, maxdt, 2.0);
+    fb = rampafter(calcfb(a2k(dt), a2k(dect)));
+    cf = select2(coefar == 1, rampafter(coef), coef);
+    tg = select2(trigar == 1, a2k(trig), trig);
+    ptg = select2(trigar == 1, select2(ba.time < blocksize, tg@blocksize, 0.0), tg');
+    tick = select2(trigar == 1, ba.time % blocksize == 0, 1);
+    rise = tick & (ptg <= 0.0) & (tg > 0.0);
+    nin = int(tmul05(a2k(dt), ma.SR));
+    loop(fw, fl, fc) = w, op, c2, op
+    with {
+        c1 = select2(ba.time == 0, select2(rise, fc, nin), select2(rise, 0, nin));
+        thisin = select2(c1 > 0, 0.0, x);
+        c2 = max(0, c1 - 1);
+        v = tap(3, fw, d, maxdt);
+        op = (1.0 - abs(cf)) * v + cf * select2(ba.time == 0, fl, 0.0);
+        w = thisin + fb * op;
+    };
+};

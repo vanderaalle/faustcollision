@@ -445,3 +445,8 @@ def ienvgen(c):
         seg = f"select2(p < {r(cum[j])}, {seg}, {segs[j]})"
     expr = f"select2(p >= {r(total)}, select2(p <= 0.0, {seg}, {r(lv[0])}), {r(lv[n])})"
     return {"expr": expr, "off": r(float(f32(c["offset"])))}
+
+
+def pluck_calc(rate, r):
+    """DelayUGens.cpp Pluck_Ctor: by the trigger and coef rates (aa, ak, ka, kk)."""
+    return f'ar_{"a" if r["trig"] == "ar" else "k"}{"a" if r["coef"] == "ar" else "k"}'

@@ -179,6 +179,11 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 	SynthDef(\case_TWindex, { var t = Impulse.ar(200), k = Impulse.kr(200);
 		Out.ar(0, [TWindex.ar(t, [1, 3, 2, 4], 1), TWindex.ar(t, [0.2, 0.3, 0.3], 0), K2A.ar(TWindex.kr(k, [0.5, 0.25, 0.25]))] * 0.2) },
 		metadata: (signals: [\silence])),
+	// Pluck: kr trigger (next_kk), audio trigger (ak), audio coef (ka, aa); knob-swept delay time
+	SynthDef(\case_Pluck, { |dt = 0.005| var n = in.value, ta = Impulse.ar(3), tk = Impulse.kr(3), c = SinOsc.ar(0.5) * 0.4;
+		Out.ar(0, [Pluck.ar(n, tk, 0.05, dt, 2, 0.4), Pluck.ar(n, ta, 0.05, dt * 1.5, 1, -0.3),
+			Pluck.ar(n, tk, 0.05, dt, 2, c), Pluck.ar(n, ta, 0.05, dt * 0.7, 3, c)] * 0.4) },
+		metadata: (specs: (dt: spec.(0.001, 0.04, 0.005)))),
 	SynthDef(\case_Formlet, { |freq = 1000| Out.ar(0, Formlet.ar(in.value, freq, 0.005, 0.1) * 0.5) },
 		metadata: (specs: (freq: spec.(50, 12000, 1000)))),
 	// Lags and decays: knob-swept time, input signal (impulse/steps from the test signals)
