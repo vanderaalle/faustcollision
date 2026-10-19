@@ -68,13 +68,16 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 		metadata: (specs: (freq: spec.(50, 12000, 1000))))
 } ++ [
 	// BEQSuite: knobs (next_kk), constants (next_ii), audio-rate freq read at the block start
-	// (next_kk); [class, rq/bw/rs, has db]
+	// (next_kk), all coefficient inputs audio rate (next_aa: stepped freq with constant
+	// rq/db, so unchanged groups occur; continuous); [class, rq/bw/rs, has db]
 ] ++ [[\BLowPass, 0.5, false], [\BHiPass, 0.5, false], [\BAllPass, 0.5, false], [\BBandPass, 1, false],
 	[\BBandStop, 1, false], [\BPeakEQ, 0.5, true], [\BLowShelf, 1, true], [\BHiShelf, 1, true]].collect { |p|
 	SynthDef(("case_" ++ p[0]).asSymbol, { |freq = 1000, db = 6|
 		var c = p[0].asClass, ext = if(p[2]) { [db] } { [] }, cext = if(p[2]) { [-9] } { [] };
 		Out.ar(0, [c.ar(in.value, freq, p[1], *ext), c.ar(in.value, 800, p[1], *cext),
-			c.ar(in.value, in.value.abs * 3000 + 200, p[1], *ext)] * 0.5) },
+			c.ar(in.value, in.value.abs * 3000 + 200, p[1], *ext),
+			c.ar(in.value, Latch.ar(in.value.abs * 3000 + 200, Impulse.ar(900)), DC.ar(p[1]), *(if(p[2]) { [DC.ar(-9)] } { [] })),
+			c.ar(in.value, in.value.abs * 3000 + 200, in.value.abs * 0.5 * p[1] + (0.5 * p[1]), *(if(p[2]) { [in.value * 12] } { [] }))] * 0.5) },
 		metadata: (specs: if(p[2]) { (freq: spec.(50, 12000, 1000), db: spec.(-24, 24, 6, \lin)) } { (freq: spec.(50, 12000, 1000)) }))
 } ++ [
 	// MidEQ: knob-swept frequency and gain (boost and cut), audio-rate (per-block) frequency

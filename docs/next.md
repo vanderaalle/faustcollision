@@ -8,33 +8,38 @@ LFGauss, Phasor, Vibrato); filters, lags, decays, delays, combs/allpasses; EnvGe
 XLine; dynamics; reverbs; Klank, PitchShift, LocalIn/LocalOut; Wrap, Fold, Clip, LinExp,
 InRange, InRect, Schmidt, ModDif; triggers (Trig ... T2A); panners (Pan2, LinPan2,
 Balance2, XFade2, LinXFade2, Rotate2, Pan4); LPZ1/2, HPZ1/2, BPZ2, BRZ2, Slope, FOS, SOS;
-MidEQ; BEQSuite (BLowPass ... BHiShelf) with constant or per-block inputs.
-Rejected with an explanation (tier "rejected"): T2K, Peak.kr of audio; BEQSuite with every
-coefficient input at audio rate (next_aa, until step 1 below).
+MidEQ; BEQSuite (BLowPass ... BHiShelf) at every input rate (next_aa: sc-findings 24).
+Rejected with an explanation (tier "rejected"): T2K, Peak.kr of audio.
 
 ## Next, in order
-1. BEQSuite next_aa (all coefficient inputs at audio rate; derive.beq_calc rejects it now).
-   Each 3-sample group reads the inputs once and recomputes the coefficients when they
-   differ from the stored ones (no ramp); the 64th sample keeps group 20's. What is read
-   differs by class (FilterUGens.cpp, *_next_aa / *_next_aaa):
-   - BLowPass, BAllPass, BPeakEQ, BLowShelf: group g reads sample g (the block's first
-     21); the remainder stores sample 21 for the next block's comparison.
-   - BHiPass: the same, but the remainder stores nothing (the stored value stays the last
-     one read).
-   - BBandPass, BBandStop, BHiShelf: on a change, `m_freq = ZXP(freq)` reads again, so the
-     pointer advances by 2 (data-dependent: 0, 2, 4 ... 40 while the input keeps
-     changing); the stored value is the sample after the one used. Remainder: BBandPass and
-     BBandStop store the last value read (`nextfreq`), BHiShelf reads the next sample.
-   One model: a per-block state machine (read pointer, pointer of the stored value,
-   block-start stored values, effective inputs), updated at j = 3g, g <= 20, reading the
-   input at delay j - p (p <= 2g, so causal). Measure against NRT (a Python simulation of
-   each variant) before writing sc-findings 24; then sc.beq_a(cf, kind, x, f, q, d) on
-   sos_g with the coefficient functions of beq_k (no ramp).
-2. Median; then kr variants still unmapped (filters, delays, Lag*, Decay*, Integrator.kr...),
-   Saw/Pulse/Blip .kr, VarLag, Linen, IEnvGen, DetectSilence, Select, Sanitize.
-3. Random UGens (statistics only), chaos oscillators, DynKlank, grains, Pluck,
+Each step has a prepared plan (and, where noted, code) in docs/plans/: apply, build, test,
+set tolerances from the measured floors, full suite, commit, bump vairi.
+1. Census failures (report/census.md, regenerated with BEQSuite next_aa included):
+   - Pan4.kr: Faust compile error (0/0 after constant folding in sc.pan4_kr).
+   - Splay.kr (-> Pan2.kr + operators): waveform 1.44: Pan2.kr is probably wrong (the
+     regression case covers Pan2.ar only); add a Pan2.kr case.
+   - VarLag.ar with the default warp (-> EnvGen + Changed + Impulse): waveform 0.066.
+   - LocalIn.kr / LocalOut.kr: waveform 1.24, probably sc-findings 19 (probes start at
+     block 0); confirm, then give the census probe a startBlock or mark it.
+   Explained: T2K (rejected), Vibrato (random rateVariation default), Pitch.kr (finding 9).
+2. Median (code: plans/median.md).
+3. Select, Sanitize, DetectSilence, Linen (code; Linen compiles, shape checked):
+   plans/select-sanitize-linen-detectsilence.md.
+4. Lag, Lag2, Lag3, LagUD, Decay, Decay2, Integrator, Slew .kr (code sketch, checks resolved):
+   plans/lag-family-kr.md.
+5. Filter .kr (LPF ... OneZero; two groups, sc-findings 28): plans/filters-kr.md.
+   Finding 28 measured on all seven; issue draft 16.
+6. Delays, combs, allpasses .kr: plans/delays-kr.md.
+7. Saw, Pulse, Blip .kr (core refactor; sc-findings 25): plans/blit-kr.md.
+8. VarLag (\lin only; sc-findings 26), IEnvGen (sc-findings 27): plans/varlag.md,
+   plans/ienvgen.md.
+9. Small remaining classes (census, unmapped): MoogFF.kr (plans/moogff-kr.md); server info
+   constants (SampleRate, SampleDur, ControlRate, ControlDur, RadiansPerSample,
+   SubsampleOffset: trivial, plans/server-info.md); Ramp (sc-findings 16, measured); Lag2UD, Lag3UD, AmpComp,
+   AmpCompA, MantissaMask, Hasher: plans/small-classes.md.
+10. Random UGens (statistics only; plans/random.md), chaos oscillators, DynKlank, grains, Pluck,
    Hilbert/FreqShift, ambisonic panners: lower priority.
-4. Issue drafts: done for 4, 5, 11, 15, 17-23 (docs/issues/); file them upstream.
+11. Issue drafts: docs/issues/ covers 4, 5, 11, 15, 17-28; file them upstream.
 
 ## Working method (keeps cost down)
 - Read the scsynth source of the UGen (and nova-simd where a nova calc function runs).

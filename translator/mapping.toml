@@ -1197,8 +1197,8 @@ case = "case_BRF"
 
 # BEQSuite (FilterUGens.cpp:4166): constant inputs -> exact double coefficients
 # (derive.py) on the pair biquad sc.sos_g; otherwise next_kk (sc.beq_k: inputs read at the
-# block start, ramp in 21 steps). All coefficient inputs at audio rate (next_aa): rejected
-# until ported (derive.beq_calc).
+# block start, ramp in 21 steps). All coefficient inputs at audio rate: next_aa (sc.beq_a,
+# per-class read pattern, sc-findings 24).
 
 [BLowPass]
 tier = "direct"
@@ -1207,9 +1207,9 @@ template_by = "beq_calc"
 derive_when_constant = ["freq", "rq"]
 derive = "blowpass"
 faust = { ar_i = "sc.sos_g({in}, ({a0h}, {a0l}, {a1h}, {a1l}, {a2h}, {a2l}, {b1h}, {b1l}, {b2h}, {b2l}), 1)" }
-faust_var = { ar_k = "sc.beq_k(sc.blpc, {in}, {freq}, {rq}, 0.0)" }
+faust_var = { ar_k = "sc.beq_k(sc.blpc, {in}, {freq}, {rq}, 0.0)", ar_a = "sc.beq_a(sc.blpc, 0, 0, {in}, {freq}, {rq}, 0.0)" }
 compare = "waveform"
-# measured: constants 4e-10 or less (exact up to pair rounding); next_kk 5.0e-6 (50 Hz): w, sin,
+# measured: constants 4e-10 or less (exact up to pair rounding); next_aa 2.5e-6 or less; next_kk 5.0e-6 (50 Hz): w, sin,
 # s2(w) in float. tol twice the worst case
 tol = 1e-5
 case = "case_BLowPass"
@@ -1221,9 +1221,9 @@ template_by = "beq_calc"
 derive_when_constant = ["freq", "rq"]
 derive = "bhipass"
 faust = { ar_i = "sc.sos_g({in}, ({a0h}, {a0l}, {a1h}, {a1l}, {a2h}, {a2l}, {b1h}, {b1l}, {b2h}, {b2l}), 1)" }
-faust_var = { ar_k = "sc.beq_k(sc.bhpc, {in}, {freq}, {rq}, 0.0)" }
+faust_var = { ar_k = "sc.beq_k(sc.bhpc, {in}, {freq}, {rq}, 0.0)", ar_a = "sc.beq_a(sc.bhpc, 0, 1, {in}, {freq}, {rq}, 0.0)" }
 compare = "waveform"
-# measured: constants 4e-10 or less (exact up to pair rounding); next_kk 3.4e-6 (50 Hz): w, sin,
+# measured: constants 4e-10 or less (exact up to pair rounding); next_aa 2.5e-6 or less; next_kk 3.4e-6 (50 Hz): w, sin,
 # s2(w) in float. tol twice the worst case
 tol = 7e-6
 case = "case_BHiPass"
@@ -1235,9 +1235,9 @@ template_by = "beq_calc"
 derive_when_constant = ["freq", "rq"]
 derive = "ballpass"
 faust = { ar_i = "sc.sos_g({in}, ({a0h}, {a0l}, {a1h}, {a1l}, {a2h}, {a2l}, {b1h}, {b1l}, {b2h}, {b2l}), 1)" }
-faust_var = { ar_k = "sc.beq_k(sc.ballc, {in}, {freq}, {rq}, 0.0)" }
+faust_var = { ar_k = "sc.beq_k(sc.ballc, {in}, {freq}, {rq}, 0.0)", ar_a = "sc.beq_a(sc.ballc, 0, 0, {in}, {freq}, {rq}, 0.0)" }
 compare = "waveform"
-# measured: constants 4e-10 or less (exact up to pair rounding); next_kk 4.4e-6 (50 Hz): w, sin,
+# measured: constants 4e-10 or less (exact up to pair rounding); next_aa 2.5e-6 or less; next_kk 4.4e-6 (50 Hz): w, sin,
 # s2(w) in float. tol twice the worst case
 tol = 9e-6
 case = "case_BAllPass"
@@ -1249,9 +1249,9 @@ template_by = "beq_calc"
 derive_when_constant = ["freq", "bw"]
 derive = "bbandpass"
 faust = { ar_i = "sc.sos_g({in}, ({a0h}, {a0l}, {a1h}, {a1l}, {a2h}, {a2l}, {b1h}, {b1l}, {b2h}, {b2l}), 1)" }
-faust_var = { ar_k = "sc.beq_k(sc.bbpc, {in}, {freq}, {bw}, 0.0)" }
+faust_var = { ar_k = "sc.beq_k(sc.bbpc, {in}, {freq}, {bw}, 0.0)", ar_a = "sc.beq_a(sc.bbpc, 1, 1, {in}, {freq}, {bw}, 0.0)" }
 compare = "waveform"
-# measured: constants 4e-10 or less (exact up to pair rounding); next_kk 8.7e-6 (50 Hz): w, sin,
+# measured: constants 4e-10 or less (exact up to pair rounding); next_aa 2.5e-6 or less; next_kk 8.7e-6 (50 Hz): w, sin,
 # s2(w) in float. tol twice the worst case
 tol = 1.8e-5
 case = "case_BBandPass"
@@ -1263,9 +1263,9 @@ template_by = "beq_calc"
 derive_when_constant = ["freq", "bw"]
 derive = "bbandstop"
 faust = { ar_i = "sc.sos_g({in}, ({a0h}, {a0l}, {a1h}, {a1l}, {a2h}, {a2l}, {b1h}, {b1l}, {b2h}, {b2l}), 1)" }
-faust_var = { ar_k = "sc.beq_k(sc.bbsc, {in}, {freq}, {bw}, 0.0)" }
+faust_var = { ar_k = "sc.beq_k(sc.bbsc, {in}, {freq}, {bw}, 0.0)", ar_a = "sc.beq_a(sc.bbsc, 1, 1, {in}, {freq}, {bw}, 0.0)" }
 compare = "waveform"
-# measured: constants 4e-10 or less (exact up to pair rounding); next_kk 5.5e-6 (50 Hz): w, sin,
+# measured: constants 4e-10 or less (exact up to pair rounding); next_aa 2.5e-6 or less; next_kk 5.5e-6 (50 Hz): w, sin,
 # s2(w) in float. tol twice the worst case
 tol = 1.1e-5
 case = "case_BBandStop"
@@ -1277,9 +1277,9 @@ template_by = "beq_calc"
 derive_when_constant = ["freq", "rq", "db"]
 derive = "bpeakeq"
 faust = { ar_i = "sc.sos_g({in}, ({a0h}, {a0l}, {a1h}, {a1l}, {a2h}, {a2l}, {b1h}, {b1l}, {b2h}, {b2l}), 1)" }
-faust_var = { ar_k = "sc.beq_k(sc.bpkc, {in}, {freq}, {rq}, {db})" }
+faust_var = { ar_k = "sc.beq_k(sc.bpkc, {in}, {freq}, {rq}, {db})", ar_a = "sc.beq_a(sc.bpkc, 0, 0, {in}, {freq}, {rq}, {db})" }
 compare = "waveform"
-# measured: constants 4e-10 or less (exact up to pair rounding); next_kk 1.6e-6 (+24 dB): w, sin,
+# measured: constants 4e-10 or less (exact up to pair rounding); next_aa 2.5e-6 or less; next_kk 1.6e-6 (+24 dB): w, sin,
 # s2(w) in float. tol twice the worst case
 tol = 3.2e-6
 case = "case_BPeakEQ"
@@ -1291,9 +1291,9 @@ template_by = "beq_calc"
 derive_when_constant = ["freq", "rs", "db"]
 derive = "blowshelf"
 faust = { ar_i = "sc.sos_g({in}, ({a0h}, {a0l}, {a1h}, {a1l}, {a2h}, {a2l}, {b1h}, {b1l}, {b2h}, {b2l}), 1)" }
-faust_var = { ar_k = "sc.beq_k(sc.blshc, {in}, {freq}, {rs}, {db})" }
+faust_var = { ar_k = "sc.beq_k(sc.blshc, {in}, {freq}, {rs}, {db})", ar_a = "sc.beq_a(sc.blshc, 0, 0, {in}, {freq}, {rs}, {db})" }
 compare = "waveform"
-# measured: constants 4e-10 or less (exact up to pair rounding); next_kk 1.3e-5 (50 Hz): w, sin,
+# measured: constants 4e-10 or less (exact up to pair rounding); next_aa 2.5e-6 or less; next_kk 1.3e-5 (50 Hz): w, sin,
 # s2(w) in float. tol twice the worst case
 tol = 2.7e-5
 case = "case_BLowShelf"
@@ -1305,9 +1305,9 @@ template_by = "beq_calc"
 derive_when_constant = ["freq", "rs", "db"]
 derive = "bhishelf"
 faust = { ar_i = "sc.sos_g({in}, ({a0h}, {a0l}, {a1h}, {a1l}, {a2h}, {a2l}, {b1h}, {b1l}, {b2h}, {b2l}), 1)" }
-faust_var = { ar_k = "sc.beq_k(sc.bhshc, {in}, {freq}, {rs}, {db})" }
+faust_var = { ar_k = "sc.beq_k(sc.bhshc, {in}, {freq}, {rs}, {db})", ar_a = "sc.beq_a(sc.bhshc, 1, 0, {in}, {freq}, {rs}, {db})" }
 compare = "waveform"
-# measured: constants 4e-10 or less (exact up to pair rounding); next_kk 4.8e-6 (+24 dB): w, sin,
+# measured: constants 4e-10 or less (exact up to pair rounding); next_aa 2.5e-6 or less; next_kk 4.8e-6 (+24 dB): w, sin,
 # s2(w) in float. tol twice the worst case
 tol = 9.5e-6
 case = "case_BHiShelf"

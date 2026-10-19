@@ -335,14 +335,12 @@ def bhishelf(c):
 
 
 def beq_calc(rate, r):
-    """BEQSuite constructors: next_aa(a) when every coefficient input is audio rate, else
-    next_kk (constants: next_ii, or next_kk without a change: the same). next_aa reads the
-    inputs once per 3-sample group, at offsets that depend on the class and on the data
-    (docs/next.md): not ported yet."""
+    """BEQSuite constructors: next_aa(a) when every coefficient input is audio rate
+    (sc-findings 24), else next_kk (constants: next_ii, or next_kk without a change: the
+    same)."""
     if rate != "ar":
         raise ValueError("only .ar exists")
     co = [v for k, v in r.items() if k not in ("in", "_cls")]
     if all(v == "ar" for v in co):
-        raise ValueError("all coefficient inputs at audio rate (next_aa) are not ported yet: "
-                         "make one of them control rate")
+        return "ar_a"
     return "ar_i" if all(v == "ir" for v in co) else "ar_k"

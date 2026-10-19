@@ -2361,3 +2361,36 @@ beqramp(h, l) = dadd2(h, l, 0.0 - ph, 0.0 - pl) : \(dh, dl).(ddivf(dh, dl, 21.0)
     : \(qh, ql).(dmul2(qh, ql, g, 0.0)) : \(mh, ml).(dadd2(ph, pl, mh, ml))
 with { ph = kprev(h); pl = kprev(l); g = float(min(int((ba.time % blocksize) / 3), 21)); };
 beq_k(cf, x, f, q, d) = sos_g(x, (cf(a2k(f), a2k(q), a2k(d)) : par(i, 5, beqramp)), 1);
+// next_aa / next_aaa (every coefficient input at audio rate; sc-findings 24): group g (j = 3g,
+// g <= 20) reads the inputs at the block's sample p and compares them with the stored m;
+// on a difference the coefficients are recomputed from the read values (no ramp) and m is
+// stored: the same sample, or (extra = 1) the next one, read again, so p advances by 2.
+// The 64th sample keeps group 20's coefficients. At the block end m becomes the next
+// unread sample, or (keep = 1) the last one read. The first block compares with the
+// first sample (the constructor value is not modelled). Gives the effective (f, q, d).
+beqsel(extra, keep, f, q, d) = loop ~ si.bus(9) : par(i, 6, !), _, _, _
+with {
+    j = ba.time % blocksize;
+    rd(x, i) = x@(max(0, min(blocksize - 1, j - int(i))));
+    loop(sp, spm, slr, sm1, sm2, sm3, se1, se2, se3) = np, npm, nlr, nm1, nm2, nm3, ne1, ne2, ne3
+    with {
+        t0 = ba.time == 0;
+        p = select2(t0, sp, 0); pm = select2(t0, spm, -1); lr = select2(t0, slr, 0);
+        m1 = select2(t0, sm1, f); m2 = select2(t0, sm2, q); m3 = select2(t0, sm3, d);
+        e1 = select2(t0, se1, f); e2 = select2(t0, se2, q); e3 = select2(t0, se3, d);
+        grp = (j % 3 == 0) & (j < blocksize - 1);
+        last = j == blocksize - 1;
+        v1 = rd(f, p); v2 = rd(q, p); v3 = rd(d, p);
+        c1 = select2(pm < 0, rd(f, pm), m1); c2 = select2(pm < 0, rd(q, pm), m2); c3 = select2(pm < 0, rd(d, pm), m3);
+        chg = (v1 != c1) | (v2 != c2) | (v3 != c3);
+        ne1 = select2(grp & chg, e1, v1); ne2 = select2(grp & chg, e2, v2); ne3 = select2(grp & chg, e3, v3);
+        ex = chg & (extra == 1);
+        np = select2(grp, select2(last, p, 0), select2(ex, p + 1, p + 2));
+        npm = select2(grp, select2(last, pm, -1), select2(ex, p, p + 1));
+        nlr = select2(grp, lr, p);
+        nm1 = select2(last, m1, select2(keep, rd(f, p), rd(f, lr)));
+        nm2 = select2(last, m2, select2(keep, rd(q, p), rd(q, lr)));
+        nm3 = select2(last, m3, select2(keep, rd(d, p), rd(d, lr)));
+    };
+};
+beq_a(cf, extra, keep, x, f, q, d) = sos_g(x, (beqsel(extra, keep, f, q, d) : cf), 1);

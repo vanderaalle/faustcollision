@@ -1,4 +1,4 @@
-# Vibrato, Wrap, Fold, Clip, InRange, ToggleFF, PulseDivider (.ar) read a constant or kr input past its end
+# Vibrato, Wrap, Fold, Clip, InRange, ToggleFF, PulseDivider, MantissaMask, TRand, TIRand, TExpRand, CoinGate, Ball, Spring, Hilbert (.ar) read a constant or kr input past its end
 
 **Environment:** SuperCollider 3.13.0, Linux x86_64 (Ubuntu 24.04 package), scsynth NRT, 48 kHz, block size 64.
 
@@ -37,6 +37,15 @@ and 1; `PulseDivider.ar(Impulse.kr(5), 2)` outputs 22750 ones instead of 25. The
 depends on the memory layout, so it differs between servers and runs. With `DC.ar(...)`
 or `T2A.ar(...)` as input, all are correct.
 
+`MantissaMask.ar(0.3, 3)` likewise: 0.28125 on each block's first sample only (1501 of
+96064 samples in 2 s), garbage elsewhere (1501 non-finite samples, values up to -1.7e38).
+`TRand.ar(0, 1, Impulse.kr(10))`, `TIRand.ar`, `TExpRand.ar` change value 22502, 29803 and
+30100 times in 10 s instead of 100; `CoinGate.ar(1, Impulse.kr(10))` outputs 22502 nonzero
+samples instead of 100. With `T2A.ar` as trigger all four are right.
+`Ball.ar`, `Spring.ar`, `Hilbert.ar` with `LFNoise0.kr(20) * 0.5` as input (2 s): Ball
+reaches 3.7e25; Spring is NaN on 96056 of 96064 samples, Hilbert on 84056. Through `K2A.ar`
+all three are finite.
+
 ## Cause
 
 The calc functions read the input as a buffer:
@@ -46,10 +55,14 @@ The calc functions read the input as a buffer:
   `float* in = ZIN(0)` and `ZXP(in)` per sample.
 - `ToggleFF_next` (`server/plugins/TriggerUGens.cpp:900`), `PulseDivider_next`
   (1110): likewise for the trigger.
+- `MantissaMask_next` (`server/plugins/NoiseUGens.cpp:872`): `(int32*)ZIN(0)`, `ZXP` per sample.
+- `TRand_next_a(a)`, `TIRand_next_a(a)`, `TExpRand_next_a(a)`, `CoinGate_next` (`NoiseUGens.cpp`): the
+  trigger with `ZXP` per sample; the constructors choose by the unit's rate, not the trigger's.
+- `Ball_next`, `Spring_next` (`PhysicalModelingUGens.cpp`), `Hilbert_next` (`FilterUGens.cpp`): `ZIN(0)`, `ZXP`.
 
 and the classes do not check the input rate: `Vibrato` (`Osc.sc:303`), `InRange` and
 its subclasses `Fold`, `Clip`, `Wrap` (`Trig.sc:208-244`), `ToggleFF`,
-`PulseDivider`.
+`PulseDivider`, `MantissaMask`, `TRand`, `TIRand`, `TExpRand`, `CoinGate` (`Noise.sc`), `Ball`, `Spring`, `Hilbert`.
 
 ## Suggestion
 

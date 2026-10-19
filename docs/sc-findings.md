@@ -4,7 +4,7 @@ Behaviour of scsynth (SuperCollider 3.13.0) that the documentation does not stat
 found by comparing renders sample by sample or by porting the C++. Source references
 are to the `Version-3.13.0` tag (`~/src/supercollider`).
 
-Issue drafts for #4, #5, #11, #15, #17-#23: `docs/issues/`.
+Issue drafts for #4, #5, #11, #15, #17-#28: `docs/issues/`.
 
 Status: **measured** = confirmed on scsynth NRT renders; **source** = read in the C++,
 not yet confirmed by a render. Kind: **bug?** (looks unintended), **undocumented**,
@@ -27,14 +27,19 @@ not yet confirmed by a render. Kind: **bug?** (looks unintended), **undocumented
 | 13 | `K2A` (first block) | ramps from the kr source's constructor output | convention | measured |
 | 14 | scsynth NRT | occasional abort (exit 134) on a render that succeeds when rerun | bug? | measured, not reproduced |
 | 15 | `APF` | not an allpass: +28 dB at its frequency, +38 dB at 100 Hz (indexing errors in the unrolled loop) | bug? | measured, source |
+| 16 | `Ramp` | reads the input one sample past the segment; past the buffer end at a block boundary | bug? | measured, source |
 | 17 | `AllpassC` (start-up) | outputs 0 for the first delay length; AllpassN/L output -fb * in there | bug? | measured, source |
 | 18 | `EnvGen` (audio-rate gate) | forced release (gate <= -1) during a segment corrupts the new segment and shortens it | bug? | measured, source |
 | 19 | `LocalIn` (server's first block) | outputs its uninitialised bus instead of the default when the synth starts at block 0 (e.g. NRT time 0) | bug? | measured, source |
 | 20 | `Formant` | phase sync product `phase1 * freq2` overflows int32: formant and bandwidth phases restart near 0 instead of at the fundamental's fraction | bug? | measured, source |
-| 21 | `Vibrato.ar`, `Wrap.ar`, `Fold.ar`, `Clip.ar`, `InRange.ar`, `ToggleFF.ar`, `PulseDivider.ar` (constant or kr input) | read the input as an audio buffer: past the single value of a constant or control wire (garbage, NaN); defaults like `Vibrato.ar(440)` are affected | bug | measured, source |
+| 21 | `Vibrato.ar`, `Wrap.ar`, `Fold.ar`, `Clip.ar`, `InRange.ar`, `ToggleFF.ar`, `PulseDivider.ar`, `MantissaMask.ar`, `TRand.ar`, `TIRand.ar`, `TExpRand.ar`, `CoinGate.ar`, `Ball.ar`, `Spring.ar`, `Hilbert.ar` (constant or kr input) | read the input as an audio buffer: past the single value of a constant or control wire (garbage, NaN); defaults like `Vibrato.ar(440)` are affected | bug | measured, source |
 | 22 | `LinExp.ar` (one bound of a range at audio rate) | the calc function reads both bounds per sample when either is audio rate: the other is read past its value (NaN, inf) | bug | measured, source |
 | 23 | `PeakFollower` (changing decay) | the decay ramp starts at the new value and moves past it, only on decaying samples; the overshoot is stored, so the decay keeps oscillating around the target | bug? | measured, source |
-| 16 | `Ramp` | reads the input one sample past the segment; past the buffer end at a block boundary | bug? | source |
+| 24 | BEQSuite (`BLowPass` ... `BHiShelf`, every coefficient input at audio rate) | inputs read once per 3 samples from the block's first 21 (BBandPass, BBandStop, BHiShelf: a second read per change, so every other sample) | bug? | measured, source |
+| 25 | `Saw.kr`, `Pulse.kr`, `Blip.kr` | inf/NaN above 375 Hz (harmonic count 0 at the control rate) | bug? | measured, source |
+| 26 | `VarLag.ar` (`warp: \lin`) | a time change after the ramp ended adds one stale slope step | bug? | measured, source |
+| 27 | `IEnvGen` | curvatures truncated to integers | bug? | measured, source |
+| 28 | `Resonz.kr`, `Ringz.kr`, `TwoPole.kr`, `TwoZero.kr`, `APF.kr`, `MidEQ.kr`, `OneZero.kr` | coefficient changes apply one block late; `APF.kr` passes its input through | undocumented | measured, source |
 
 ## 1. `Amplitude.kr` with an audio-rate input releases 64× too fast
 
@@ -228,7 +233,15 @@ in += nsmps;
 if (counter <= 0) { ...; slope = (*in - level) / counter; }
 ```
 
-- Translation: `Ramp` not mapped until measured.
+Measured (NRT, `Ramp.ar(LFNoise1.ar(300), 21.5 / 48000)`: 21-sample segments, the first one
+1 sample long, so one segment in 64 ends on a block boundary): the value each segment
+ramps to, inferred from its slope, equals the input sample at the segment start for all
+4499 segments that start inside a block, and differs (up to 0.84) for all 71 that start
+at a block boundary.
+
+- Translation: `Ramp` not mapped yet; the boundary read cannot be reproduced (it is
+  whatever follows the input buffer). A port would read the next block's first sample,
+  and document the difference.
 
 ## 17. `AllpassC` drops its direct path at start-up
 
@@ -332,13 +345,24 @@ Measured (NRT, input 0.3, range 0..1): `Wrap.ar(0.3, 0, 1)`, `Fold.ar`, `Clip.ar
 10 s for Wrap and Fold); `InRange.ar` flips between 0 and 1; `Wrap.ar(LFNoise0.kr(..))`
 likewise; `Wrap.ar(DC.ar(0.3), 0, 1)` is correct. `ToggleFF.ar` and `PulseDivider.ar`
 (no `checkInputs`) with `Impulse.kr(5)` as trigger read past it too: `PulseDivider.ar(k, 2)`
-outputs 22750 ones in 10 s instead of 25 (with `T2A.ar(k)`: 25). LinExp, TDelay,
+outputs 22750 ones in 10 s instead of 25 (with `T2A.ar(k)`: 25). `MantissaMask.ar(0.3, 3)` (no `checkInputs` either) is
+0.28125 on each block's first sample only (1501 of 96064 samples), garbage elsewhere
+(1501 non-finite, values up to -1.7e38); with `DC.ar(0.3)` it is right throughout. `TRand.ar`, `TIRand.ar`,
+`TExpRand.ar` and `CoinGate.ar` with `Impulse.kr(10)` as trigger (10 s): 22502, 29803 and
+30100 value changes, and 22502 nonzero samples, instead of 100 (with `T2A.ar(k)`: 100).
+Their constructors pick the calc function by the unit's rate (TRand* also by `lo`'s), and
+the `.ar` ones read the trigger with `ZXP` per sample; no `checkInputs`. `Ball.ar`,
+`Spring.ar` and `Hilbert.ar` (no `checkInputs`, `in` read with `ZXP`) with
+`LFNoise0.kr(20) * 0.5` as input (2 s): Ball's output reaches 3.7e25, Spring is NaN on
+96056 of 96064 samples, Hilbert on 84056; with the same signal through `K2A.ar` all three
+are finite. (`TBall.ar` differed from the `K2A` version on 21 samples by at most 0.02,
+consistent with K2A's ramp: not shown to be affected.) LinExp, TDelay,
 SetResetFF, PulseCount, Stepper, Timer and ZeroCrossing are protected: sclang rejects a
 non-audio first input ("first input is not audio rate").
 
 - Source: `server/plugins/LFUGens.cpp` `Vibrato_next`, `Wrap_next_*`, `Fold_next_*`,
-  `Clip_next_*`, `InRange_next` (`ZIN(0)`/`ZXP(in)`); `Osc.sc` `Vibrato`, `Trig.sc`
-  `InRange`. Fix: `checkInputs { ^this.checkSameRateAsFirstInput }`-style checks requiring
+  `Clip_next_*`, `InRange_next` (`ZIN(0)`/`ZXP(in)`); `NoiseUGens.cpp` `MantissaMask_next`, `TRand_next_a(a)`, `TIRand_next_a(a)`, `TExpRand_next_a(a)`, `CoinGate_next`; `PhysicalModelingUGens.cpp` `Ball_next`, `Spring_next`; `FilterUGens.cpp` `Hilbert_next`;
+  `Osc.sc` `Vibrato`, `Trig.sc` `InRange`, `Noise.sc` `MantissaMask`. Fix: `checkInputs { ^this.checkSameRateAsFirstInput }`-style checks requiring
   an audio-rate input for `.ar` (or calc functions reading `ZIN0(0)` otherwise).
 
 ## 22. `LinExp.ar` with one audio-rate bound reads the other past its value
@@ -375,3 +399,104 @@ differ); the FaustCollision port reproduces it.
 
 - Source: `server/plugins/TriggerUGens.cpp` `PeakFollower_next`. Fix: ramp from
   `unit->mDecay` (`float decay = unit->mDecay;`) and store the target at the block end.
+
+## 24. BEQSuite with audio-rate inputs reads them once per 3 samples, from the block's start
+
+With every coefficient input at audio rate (`next_aa` / `next_aaa`), the BEQSuite filters
+(`BLowPass`, `BHiPass`, `BAllPass`, `BBandPass`, `BBandStop`, `BPeakEQ`, `BLowShelf`,
+`BHiShelf`) read `freq`, `rq`/`bw`/`rs` and `db` once per 3-sample group
+(`mFilterLoops`), with `ZXP`: group g reads the block's sample g, not sample 3g. The 21
+groups use the first 21 samples of the block; the rest of the block's modulation is never
+read. The coefficients are recomputed when the read values differ from the stored ones
+(no ramp); the 64th sample keeps group 20's.
+
+`BBandPass`, `BBandStop` and `BHiShelf` store the compared value with another `ZXP`
+(`unit->m_freq = ZXP(freq)`) inside the change branch, so each change advances the read
+pointer by 2: while the input keeps changing they read samples 0, 2, 4 ... 40, and the
+stored value is the sample after the one used. At the block end the stored value is the
+next unread sample (`BLowPass`, `BAllPass`, `BPeakEQ`, `BLowShelf`, `BHiShelf`) or the last
+one read (`BHiPass`: no store; `BBandPass`, `BBandStop`: `nextfreq`).
+
+Measured (NRT, 2 s, white noise through each filter; inputs stepped with `LFNoise0.ar`
+and continuous with `SinOsc.ar`): a double-precision simulation of these rules is
+bit-exact against scsynth for all eight classes and both input kinds from block 10 on
+(blocks 1-4 differ by the start-up transient of constructor-time input values). A model
+reading the group's own sample (3g) differs on 99% of samples; swapping the extra-read
+rule between classes differs on 28-41% of samples. The block-end rule did not change the
+output on these signals (it matters only when a block's first value equals one candidate
+stored value but not the other); the port follows the source.
+
+- Source: `server/plugins/FilterUGens.cpp` `BLowPass_next_aa` ... `BHiShelf_next_aaa`.
+- Translation: `sc.beq_a` (per-class flags), within the float-coefficient floor of next_kk.
+
+## 25. `Saw.kr`, `Pulse.kr`, `Blip.kr` output inf/NaN above 375 Hz
+
+The band-limited oscillators compute the harmonic count N = (int32)((SAMPLERATE * 0.5) /
+freq). At control rate SAMPLERATE is SR / 64 (750 Hz at 48 kHz), so any frequency above
+375 Hz gives N = 0 and `scale = 0.5 / N` = inf. `Saw` and `Pulse` never clamp N; `Blip`
+clamps it to 1 only when `numharm` is below the maximum, not in the `N > maxN` branch
+that sets N = maxN = 0. The same happens at audio rate above SR / 2, where it does not
+matter.
+
+Measured (NRT, `Line.kr(300, 450, 2)` as frequency, through `K2A`): from 375.1 Hz on,
+every block of `Saw.kr`, `Pulse.kr` and `Blip.kr(f, 200)` is non-finite (750 of 1501
+blocks); below it the output is finite.
+
+- Source: `server/plugins/OscUGens.cpp` `Saw_next`, `Pulse_next`, `Blip_next` (the
+  maxN branch). Fix: clamp N to at least 1 in every branch (or output 0 when the
+  frequency exceeds the rate's Nyquist).
+
+## 26. `VarLag.ar`: a time change after the ramp has ended adds one stale step
+
+When `time` changes while the input is unchanged, `VarLag_next` rescales the ramp:
+`counter = max(1, (int)(counter * time / oldTime))`, `slope /= scaleFactor`. It does so
+even when the ramp has already ended (counter 0): the counter becomes 1, and the next
+sample adds the old slope once more to the level that already equals the target; the
+sample after snaps back to the target (`level = m_in`). `VarLag_next_1` (control rate)
+checks `counter != 0` and is not affected.
+
+Measured (NRT): `VarLag.ar` with `warp: \lin`, a step 0 -> 1 ramped over 0.02 s, then
+`time` changed from 0.02 to 0.03 s after the ramp: one sample reads 1.0006951 = (1/960) /
+1.5, the old per-sample slope over the time ratio.
+
+Only `warp: \lin` creates the VarLag UGen; other warps (including the default) build an
+EnvGen (`Filter.sc`, `VarLag.new1`).
+
+- Source: `server/plugins/FilterUGens.cpp` `VarLag_next` (the `else` branch), vs
+  `VarLag_next_1`. Fix: rescale only while `counter > 0`.
+
+## 27. `IEnvGen` truncates curvatures to integers
+
+`GET_ENV_VAL` reads the curve as `int curve = (int)unit->m_envvals[...]` before
+`exp((float)curve)`: a fractional curvature is truncated toward zero, and any curvature
+with |c| < 1 becomes linear. `EnvGen` uses the float value.
+
+Measured (NRT, index `Line.ar(0, 1, 1)`): `IEnvGen.ar(Env([0, 1], [1], -4.5), idx)`
+matches the curve -4 formula within 1.5e-7 (and differs from -4.5 by 3.9e-2);
+`Env([0, 1], [1], 0.7)` is linear within 3e-8.
+
+- Source: `server/plugins/LFUGens.cpp` `GET_ENV_VAL` (shape_Curve) and its callers
+  `IEnvGen_Ctor`, `IEnvGen_next_a`, `IEnvGen_next_k`. Fix: `float curve`.
+
+## 28. Control-rate filters without a `_next_1` apply coefficient changes one block late; `APF.kr` passes its input through
+
+At control rate the buffer length is 1, so `mFilterLoops` = 0, `mFilterRemain` = 1 and
+`mFilterSlope` = 0 (`server/scsynth/SC_Rate.cpp:34-40`). Filters whose `.kr` runs the
+unrolled audio-rate function (`Resonz`, `Ringz`, `TwoPole`, `TwoZero`, `APF`, `MidEQ`,
+`OneZero`) compute the new coefficients when an input changes, but the ramp slopes are
+`(next - current) * 0`: the block's single sample uses the old coefficients, and the new
+ones are stored for the next block. `LPF`, `HPF`, `RLPF`, `RHPF`, `BPF`, `BRF`, `Formlet`
+and `LeakDC` have a `_next_1` that uses the new coefficients at once.
+
+`APF.kr` runs only the remainder loop, whose per-sample formula is the identity (finding
+15): from zero state it outputs its input exactly.
+
+Measured (NRT, input `LFNoise0.kr(200)`, frequency stepping 30 -> 70 Hz): a double
+simulation of `Resonz.kr` applying new coefficients one block late is bit-exact (0 of 748
+blocks differ); applying them immediately differs on 121 blocks by up to 0.94.
+`APF.kr(x, 50, 0.9)` equals `x` on every block. `Ringz.kr`, `TwoPole.kr`, `TwoZero.kr`,
+`MidEQ.kr` likewise bit-exact one block late (TwoPole/TwoZero with `reson * reson` as a
+float product). `OneZero.kr` is late for another reason: `OneZero_next` adds its
+CALCSLOPE step after the sample (slope factor 1 at control rate), also bit-exact.
+
+- Kind: undocumented (Resonz ... OneZero); bug? (APF.kr, a consequence of finding 15).
