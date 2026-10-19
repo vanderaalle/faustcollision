@@ -16,14 +16,15 @@ shorter than requested. With a control-rate gate the same envelope releases corr
     var gate = K2A.ar(Line.kr(1, -1.012, 0.05));   // drops below -1 mid-segment
     [
         EnvGen.ar(Env.perc(0.01, 0.3), gate),       // audio-rate gate
-        EnvGen.ar(Env.perc(0.01, 0.3), A2K.kr(gate))
+        EnvGen.ar(Env.perc(0.01, 0.3), A2K.kr(gate)),  // control-rate gate
+        gate
     ]
 }.plot(0.1)
 )
 ```
 
-(We measured it with `EnvGen.ar(Env.perc(0.01, 0.3), SoundIn.ar(0))` on white noise: when
-the gate dips to -1.012 the level, near 1.0, jumps to -0.0187 instead of starting a 12 ms
+(Also seen with `EnvGen.ar(Env.perc(0.01, 0.3), SoundIn.ar(0))` on white noise: when the
+gate dips to -1.012 the level, near 1.0, jumps to -0.0187 instead of starting a 12 ms
 curve to 0.)
 
 ## Expected
@@ -32,8 +33,10 @@ A release from the current level to 0 over `-gate - 1` seconds, as with a contro
 
 ## Actual
 
-The new segment starts from a wrong value and is shortened by the number of samples
-already processed in the current loop.
+(NRT render of the snippet.) The gate passes -1 at sample 2418. The control-rate gate
+channel then releases from 0.5756 to 0 over 589 samples (12 ms = 576 requested; the gate
+is read per block). The audio-rate gate channel drops from 0.5758 straight to 0 at sample
+2418 and stays there: no release segment at all.
 
 ## Cause
 

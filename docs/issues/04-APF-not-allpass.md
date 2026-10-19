@@ -4,24 +4,13 @@
 
 ## Description
 
-`APF` should have a flat magnitude response. It boosts low frequencies by up to ~38 dB.
-Measured magnitude response of `APF.ar(impulse, 1000, 0.95)` (8192-point FFT of the
-impulse response):
-
-| Frequency | 100 Hz | 300 Hz | 1 kHz | 2 kHz | 5 kHz | 12 kHz |
-| --- | --- | --- | --- | --- | --- | --- |
-| Gain | +37.8 dB | +35.6 dB | +27.9 dB | +21.8 dB | +11.1 dB | +4.9 dB |
+`APF` should have a flat magnitude response. It boosts low frequencies by up to ~40 dB.
 
 ## Steps to reproduce
 
 ```supercollider
-(
-{
-    var imp = Impulse.ar(0) * EnvGen.ar(Env([1, 1, 0], [0.01, 0]));
-    APF.ar(imp, 1000, 0.95)
-}.plot(0.2)
-)
-// FFT the result: the gain is far from 0 dB at every frequency.
+{ APF.ar(Impulse.ar(0), 1000, 0.95) }.plot(0.2);
+// FFT the impulse response: the gain is far from 0 dB at every frequency.
 ```
 
 ## Expected
@@ -30,7 +19,12 @@ impulse response):
 
 ## Actual
 
-See the table: +4.9 to +37.8 dB.
+Impulse response starts 1.0, 0.902, 1.788, 2.554, 3.996, ... Magnitude response
+(NRT render of the snippet, 8192-point FFT):
+
+| Frequency | 100 Hz | 300 Hz | 1 kHz | 2 kHz | 5 kHz | 12 kHz |
+| --- | --- | --- | --- | --- | --- | --- |
+| Gain | +39.9 dB | +37.6 dB | +30.0 dB | +23.8 dB | +12.0 dB | +2.7 dB |
 
 ## Cause
 

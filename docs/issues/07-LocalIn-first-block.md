@@ -12,23 +12,35 @@ data. Started from block 1 on, the default is output as documented.
 
 ## Steps to reproduce
 
-NRT score, synth started at time 0 vs. at 64 samples:
+NRT score, one synth started in block 0, the same SynthDef started in block 1. (NRT runs
+every command timestamped up to the end of the current block, so block 1 needs a time
+strictly after 64 samples.)
 
 ```supercollider
-SynthDef(\li, { |out| var x = LocalIn.ar(1, 0.5); LocalOut.ar(x * 0); Out.ar(out, x) }).add;
-// /s_new at time 0: first block is 0.0
-// /s_new at 64 / sampleRate: first block is 0.5
+(
+var sr = 48000;
+var defs = [0, 1].collect { |o|
+    SynthDef(("li" ++ o).asSymbol, { var x = LocalIn.ar(1, 0.5); LocalOut.ar(x * 0); Out.ar(o, x) })
+};
+Score([
+    [0, ['/d_recv', defs[0].asBytes]], [0, ['/d_recv', defs[1].asBytes]],
+    [0, Synth.basicNew(\li0, nil, 1000).newMsg],             // starts in block 0
+    [64.5 / sr, Synth.basicNew(\li1, nil, 1001).newMsg]      // starts in block 1
+]).recordNRT(nil, "localin.wav", nil, sr, "WAV", "float",
+    ServerOptions.new.numOutputBusChannels_(2).sampleRate_(sr), "", 0.01);
+)
 ```
 
 (`LocalIn.ar(3, [0.5, 0.1, -0.2])` and `LocalIn.kr(1, 0.1)` measured likewise.)
 
 ## Expected
 
-The default (0.5) in the first block in both cases.
+Each synth outputs the default (0.5) in its first block, then 0 (what `LocalOut` wrote).
 
 ## Actual
 
-0 (the content of the freshly allocated bus) when the synth starts at block 0.
+Channel 1 (started in block 1): 0.5 for samples 64-127, then 0, as expected. Channel 0
+(started in block 0): 0 from the first sample: the content of the freshly allocated bus.
 
 ## Cause
 

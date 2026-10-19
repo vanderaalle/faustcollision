@@ -11,18 +11,26 @@ alternates around the target indefinitely instead of settling.
 
 ## Steps to reproduce
 
+The stored decay is internal state, so the effect shows by comparing a render with float32
+simulations of the C code. Render (NRT, 6 s) with the input and decay recorded alongside:
+
 ```supercollider
 (
 {
     var in = SinOsc.ar(110) * Decay.ar(Impulse.ar(2), 0.3);
-    PeakFollower.ar(in, Line.kr(0.99, 0.9999, 6))
+    var decay = Line.ar(0.99, 0.9999, 6);   // PeakFollower reads the block's first sample
+    [PeakFollower.ar(in, decay), in, decay]
 }.plot(6)
 )
 ```
 
-A float simulation of `PeakFollower_next` as written is bit-exact against scsynth (we
-checked 10 s of `PeakFollower.ar(SoundIn.ar(0), Line.kr(0.99, 0.9999, 6))` on a bass
-recording: 0 of 484800 samples differ); a simulation ramping from the old value is not.
+- Simulation of `PeakFollower_next` as written: bit-exact, 0 of 288000 samples differ
+  (block 0 skipped).
+- Simulation ramping from the stored value to the target and storing the target: 224204
+  samples differ, by up to 3.3e-4.
+
+Also seen on 10 s of `PeakFollower.ar(SoundIn.ar(0), Line.kr(0.99, 0.9999, 6))` on a bass
+recording: the as-written simulation is bit-exact (0 of 484800 samples differ).
 
 ## Expected
 

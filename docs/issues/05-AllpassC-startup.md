@@ -17,7 +17,8 @@ the first `delaytime` seconds.
     var in = WhiteNoise.ar(0.5);
     [
         AllpassL.ar(in, 0.2, 0.2, 1),
-        AllpassC.ar(in, 0.2, 0.2, 1)
+        AllpassC.ar(in, 0.2, 0.2, 1),
+        in
     ]
 }.plot(0.3)
 )
@@ -29,7 +30,9 @@ Both channels equal `-feedback * in` for the first 0.2 s, then (nearly) equal.
 
 ## Actual
 
-The `AllpassC` channel is 0 for the first 0.2 s.
+(NRT render of the snippet.) The `AllpassC` channel is exactly 0 for the first 9599
+samples; the `AllpassL` channel equals `-0.2512 * in` exactly there (feedback for a 0.2 s
+delay with 1 s decay). From sample 9599 on the two channels are identical.
 
 ## Cause
 
