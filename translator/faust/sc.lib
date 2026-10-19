@@ -2973,3 +2973,48 @@ with {
         w = thisin + fb * op;
     };
 };
+
+//------------------------------------------------------------------------------
+// Hilbert (FilterUGens.cpp:3673, HILBERT_FILTER): two cascades of six first-order allpasses.
+// Hilbert_next copies state and coefficients into local float arrays: per stage the
+// product c * y1 is a float product, y0 = u - c y1 and the stage output c y0 + y1 are
+// doubles (float pairs here; the first stage's y0 = in - c y1 is all float), the state
+// stored back is (float)y0, zapped at the block end. Coefficients from derive.hilbert
+// (double, cast to float). The constructor runs one sample from zero state.
+//------------------------------------------------------------------------------
+// one stage: input pair (uh, ul), coefficient c, state y1 -> (output pair, new state)
+hstage(c, uh, ul, y1) = ah, al, y0h
+with {
+    p = fmul(c, y1);
+    y0h = dadd2(uh, ul, 0.0 - p, 0.0) : _, !; y0l = dadd2(uh, ul, 0.0 - p, 0.0) : !, _;
+    mh = dmulf(y0h, y0l, c) : _, !; ml = dmulf(y0h, y0l, c) : !, _;
+    ah = dadd2(mh, ml, y1, 0.0) : _, !; al = dadd2(mh, ml, y1, 0.0) : !, _;
+};
+// the first stage: y0 = in - c y1 in float
+hstage1(c, x, y1) = ah, al, y0
+with {
+    y0 = fsub(x, fmul(c, y1));
+    ah = dmulf(y0, 0.0, c) : \(h, l).(dadd2(h, l, y1, 0.0)) : _, !;
+    al = dmulf(y0, 0.0, c) : \(h, l).(dadd2(h, l, y1, 0.0)) : !, _;
+};
+// a stage as a box: (uh, ul, m carried states) -> (ah, al, m carried states, new state)
+hbox(c, y1, m) = ((\(uh, ul).(hstage(c, uh, ul, y1))), si.bus(m)) : route(3 + m, 3 + m, (1, 1), (2, 2), (3, 3 + m), par(i, m, (4 + i, 3 + i)));
+hbox1(c, y1) = \(x).(hstage1(c, x, y1));
+// one cascade of six from x: -> (output pair, 6 new states)
+hcas(c0, c1, c2, c3, c4, c5, s0, s1, s2, s3, s4, s5, x) = x : hbox1(c0, s0) : hbox(c1, s1, 1) : hbox(c2, s2, 2)
+    : hbox(c3, s3, 3) : hbox(c4, s4, 4) : hbox(c5, s5, 5);
+// the step: (12 states) -> (out cos, out sin, 12 new states)
+hilbert_step(cs, x, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11) =
+    (hcas(c(0), c(1), c(2), c(3), c(4), c(5), s0, s1, s2, s3, s4, s5, x),
+     hcas(c(6), c(7), c(8), c(9), c(10), c(11), s6, s7, s8, s9, s10, s11, x))
+    : route(16, 14, (1, 1), (9, 2), par(i, 6, (3 + i, 3 + i)), par(i, 6, (11 + i, 9 + i)))
+with { c(k) = cs : ba.selector(k, 12); };
+// zero state at time 0 has already run the constructor's sample; state zapped at block ends
+hilbert(cs, x) = loop ~ si.bus(12) : par(i, 12, !), _, _
+with {
+    z = par(i, 12, 0.0);
+    ctor = z : hilbert_step(cs, x) : !, !, si.bus(12);
+    loop = si.bus(12) <: (si.bus(12), ctor) : ro.interleave(12, 2) : par(i, 12, select2(ba.time == 0))
+        : hilbert_step(cs, x) : (_, _, par(i, 12, zzend)) : route(14, 14, (1, 13), (2, 14), par(i, 12, (i + 3, i + 1)));
+};
+

@@ -2627,3 +2627,16 @@ faust = "sc.fadd(sc.fadd(sc.fadd({in0}, {in1}), {in2}), {in3})"
 compare = "waveform"
 tol = 1e-6
 case = "case_Sum34"
+
+[Hilbert]
+tier = "direct"
+inputs = ["in"]
+outputs = 2
+# reads `in` per sample (no checkInputs, sc-findings 21): audio only
+ar_inputs = ["in"]
+# float state and coefficients, double intermediates (pairs); measured <= 4e-10
+derive = "hilbert"
+faust = { ar = "sc.hilbert(({cs}), {in})" }
+compare = "waveform"
+tol = 1e-6
+case = "case_Hilbert"

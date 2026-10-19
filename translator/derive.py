@@ -450,3 +450,29 @@ def ienvgen(c):
 def pluck_calc(rate, r):
     """DelayUGens.cpp Pluck_Ctor: by the trigger and coef rates (aa, ak, ka, kk)."""
     return f'ar_{"a" if r["trig"] == "ar" else "k"}{"a" if r["coef"] == "ar" else "k"}'
+
+
+_HILBERT_K = (0.3609, 2.7412, 11.1573, 44.7581, 179.6242, 798.4578, 1.2524, 5.5671, 22.3423, 89.6271, 364.7914, 2770.1114)
+
+
+def hilbert(c):
+    """FilterUGens.cpp Hilbert_Ctor: gamconst = (15.0f * pi_f) / SAMPLERATE (a float product,
+    then double), gamma = gamconst * k (float literals), coef = (gamma - 1) / (gamma + 1) in
+    double; the loop uses them as floats."""
+    g0 = float(f32(f32(15.0) * f32(math.pi))) / SR
+    cs = []
+    for k in _HILBERT_K:
+        g = g0 * float(f32(k))
+        cs.append(repr(float(f32((g - 1.0) / (g + 1.0)))))
+    return {"cs": ", ".join(cs)}
+
+
+def freqshift(c):
+    """FilterUGens.cpp FreqShift_Ctor: gamconst = (15.0 * pi) / SAMPLERATE in double; m_coefs
+    are floats (used as doubles in the loop)."""
+    g0 = (15.0 * math.pi) / SR
+    cs = []
+    for k in _HILBERT_K:
+        g = g0 * float(f32(k))
+        cs.append(repr(float(f32((g - 1.0) / (g + 1.0)))))
+    return {"cs": ", ".join(cs)}

@@ -192,6 +192,8 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 			DynKlank.ar(`[[400, 800, 1200], [0.3, 0.2, 0.1], [0.3, 0.2, 0.4]], x * 0.1),
 			DynKlank.ar(`[[300, 500, 700, 900, 1100], nil, [0.2]], x * 0.1, g + 0.5)]) },
 		metadata: (specs: (g: spec.(0, 1, 0.5, \lin)))),
+	// Hilbert: the two quadrature outputs of the test signal
+	SynthDef(\case_Hilbert, { Out.ar(0, Hilbert.ar(in.value)) }),
 	SynthDef(\case_Formlet, { |freq = 1000| Out.ar(0, Formlet.ar(in.value, freq, 0.005, 0.1) * 0.5) },
 		metadata: (specs: (freq: spec.(50, 12000, 1000)))),
 	// Lags and decays: knob-swept time, input signal (impulse/steps from the test signals)
