@@ -127,3 +127,12 @@ Saw.kr, Pulse.kr and Blip.kr each compile in 5-16 s through DawDreamer; all thre
 SynthDef took over 10 minutes (the ar ports showed the same with five Saws). Regression
 cases keep one band-limited oscillator per SynthDef; consumers with several should expect
 long compiles.
+
+## -ftz 2 turns -0.0 into +0.0 in recursive signals
+
+The flush-to-zero applied to recursive signals also zeroes the sign of -0.0, so a value held
+through `sc.a2k` (a sample-and-hold recursion) loses it; scsynth keeps it. It shows only
+in sign-of-zero-sensitive results: Hasher (the bit pattern of -0.0), 1 / x (the sign of
+the infinity). Measured: Hasher.kr on bass_di, 4 of 4574 blocks with a -0.0 input. A
+non-recursive hold (x@(time % blocksize)) would keep it, at the cost of a delay line per
+hold: not done.

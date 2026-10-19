@@ -32,8 +32,8 @@ def test_require_violation_is_an_error():
 
 
 def test_unmapped_rate_is_an_error():
-    g = graph(UGen(2, "Saw", "kr", 0, [Const(1.0)], ["kr"]))
-    with pytest.raises(TranslationError, match="Saw.kr"):
+    g = graph(UGen(2, "Formant", "kr", 0, [Const(440.0), Const(1760.0), Const(880.0)], ["kr"]))
+    with pytest.raises(TranslationError, match="Formant.kr"):
         translate(g, {})
 
 

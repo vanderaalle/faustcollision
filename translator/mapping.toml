@@ -2478,7 +2478,8 @@ case = "case_MantissaMask"
 [Hasher]
 tier = "direct"
 inputs = ["in"]
-# the input's bit pattern rebuilt arithmetically (no bitcast in Faust); integer hash exact
+# the input's bit pattern rebuilt arithmetically (no bitcast in Faust); integer hash exact;
+# a -0.0 held through a2k becomes +0.0 (faust-notes: -ftz 2), so Hasher.kr of it differs
 faust = { ar = "sc.hasher({in})", kr = "sc.hasher({in})" }
 compare = "waveform"
 tol = 0
@@ -2532,10 +2533,12 @@ case = "case_random2"
 [TRand]
 tier = "direct"
 inputs = ["lo", "hi", "trig"]
-# .ar reads the trigger per sample whatever its rate (sc-findings 21): audio only
+# .ar reads the trigger per sample whatever its rate (sc-findings 21): audio only; lo/hi
+# read at the block start, per sample when lo is audio rate (next_aa reads both: a kr hi
+# with an audio lo is read past its value, probably as sc-findings 22; not measured)
 ar_inputs = ["trig"]
 self_hold = true
-faust = { ar = "sc.trand_clk({seed}, {lo}, {hi}, {trig}, 1)", kr = "(sc.trand_clk({seed}, {lo}, {hi}, {trig}, sc.krclk) : ba.sAndH(sc.krclk))" }
+faust = { ar = "sc.trand_clk({seed}, sc.a2k({lo}), sc.a2k({hi}), {trig}, 1)", "ar<lo:ar" = "sc.trand_clk({seed}, {lo}, {hi}, {trig}, 1)", kr = "(sc.trand_clk({seed}, {lo}, {hi}, {trig}, sc.krclk) : ba.sAndH(sc.krclk))" }
 compare = "statistics"
 tol = 1.5
 case = "case_random2"
@@ -2543,10 +2546,12 @@ case = "case_random2"
 [TIRand]
 tier = "direct"
 inputs = ["lo", "hi", "trig"]
-# .ar reads the trigger per sample whatever its rate (sc-findings 21): audio only
+# .ar reads the trigger per sample whatever its rate (sc-findings 21): audio only; lo/hi
+# read at the block start, per sample when lo is audio rate (next_aa reads both: a kr hi
+# with an audio lo is read past its value, probably as sc-findings 22; not measured)
 ar_inputs = ["trig"]
 self_hold = true
-faust = { ar = "sc.tirand_clk({seed}, {lo}, {hi}, {trig}, 1)", kr = "(sc.tirand_clk({seed}, {lo}, {hi}, {trig}, sc.krclk) : ba.sAndH(sc.krclk))" }
+faust = { ar = "sc.tirand_clk({seed}, sc.a2k({lo}), sc.a2k({hi}), {trig}, 1)", "ar<lo:ar" = "sc.tirand_clk({seed}, {lo}, {hi}, {trig}, 1)", kr = "(sc.tirand_clk({seed}, {lo}, {hi}, {trig}, sc.krclk) : ba.sAndH(sc.krclk))" }
 compare = "statistics"
 tol = 1.5
 case = "case_random2"
@@ -2554,10 +2559,12 @@ case = "case_random2"
 [TExpRand]
 tier = "direct"
 inputs = ["lo", "hi", "trig"]
-# .ar reads the trigger per sample whatever its rate (sc-findings 21): audio only
+# .ar reads the trigger per sample whatever its rate (sc-findings 21): audio only; lo/hi
+# read at the block start, per sample when lo is audio rate (next_aa reads both: a kr hi
+# with an audio lo is read past its value, probably as sc-findings 22; not measured)
 ar_inputs = ["trig"]
 self_hold = true
-faust = { ar = "sc.texprand_clk({seed}, {lo}, {hi}, {trig}, 1)", kr = "(sc.texprand_clk({seed}, {lo}, {hi}, {trig}, sc.krclk) : ba.sAndH(sc.krclk))" }
+faust = { ar = "sc.texprand_clk({seed}, sc.a2k({lo}), sc.a2k({hi}), {trig}, 1)", "ar<lo:ar" = "sc.texprand_clk({seed}, {lo}, {hi}, {trig}, 1)", kr = "(sc.texprand_clk({seed}, {lo}, {hi}, {trig}, sc.krclk) : ba.sAndH(sc.krclk))" }
 compare = "statistics"
 tol = 1.5
 case = "case_random2"
@@ -2565,10 +2572,11 @@ case = "case_random2"
 [CoinGate]
 tier = "direct"
 inputs = ["prob", "in"]
-# .ar reads the trigger per sample whatever its rate (sc-findings 21): audio only
+# .ar reads the trigger per sample whatever its rate (sc-findings 21): audio only; prob
+# read at the block start (ZIN0)
 ar_inputs = ["in"]
 self_hold = true
-faust = { ar = "sc.coingate_clk({seed}, {prob}, {in}, 1)", kr = "(sc.coingate_clk({seed}, {prob}, {in}, sc.krclk) : ba.sAndH(sc.krclk))" }
+faust = { ar = "sc.coingate_clk({seed}, sc.a2k({prob}), {in}, 1)", kr = "(sc.coingate_clk({seed}, {prob}, {in}, sc.krclk) : ba.sAndH(sc.krclk))" }
 compare = "statistics"
 tol = 1.5
 case = "case_random2"
