@@ -51,7 +51,7 @@ Requirements: SuperCollider 3.13 (`sclang`, `scsynth`), Faust 2.70 (`faust`), Py
 
 Porting at this level of detail surfaces behaviour of scsynth that its documentation
 does not state, some of it likely bugs: `docs/sc-findings.md` (with source references and
-reproducers; drafts of upstream issues in `docs/issues/`). 28 findings so far, most of them
+reproducers; drafts of upstream issues in `docs/issues/`). 31 findings so far, most of them
 measured on renders, among them buffer over-reads in fifteen `.ar` UGens fed a constant or
 control-rate input, an allpass that is not one (APF), and filters whose audio-rate inputs
 are read from the wrong samples (BEQSuite). Faust pitfalls met along the way
@@ -62,22 +62,23 @@ are read from the wrong samples (BEQSuite). Faust pitfalls met along the way
 Covered: arithmetic and all unary/binary operators (at ar and kr, including scsynth's
 nova-simd approximations at audio rate), oscillators (SinOsc, FSinOsc, SinOscFB, Saw,
 Pulse, Blip, Formant, VarSaw, SyncSaw, Klang, LF*, LFGauss, Impulse, Phasor, Vibrato),
-noise, filters (LPF/HPF/RLPF/RHPF/BPF/BRF, MidEQ, the BEQSuite BLowPass ... BHiShelf,
-resonators, one/two-pole/zero, LPZ/HPZ/BPZ/BRZ, Slope, FOS, SOS, lags, decays), delays,
-combs and allpasses, EnvGen, Line/XLine, dynamics, FreeVerb/FreeVerb2/GVerb, Wrap, Fold,
-Clip, LinExp, InRange, InRect, Schmidt, ModDif, triggers (Trig, Latch, Gate, TDelay,
-ToggleFF, SetResetFF, PulseCount, PulseDivider, Stepper, Timer, Sweep, Peak, RunningMin/
-Max, PeakFollower, T2A...), panners and crossfades (Pan2, LinPan2, Balance2, XFade2,
-LinXFade2, Rotate2, Pan4), Amplitude, MoogFF, Klank, PitchShift, LocalIn/LocalOut
-(feedback); Pitch as a substitute tracker.
+noise and random UGens (statistics), filters at ar and kr (LPF/HPF/RLPF/RHPF/BPF/BRF,
+MidEQ, the BEQSuite, resonators, one/two-pole/zero, LPZ/HPZ/BPZ/BRZ, Slope, FOS, SOS,
+lags, decays, Median), delays, combs, allpasses and Pluck at ar and kr, EnvGen, IEnvGen,
+Line/XLine, Linen, VarLag, Ramp, dynamics, FreeVerb/FreeVerb2/GVerb, Wrap, Fold, Clip,
+LinExp, InRange, InRect, Schmidt, ModDif, Select, Sanitize, DetectSilence, triggers,
+panners and crossfades, Amplitude, AmpComp, MoogFF (ar), Klank, PitchShift,
+LocalIn/LocalOut (feedback), server info constants; Pitch as a substitute tracker.
 
 Census (`translator.census`, `report/census.md`): of the 215 core UGen classes in scope,
-470 probes (one per class and rate, plus every operator); 312 pass, 149 unmapped (mostly
-the `.kr` of filters, lags and delays, then random, chaos, grain and ambisonic UGens), 9
-failing at the time: 5 since fixed, 4 explained (T2K and Vibrato rejected by design, Pitch.kr
-the substitute tracker). `docs/next.md` lists the queue. Unmapped UGens are a translation
-error naming the class: nothing is translated by guesswork. Excluded by design: buffers,
-buses, demand rate, FFT.
+470 probes (one per class and rate, plus every operator); 396 pass, 59 unmapped (chaos
+oscillators, grains, ambisonic panners, FreqShift/Hilbert, MoogFF.kr, a few others). Of
+the 15 not passing, most are probe artifacts or rejections by design: random UGens probed
+with a signal that triggers once (statistics of one value), T2K and Vibrato (rejected),
+Pitch.kr (substitute tracker), Blip.kr at the probe's 440 Hz (above the control-rate
+limit, sc-findings 25), Hasher.kr on a -0.0 input (docs/faust-notes.md). Unmapped UGens
+are a translation error naming the class: nothing is translated by guesswork. Excluded
+by design: buffers, buses, demand rate, FFT.
 
 Known limitation: where scsynth reads an input in the constructor (an initial phase or
 duty, the start of a ramp), the port uses the input's first-block value. The two differ
