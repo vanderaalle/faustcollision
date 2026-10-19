@@ -150,6 +150,11 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 		var e1 = Env([0.1, 1, 0.3, 0.8, 0.05, 0.6, 0.2, 0.7, 0.4], [0.1, 0.15, 0.1, 0.2, 0.1, 0.15, 0.1, 0.1], [\step, \lin, \exp, \sin, \wel, \sqr, \cub, -4.5]);
 		var e2 = Env([0, 1, 0.2, 0.9], [0.3, 0.4, 0.3], [3, 0.7, -2], offset: 0.05);
 		Out.ar(0, [IEnvGen.ar(e1, idx), IEnvGen.ar(e2, idx), K2A.ar(IEnvGen.kr(e1, Latch.kr(idx, Impulse.kr(100))))]) }),
+	// Ramp: even segment lengths (480, 240 samples: never ending with a block, sc-findings 16; 0.01 gives
+	// (int)(0.01f * 48000) = 479), ar
+	// and kr
+	SynthDef(\case_Ramp, { Out.ar(0, [Ramp.ar(in.value, 0.01001), Ramp.ar(in.value, 0.00501),
+		K2A.ar(Ramp.kr(Latch.kr(in.value, Impulse.kr(40)), 0.02))]) }),
 	SynthDef(\case_Formlet, { |freq = 1000| Out.ar(0, Formlet.ar(in.value, freq, 0.005, 0.1) * 0.5) },
 		metadata: (specs: (freq: spec.(50, 12000, 1000)))),
 	// Lags and decays: knob-swept time, input signal (impulse/steps from the test signals)

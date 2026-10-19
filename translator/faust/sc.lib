@@ -2741,3 +2741,42 @@ with {
 };
 varlag(x, t, st) = varlag_g(1, x, t, st, ma.SR, ba.time % blocksize == 0);
 varlag_kr(x, t, st) = varlag_g(0, x, t, st, srk, krclk) : ba.sAndH(krclk);   // out = the level at the block start
+
+//------------------------------------------------------------------------------
+// Ramp (FilterUGens.cpp, Ramp_next / Ramp_next_1): linear segments toward the input
+// sampled at each segment's end; counter = max(1, (int)(period * SR)) (double product,
+// tmul), slope = (in - level) / counter, level and slope doubles (pairs). ar: at a segment
+// end the C reads the next sample's input; here the reset happens on that next sample
+// (same output). Where the segment ends with the block, scsynth reads past the input
+// buffer (sc-findings 16) and the port reads the next block's first sample. Constructor:
+// level = in[0], counter 1, slope 0. kr: one step per block, the reset reads the current
+// block's input.
+//------------------------------------------------------------------------------
+ramp_g(isar, x, per, sr, clk) = loop ~ si.bus(5) : par(i, 5, !), _
+with {
+    t0 = ba.time == 0;
+    loop(lh0, ll0, sh0, sl0, ct0) = nlh, nll, nsh, nsl, nct, out
+    with {
+        lh = select2(t0, lh0, x); ll = select2(t0, ll0, 0.0);
+        sh1 = select2(t0, sh0, 0.0); sl1 = select2(t0, sl0, 0.0); ct1 = select2(t0, ct0, 1);
+        cn = max(1, int(tmul(a2k(per), sr)));
+        // ar: reset before this sample when the previous one ended a segment
+        rs = (isar == 1) & (ct1 <= 0);
+        rh = dadd2(x, 0.0, 0.0 - lh, 0.0 - ll) : \(dh, dl).(ddivf(dh, dl, float(cn))) : _, !;
+        rl = dadd2(x, 0.0, 0.0 - lh, 0.0 - ll) : \(dh, dl).(ddivf(dh, dl, float(cn))) : !, _;
+        sh = select2(rs, sh1, rh); sl = select2(rs, sl1, rl); ct = select2(rs, ct1, cn);
+        out = lh;
+        ah = dadd2(lh, ll, sh, sl) : _, !; al = dadd2(lh, ll, sh, sl) : !, _;
+        go = select2(isar == 1, clk, 1);
+        c2 = ct - 1;
+        // kr: reset in the same step with the new level and this block's input
+        kres = (isar == 0) & (c2 <= 0);
+        kh = dadd2(x, 0.0, 0.0 - ah, 0.0 - al) : \(dh, dl).(ddivf(dh, dl, float(cn))) : _, !;
+        kl = dadd2(x, 0.0, 0.0 - ah, 0.0 - al) : \(dh, dl).(ddivf(dh, dl, float(cn))) : !, _;
+        nlh = select2(go, lh, ah); nll = select2(go, ll, al);
+        nsh = select2(go, sh, select2(kres, sh, kh)); nsl = select2(go, sl, select2(kres, sl, kl));
+        nct = select2(go, ct, select2(kres, c2, cn));
+    };
+};
+rampseg(x, per) = ramp_g(1, x, per, ma.SR, 1);
+rampseg_kr(x, per) = ramp_g(0, x, per, srk, krclk) : ba.sAndH(krclk);

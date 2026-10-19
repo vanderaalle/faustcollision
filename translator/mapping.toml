@@ -2447,3 +2447,16 @@ faust = { ar = "(max(sc.fsub({index}, {off}), 0.0) : \\(p).({expr}))", kr = "(ma
 compare = "waveform"
 tol = 1e-6
 case = "case_IEnvGen"
+
+[Ramp]
+tier = "direct"
+inputs = ["in", "lagTime"]
+# segments in double (pairs); where a segment ends with the block, scsynth reads past the
+# input buffer (sc-findings 16) and the port reads the next block's first sample; the case
+# uses even segment lengths, which never end there (the first segment is 1 sample);
+# measured <= 4e-7 (exact in double pairs)
+self_hold = true
+faust = { ar = "sc.rampseg({in}, {lagTime})", kr = "sc.rampseg_kr({in}, {lagTime})" }
+compare = "waveform"
+tol = 1e-6
+case = "case_Ramp"
