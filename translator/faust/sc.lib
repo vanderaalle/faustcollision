@@ -2614,3 +2614,37 @@ onezero_kr(x, coef) = select2((p >= 0) & (n >= 0),
 with { n = coef; p = kprev(coef); x1 = kx1(x); };
 onepole_kr(x, coef) = rec1_kr(\(xx, y1, b).(onepole_step(xx, kprev(b), kprev(b), b, y1)), x * (1.0 - coef), x, coef);
 apf_kr(x, f, r) = x;
+
+//------------------------------------------------------------------------------
+// Delays, combs, allpasses .kr (DelayUGens.cpp): the same calc functions with one sample
+// per block at the control rate: buffer ceil(maxdelay * SR/64 + 1) + 1 (BUFLENGTH 1), next
+// power of two; dsamp = clip(delaytime * SR/64, minDelay, buffer length); delay-time and
+// feedback changes add their slope before the sample (slope factor 1): at once. A kr
+// signal is constant over a block, so a tap of blocksize * i samples reads the value i
+// blocks back exactly, also inside the feedback loop. Unwritten taps read 0 (the `_z`
+// start-up), and AllpassC's start-up quirk (sc-findings 17) counts blocks.
+//------------------------------------------------------------------------------
+dlylen_k(maxdt) = nextpow2(int(ceil(maxdt * srk + 1.0)) + 1);
+dlymax_k(maxdt) = nextpow2(int(ceil(maxdt * 3000.0 + 1.0)) + 1) + 3;   // bound at 192 kHz / 64
+dsamp_kr(dt, maxdt, mind) = max(mind, min(float(dlylen_k(maxdt)), fmaf(dt, float(srk), 0.0)));
+// x delayed by i blocks (i >= 0)
+dlyb(x, i, maxdt) = x @ (blocksize * min(max(0, i), dlymax_k(maxdt)));
+// fw is w delayed by one sample (the recursion): w delayed by i >= 1 blocks
+dlybw(fw, i, maxdt) = fw @ (blocksize * min(max(1, i), dlymax_k(maxdt)) - 1);
+delayn_kr(x, maxdt, dt) = dlyb(x, int(d), maxdt) with { d = dsamp_kr(dt, maxdt, 1.0); };
+delayl_kr(x, maxdt, dt) = d1 + frc(d) * (d2 - d1)
+with { d = dsamp_kr(dt, maxdt, 1.0); d1 = dlyb(x, int(d), maxdt); d2 = dlyb(x, int(d) + 1, maxdt); };
+delayc_kr(x, maxdt, dt) = cubic(frc(d), dlyb(x, i - 1, maxdt), dlyb(x, i, maxdt), dlyb(x, i + 1, maxdt), dlyb(x, i + 2, maxdt))
+with { d = dsamp_kr(dt, maxdt, 1.0); i = int(d); };
+delay0_kr(x, maxdt, dt) = select2(dt == 0, delayn_kr(x, maxdt, dt), x);
+delayl0_kr(x, maxdt, dt) = select2(dt == 0, delayl_kr(x, maxdt, dt), x);
+tapk(0, fw, d, maxdt) = dlybw(fw, int(d), maxdt);
+tapk(1, fw, d, maxdt) = dlybw(fw, int(d), maxdt) + frc(d) * (dlybw(fw, int(d) + 1, maxdt) - dlybw(fw, int(d), maxdt));
+tapk(3, fw, d, maxdt) = cubic(frc(d), dlybw(fw, int(d) - 1, maxdt), dlybw(fw, int(d), maxdt), dlybw(fw, int(d) + 1, maxdt), dlybw(fw, int(d) + 2, maxdt));
+comb_kr(kind, x, maxdt, dt, dect) = (\(fw).(x + fb * v, v with { v = tapk(kind, fw, d, maxdt); })) ~ _ : !, _
+with { d = dsamp_kr(dt, maxdt, mind(kind)); fb = calcfb(dt, dect); };
+allpass_kr(kind, x, maxdt, dt, dect) = (\(fw).(w, select2((kind == 3) & (int(ba.time / blocksize) + 1 < int(d)), v - fb * w, 0.0)
+    with { v = tapk(kind, fw, d, maxdt); w = x + fb * v; })) ~ _ : !, _
+with { d = dsamp_kr(dt, maxdt, mind(kind)); fb = calcfb(dt, dect); };
+delay1_kr(x) = kx1(x);
+delay2_kr(x) = select2(int(ba.time / blocksize) == 1, x@(2 * blocksize), x@blocksize);

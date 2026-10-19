@@ -1089,8 +1089,10 @@ case = "case_LeakDC"
 tier = "direct"
 inputs = ["in", "maxdelaytime", "delaytime"]
 constant_inputs = ["maxdelaytime"]
-faust = { ar = "sc.delayn({in}, {maxdelaytime}, {delaytime})", "ar<delaytime:ir" = "sc.delay0({in}, {maxdelaytime}, {delaytime})", "ar<delaytime:ar" = "sc.delayn_ar({in}, {maxdelaytime}, {delaytime})" }
+faust = { ar = "sc.delayn({in}, {maxdelaytime}, {delaytime})", "ar<delaytime:ir" = "sc.delay0({in}, {maxdelaytime}, {delaytime})", "ar<delaytime:ar" = "sc.delayn_ar({in}, {maxdelaytime}, {delaytime})", kr = "sc.delayn_kr({in}, {maxdelaytime}, {delaytime})", "kr<delaytime:ir" = "sc.delay0_kr({in}, {maxdelaytime}, {delaytime})" }
 compare = "waveform"
+# kr: the ar algorithm on block values (taps of blocksize * i samples), lengths at SR / 64;
+# exact (case scores ~1e-7 from K2A)
 tol = 1e-6
 case = "case_DelayN"
 
@@ -1098,24 +1100,30 @@ case = "case_DelayN"
 tier = "direct"
 inputs = ["in", "maxdelaytime", "delaytime"]
 constant_inputs = ["maxdelaytime"]
-faust = { ar = "sc.delayl({in}, {maxdelaytime}, {delaytime})", "ar<delaytime:ir" = "sc.delayl0({in}, {maxdelaytime}, {delaytime})", "ar<delaytime:ar" = "sc.delayl_ar({in}, {maxdelaytime}, {delaytime})" }
+faust = { ar = "sc.delayl({in}, {maxdelaytime}, {delaytime})", "ar<delaytime:ir" = "sc.delayl0({in}, {maxdelaytime}, {delaytime})", "ar<delaytime:ar" = "sc.delayl_ar({in}, {maxdelaytime}, {delaytime})", kr = "sc.delayl_kr({in}, {maxdelaytime}, {delaytime})", "kr<delaytime:ir" = "sc.delayl0_kr({in}, {maxdelaytime}, {delaytime})" }
 compare = "waveform"
+# kr: the ar algorithm on block values (taps of blocksize * i samples), lengths at SR / 64;
+# exact (case scores ~1e-7 from K2A)
 tol = 1e-5
 case = "case_DelayL"
 
 [Delay1]
 tier = "direct"
 inputs = ["in"]
-faust = { ar = "sc.delay1({in})" }
+faust = { ar = "sc.delay1({in})", kr = "sc.delay1_kr({in})" }
 compare = "waveform"
+# kr: the ar algorithm on block values (taps of blocksize * i samples), lengths at SR / 64;
+# exact (case scores ~1e-7 from K2A)
 tol = 1e-6
 case = "case_Delay1"
 
 [Delay2]
 tier = "direct"
 inputs = ["in"]
-faust = { ar = "sc.delay2({in})" }
+faust = { ar = "sc.delay2({in})", kr = "sc.delay2_kr({in})" }
 compare = "waveform"
+# kr: the ar algorithm on block values (taps of blocksize * i samples), lengths at SR / 64;
+# exact (case scores ~1e-7 from K2A)
 tol = 1e-6
 case = "case_Delay2"
 
@@ -1473,8 +1481,10 @@ case = "case_Slew"
 tier = "direct"
 inputs = ["in", "maxdelaytime", "delaytime"]
 constant_inputs = ["maxdelaytime"]
-faust = { ar = "sc.delayc({in}, {maxdelaytime}, {delaytime})", "ar<delaytime:ar" = "sc.delayc_ar({in}, {maxdelaytime}, {delaytime})" }
+faust = { ar = "sc.delayc({in}, {maxdelaytime}, {delaytime})", "ar<delaytime:ar" = "sc.delayc_ar({in}, {maxdelaytime}, {delaytime})", kr = "sc.delayc_kr({in}, {maxdelaytime}, {delaytime})" }
 compare = "waveform"
+# kr: the ar algorithm on block values (taps of blocksize * i samples), lengths at SR / 64;
+# exact (case scores ~1e-7 from K2A)
 tol = 1e-5
 case = "case_DelayC"
 
@@ -1482,8 +1492,10 @@ case = "case_DelayC"
 tier = "direct"
 inputs = ["in", "maxdelaytime", "delaytime", "decaytime"]
 constant_inputs = ["maxdelaytime"]
-faust = { ar = "sc.comb(0, {in}, {maxdelaytime}, {delaytime}, {decaytime})", "ar<delaytime:ar" = "sc.comb_ar(0, {in}, {maxdelaytime}, {delaytime}, {decaytime})" }
+faust = { ar = "sc.comb(0, {in}, {maxdelaytime}, {delaytime}, {decaytime})", "ar<delaytime:ar" = "sc.comb_ar(0, {in}, {maxdelaytime}, {delaytime}, {decaytime})", kr = "sc.comb_kr(0, {in}, {maxdelaytime}, {delaytime}, {decaytime})" }
 compare = "waveform"
+# kr: the ar algorithm on block values (taps of blocksize * i samples), lengths at SR / 64;
+# exact (case scores ~1e-7 from K2A)
 tol = 1e-4
 case = "case_CombN"
 
@@ -1491,8 +1503,10 @@ case = "case_CombN"
 tier = "direct"
 inputs = ["in", "maxdelaytime", "delaytime", "decaytime"]
 constant_inputs = ["maxdelaytime"]
-faust = { ar = "sc.allpass(0, {in}, {maxdelaytime}, {delaytime}, {decaytime})", "ar<delaytime:ar" = "sc.allpass_ar(0, {in}, {maxdelaytime}, {delaytime}, {decaytime})" }
+faust = { ar = "sc.allpass(0, {in}, {maxdelaytime}, {delaytime}, {decaytime})", "ar<delaytime:ar" = "sc.allpass_ar(0, {in}, {maxdelaytime}, {delaytime}, {decaytime})", kr = "sc.allpass_kr(0, {in}, {maxdelaytime}, {delaytime}, {decaytime})" }
 compare = "waveform"
+# kr: the ar algorithm on block values (taps of blocksize * i samples), lengths at SR / 64;
+# exact (case scores ~1e-7 from K2A)
 tol = 1e-4
 case = "case_AllpassN"
 
@@ -1500,8 +1514,10 @@ case = "case_AllpassN"
 tier = "direct"
 inputs = ["in", "maxdelaytime", "delaytime", "decaytime"]
 constant_inputs = ["maxdelaytime"]
-faust = { ar = "sc.comb(1, {in}, {maxdelaytime}, {delaytime}, {decaytime})", "ar<delaytime:ar" = "sc.comb_ar(1, {in}, {maxdelaytime}, {delaytime}, {decaytime})" }
+faust = { ar = "sc.comb(1, {in}, {maxdelaytime}, {delaytime}, {decaytime})", "ar<delaytime:ar" = "sc.comb_ar(1, {in}, {maxdelaytime}, {delaytime}, {decaytime})", kr = "sc.comb_kr(1, {in}, {maxdelaytime}, {delaytime}, {decaytime})" }
 compare = "waveform"
+# kr: the ar algorithm on block values (taps of blocksize * i samples), lengths at SR / 64;
+# exact (case scores ~1e-7 from K2A)
 tol = 1e-4
 case = "case_CombL"
 
@@ -1509,8 +1525,10 @@ case = "case_CombL"
 tier = "direct"
 inputs = ["in", "maxdelaytime", "delaytime", "decaytime"]
 constant_inputs = ["maxdelaytime"]
-faust = { ar = "sc.allpass(1, {in}, {maxdelaytime}, {delaytime}, {decaytime})", "ar<delaytime:ar" = "sc.allpass_ar(1, {in}, {maxdelaytime}, {delaytime}, {decaytime})" }
+faust = { ar = "sc.allpass(1, {in}, {maxdelaytime}, {delaytime}, {decaytime})", "ar<delaytime:ar" = "sc.allpass_ar(1, {in}, {maxdelaytime}, {delaytime}, {decaytime})", kr = "sc.allpass_kr(1, {in}, {maxdelaytime}, {delaytime}, {decaytime})" }
 compare = "waveform"
+# kr: the ar algorithm on block values (taps of blocksize * i samples), lengths at SR / 64;
+# exact (case scores ~1e-7 from K2A)
 tol = 1e-4
 case = "case_AllpassL"
 
@@ -1518,8 +1536,10 @@ case = "case_AllpassL"
 tier = "direct"
 inputs = ["in", "maxdelaytime", "delaytime", "decaytime"]
 constant_inputs = ["maxdelaytime"]
-faust = { ar = "sc.comb(3, {in}, {maxdelaytime}, {delaytime}, {decaytime})", "ar<delaytime:ar" = "sc.comb_ar(3, {in}, {maxdelaytime}, {delaytime}, {decaytime})" }
+faust = { ar = "sc.comb(3, {in}, {maxdelaytime}, {delaytime}, {decaytime})", "ar<delaytime:ar" = "sc.comb_ar(3, {in}, {maxdelaytime}, {delaytime}, {decaytime})", kr = "sc.comb_kr(3, {in}, {maxdelaytime}, {delaytime}, {decaytime})" }
 compare = "waveform"
+# kr: the ar algorithm on block values (taps of blocksize * i samples), lengths at SR / 64;
+# exact (case scores ~1e-7 from K2A)
 tol = 1e-4
 case = "case_CombC"
 
@@ -1527,8 +1547,10 @@ case = "case_CombC"
 tier = "direct"
 inputs = ["in", "maxdelaytime", "delaytime", "decaytime"]
 constant_inputs = ["maxdelaytime"]
-faust = { ar = "sc.allpass(3, {in}, {maxdelaytime}, {delaytime}, {decaytime})", "ar<delaytime:ar" = "sc.allpass_ar(3, {in}, {maxdelaytime}, {delaytime}, {decaytime})" }
+faust = { ar = "sc.allpass(3, {in}, {maxdelaytime}, {delaytime}, {decaytime})", "ar<delaytime:ar" = "sc.allpass_ar(3, {in}, {maxdelaytime}, {delaytime}, {decaytime})", kr = "sc.allpass_kr(3, {in}, {maxdelaytime}, {delaytime}, {decaytime})" }
 compare = "waveform"
+# kr: the ar algorithm on block values (taps of blocksize * i samples), lengths at SR / 64;
+# exact (case scores ~1e-7 from K2A)
 tol = 1e-4
 case = "case_AllpassC"
 

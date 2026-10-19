@@ -117,6 +117,15 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 			TwoPole.kr(k, f, 0.9) * 0.1, TwoZero.kr(k, f, 0.9), APF.kr(k, f, 0.9), MidEQ.kr(k, f, 0.5, 6),
 			OnePole.kr(k, 0.9 - (0.4 * st)), OneZero.kr(k, 0.5 * st - 0.2), LeakDC.kr(k, 0.9 + (0.05 * st))])) },
 		metadata: (specs: (freq: spec.(5, 150, 40)))),
+	// Delays, combs, allpasses at kr: delays in blocks (fractional for L/C), a delay-time step at
+	// 1 s (applied at once), feedback; Delay1/Delay2; a constant zero delay (pass-through)
+	SynthDef(\case_delays_kr, { |dt = 0.05|
+		var k = Latch.kr(in.value, Impulse.kr(400)), t = dt * (1 + (0.5 * (Line.kr(0, 1, 2) > 0.5)));
+		Out.ar(0, K2A.ar([DelayN.kr(k, 0.2, t), DelayL.kr(k, 0.2, t), DelayC.kr(k, 0.2, t),
+			CombN.kr(k, 0.2, t, 1), CombL.kr(k, 0.2, t, 1), CombC.kr(k, 0.2, t, 1),
+			AllpassN.kr(k, 0.2, t, 1), AllpassL.kr(k, 0.2, t, 1), AllpassC.kr(k, 0.2, t, 1),
+			Delay1.kr(k), Delay2.kr(k), DelayN.kr(k, 0.2, 0)] * 0.5)) },
+		metadata: (specs: (dt: spec.(0.003, 0.13, 0.05)))),
 	SynthDef(\case_Formlet, { |freq = 1000| Out.ar(0, Formlet.ar(in.value, freq, 0.005, 0.1) * 0.5) },
 		metadata: (specs: (freq: spec.(50, 12000, 1000)))),
 	// Lags and decays: knob-swept time, input signal (impulse/steps from the test signals)

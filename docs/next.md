@@ -11,6 +11,7 @@ Balance2, XFade2, LinXFade2, Rotate2, Pan4); LPZ1/2, HPZ1/2, BPZ2, BRZ2, Slope, 
 MidEQ; BEQSuite (BLowPass ... BHiShelf) at every input rate (next_aa: sc-findings 24).
 Median, Select, Sanitize, Linen, DetectSilence; Lag, Lag2, Lag3, LagUD, Decay, Decay2,
 Integrator, Slew at kr.
+Filters at kr (LPF ... LeakDC, sc-findings 28 timing); delays, combs, allpasses, Delay1/2 at kr.
 Census failures fixed: kr UGens fed by audio read the block's first sample (a2k; krhold
 only for kr_block entries: Amplitude, Pitch, T2K); EnvGen's audio-rate envelope inputs at
 the block start; LocalIn.kr held per block; Pan4.kr compile error (opaque inputs).
@@ -19,19 +20,16 @@ Rejected with an explanation (tier "rejected"): T2K, Peak.kr of audio.
 ## Next, in order
 Each step has a prepared plan (and, where noted, code) in docs/plans/: apply, build, test,
 set tolerances from the measured floors, full suite, commit, bump vairi.
-1. Filter .kr (LPF ... OneZero; two groups, sc-findings 28): plans/filters-kr.md.
-   Finding 28 measured on all seven; issue draft 16.
-2. Delays, combs, allpasses .kr: plans/delays-kr.md.
-3. Saw, Pulse, Blip .kr (core refactor; sc-findings 25): plans/blit-kr.md.
-4. VarLag (\lin only; sc-findings 26), IEnvGen (sc-findings 27): plans/varlag.md,
+1. Saw, Pulse, Blip .kr (core refactor; sc-findings 25): plans/blit-kr.md.
+2. VarLag (\lin only; sc-findings 26), IEnvGen (sc-findings 27): plans/varlag.md,
    plans/ienvgen.md.
-5. Small remaining classes (census, unmapped): MoogFF.kr (plans/moogff-kr.md); server info
+3. Small remaining classes (census, unmapped): MoogFF.kr (plans/moogff-kr.md); server info
    constants (SampleRate, SampleDur, ControlRate, ControlDur, RadiansPerSample,
    SubsampleOffset: trivial, plans/server-info.md); Ramp (sc-findings 16, measured); Lag2UD, Lag3UD, AmpComp,
    AmpCompA, MantissaMask, Hasher: plans/small-classes.md.
-6. Random UGens (statistics only; plans/random.md), chaos oscillators, DynKlank, grains, Pluck,
+4. Random UGens (statistics only; plans/random.md), chaos oscillators, DynKlank, grains, Pluck,
    Hilbert/FreqShift, ambisonic panners: lower priority.
-7. Issue drafts: docs/issues/ covers 4, 5, 11, 15, 17-28; file them upstream.
+5. Issue drafts: docs/issues/ covers 4, 5, 11, 15, 17-28; file them upstream.
 
 ## Working method (keeps cost down)
 - Read the scsynth source of the UGen (and nova-simd where a nova calc function runs).
