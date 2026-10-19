@@ -22,7 +22,7 @@ Rejected with an explanation (tier "rejected"): T2K, Peak.kr of audio.
    Saw/Pulse/Blip .kr, VarLag, Linen, IEnvGen, DetectSilence, Select, Sanitize.
 4. Random UGens (statistics only), chaos oscillators, DynKlank, grains, Pluck,
    Hilbert/FreqShift, ambisonic panners: lower priority.
-5. Issue drafts in docs/issues/ for findings 15, 17-23 (only 4, 5, 11 have drafts).
+5. Issue drafts: done for 4, 5, 11, 15, 17-23 (docs/issues/); file them upstream.
 6. vairi: bump its faustcollision submodule pointer.
 
 ## Working method (keeps cost down)
