@@ -2804,3 +2804,46 @@ with {
     h6 = xor(h5, lsr(h5, 16));
 };
 hasher(x) = 2.0 + float(lsr(whash(fbits(x)), 9)) * (1.0 / 4194304.0) - 3.0;
+
+//------------------------------------------------------------------------------
+// Random UGens (compared by statistics: the RNG streams differ from scsynth's).
+// LFClipNoise: LFNoise0 with a coin (+-1). LFDNoise0/1/3, LFDClipNoise (DynNoiseUGens.cpp):
+// phase -= freq * sampleDur per sample (freq per sample at ar); on wrapping below 0 a new
+// level (0: hold, 1: linear from the previous, 3: cubic over four levels, scaled by 0.8);
+// constructor from phase 0, level 0, one step. TRand/TIRand/TExpRand (NoiseUGens.cpp): a
+// new value on each trigger rise (prev <= 0 < cur); the constructor draws the first.
+// CoinGate: on a rise, the trigger value with probability prob, else 0; output 0 between.
+//------------------------------------------------------------------------------
+lfclipnoise_clk(seed, freq, sr, clk) = machine(2, step, (0, 0.0), 1, clk)
+with {
+    step = \(c, lv).(select2(c <= 0, lv, fcoin(seed)),
+                     select2(c <= 0, c, nseg(freq, sr, 1)) - 1,
+                     select2(c <= 0, lv, fcoin(seed)));
+};
+dwrap(p) = p - floor(p);
+lfdnoise0_clk(seed, freq, sd, clk) = machine(2, step, (0.0, 0.0), 1, clk)
+with { step = \(ph, lv).(((ph1, lv1) : \(p, l).(l, p, l)) with { ph0 = ph - freq * sd; ng = ph0 < 0.0; ph1 = select2(ng, ph0, dwrap(ph0)); lv1 = select2(ng, lv, frand2(seed)); }); };
+lfdclipnoise_clk(seed, freq, sd, clk) = machine(2, step, (0.0, 0.0), 1, clk)
+with { step = \(ph, lv).(((ph1, lv1) : \(p, l).(l, p, l)) with { ph0 = ph - freq * sd; ng = ph0 < 0.0; ph1 = select2(ng, ph0, dwrap(ph0)); lv1 = select2(ng, lv, fcoin(seed)); }); };
+lfdnoise1_clk(seed, freq, sd, clk) = machine(3, step, (0.0, 0.0, 0.0), 1, clk)
+with {
+    step = \(ph, pv, nx).((nx1 + ph1 * (pv1 - nx1), ph1, pv1, nx1)
+    with { ph0 = ph - freq * sd; ng = ph0 < 0.0; ph1 = select2(ng, ph0, dwrap(ph0)); pv1 = select2(ng, pv, nx); nx1 = select2(ng, nx, frand2(seed)); });
+};
+lfdnoise3_clk(seed, freq, sd, clk) = machine(5, step, (0.0, 0.0, 0.0, 0.0, 0.0), 1, clk)
+with {
+    step = \(ph, a, b, c, d).((cubic(1.0 - ph1, a1, b1, c1, d1), ph1, a1, b1, c1, d1)
+    with {
+        ph0 = ph - freq * sd; ng = ph0 < 0.0; ph1 = select2(ng, ph0, dwrap(ph0));
+        a1 = select2(ng, a, b); b1 = select2(ng, b, c); c1 = select2(ng, c, d); d1 = select2(ng, d, frand2(seed) * 0.8);
+    });
+};
+// triggered draws: draw(seed) -> value
+trigdraw_g(draw, init, trig, clk) = machine(2, step, (trig, init), 0, clk)
+with { step = \(pt, v).((v1, trig, v1) with { v1 = select2((pt <= 0.0) & (trig > 0.0), v, draw); }); };
+trand_clk(seed, lo, hi, trig, clk) = trigdraw_g(frand(seed) * (hi - lo) + lo, frand(seed + 7) * (hi - lo) + lo, trig, clk);
+tirand_clk(seed, lo, hi, trig, clk) = trigdraw_g(dr(seed), dr(seed + 7), trig, clk)
+with { l = int(lo); r = int(hi) - l + 1; dr(s) = float(int(floor(frand(s) * float(r))) + l); };
+texprand_clk(seed, lo, hi, trig, clk) = trigdraw_g(pow(hi / lo, frand(seed)) * lo, pow(hi / lo, frand(seed + 7)) * lo, trig, clk);
+coingate_clk(seed, prob, trig, clk) = machine(1, step, trig, 0, clk)
+with { step = \(pt).(select2((pt <= 0.0) & (trig > 0.0) & (frand(seed) < prob), 0.0, trig), trig); };

@@ -159,6 +159,13 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 	SynthDef(\case_MantissaMask, { var k = Latch.kr(in.value, Impulse.kr(100));
 		Out.ar(0, [MantissaMask.ar(in.value, 3), MantissaMask.ar(in.value, 0), MantissaMask.ar(in.value, 10),
 			MantissaMask.ar(in.value, 23), K2A.ar(MantissaMask.kr(k, 5)), Hasher.ar(in.value), K2A.ar(Hasher.kr(k))]) }),
+	// Random UGens (statistics only): rates and trigger densities >= 100/s on the silence signal
+	// (~1000 random events per render, as the noise cases below)
+	SynthDef(\case_random2, { |freq = 500| var t = Impulse.ar(200), k = Impulse.kr(200);
+		Out.ar(0, [LFClipNoise.ar(freq), LFDNoise0.ar(freq), LFDNoise1.ar(freq), LFDNoise3.ar(freq), LFDClipNoise.ar(freq),
+			K2A.ar(LFDNoise1.kr(100)), TRand.ar(-1, 1, t), TIRand.ar(-5, 5, t) * 0.2, TExpRand.ar(0.1, 1, t),
+			CoinGate.ar(0.5, t), K2A.ar(TRand.kr(-1, 1, k)), K2A.ar(CoinGate.kr(0.5, k))] * 0.5) },
+		metadata: (specs: (freq: spec.(100, 5000, 500)), signals: [\silence])),
 	SynthDef(\case_Formlet, { |freq = 1000| Out.ar(0, Formlet.ar(in.value, freq, 0.005, 0.1) * 0.5) },
 		metadata: (specs: (freq: spec.(50, 12000, 1000)))),
 	// Lags and decays: knob-swept time, input signal (impulse/steps from the test signals)
