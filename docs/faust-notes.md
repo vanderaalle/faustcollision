@@ -88,3 +88,8 @@ Saw, Pulse and Blip bit-exact (they had been at 1e-3).
 **Float division may round a quotient up to an integer** (`24000 / 166.66667f` = 144 in
 float, 143.99999 in double): for `(int)(a / b)` computed in double, correct the float
 quotient with the exact remainder `fmaf(-q, b, a)` (`sc.bl_N`).
+
+**faust 2.70.3 segfaults** (the CLI; libfaust in DawDreamer compiles the same code) on
+`fmod` combined with opaque `fmaf` operations when the modulus is a recursive signal
+(`sc.moddif` fed by a per-block ramp). Plain operators there compile; use the opaque forms
+only where reassociation would change the result.

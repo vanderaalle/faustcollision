@@ -252,6 +252,13 @@ def translate(sdef: SynthDef, meta: dict, table=None) -> Translation:
         exact = all(isinstance(args[k], Const) for k in e.get("derive_when_constant", []))
         if not exact:
             template = rec["faust_var"]
+        if e.get("template_by"):  # the calc function from all input rates (translator/derive.py)
+            from . import derive
+            rates = {k: (ugens[v.ugen].rate if isinstance(v, Ref) else "ir") for k, v in args.items()}
+            try:
+                template = {u.rate: template[getattr(derive, e["template_by"])(u.rate, rates)]}
+            except ValueError as err:
+                raise TranslationError(f"{u.cls}: {err}")
         if isinstance(template, dict):
             def rate_of(v):
                 return ugens[v.ugen].rate if isinstance(v, Ref) else "ir"

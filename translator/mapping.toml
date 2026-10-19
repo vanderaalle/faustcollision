@@ -1672,3 +1672,54 @@ faust = { ar = "sc.uclip_sse({in}, {lo}, {hi})", kr = "sc.uclip_std({in}, {lo}, 
 compare = "waveform"
 tol = 1e-6
 case = "case_Wrap"
+
+[LinExp]
+tier = "direct"
+inputs = ["in", "srclo", "srchi", "dstlo", "dsthi"]
+# the calc function depends on all bound rates (derive.linexp_calc); sc_reciprocal (rcp +
+# Newton) for control and audio-rate bounds: sc.recip's floor (as UnaryOp reciprocal).
+# Measured: 5.4e-8 with constant bounds (nova pow, sc.npow), ~3e-7 with recip.
+template_by = "linexp_calc"
+faust = { ar_i = "sc.linexp_i({in}, {srclo}, {srchi}, {dstlo}, {dsthi}, sc.npow)", ar_k = "sc.linexp_kn({in}, {srclo}, {srchi}, {dstlo}, {dsthi})", ar_a = "sc.linexp_a({in}, {srclo}, {srchi}, {dstlo}, {dsthi})", kr_i = "sc.linexp_i({in}, {srclo}, {srchi}, {dstlo}, {dsthi}, pow)", kr_k = "sc.linexp_kk({in}, {srclo}, {srchi}, {dstlo}, {dsthi})" }
+compare = "waveform"
+tol = 1e-5
+case = "case_LinExp"
+
+[InRange]
+tier = "direct"
+inputs = ["in", "lo", "hi"]
+ar_inputs = ["in"]
+# lo, hi read once per block (ZIN0)
+faust = { ar = "float((({in}) >= sc.a2k({lo})) & (({in}) <= sc.a2k({hi})))", kr = "float((({in}) >= ({lo})) & (({in}) <= ({hi})))" }
+compare = "waveform"
+tol = 1e-6
+case = "case_InRange"
+
+[InRect]
+tier = "direct"
+inputs = ["x", "y", "left", "top", "right", "bottom"]
+ar_inputs = ["x", "y"]
+faust = { ar = "sc.inrect({x}, {y}, sc.a2k({left}), sc.a2k({top}), sc.a2k({right}), sc.a2k({bottom}))", kr = "sc.inrect({x}, {y}, {left}, {top}, {right}, {bottom})" }
+compare = "waveform"
+tol = 1e-6
+case = "case_InRange"
+
+[Schmidt]
+tier = "direct"
+inputs = ["in", "lo", "hi"]
+ar_inputs = ["in"]
+faust = { ar = "sc.schmidt({in}, sc.a2k({lo}), sc.a2k({hi}))", kr = "sc.schmidt({in}, {lo}, {hi})" }
+self_hold = true
+compare = "waveform"
+tol = 1e-6
+case = "case_InRange"
+
+[ModDif]
+tier = "direct"
+inputs = ["x", "y", "mod"]
+ar_inputs = ["x"]
+kr_wrap = { y = "sc.kacc", mod = "sc.kacc" }
+faust = { ar = "sc.moddif({x}, {y}, {mod})", kr = "sc.moddif({x}, {y}, {mod})" }
+compare = "waveform"
+tol = 1e-6
+case = "case_InRange"

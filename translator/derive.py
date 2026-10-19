@@ -180,3 +180,19 @@ def klang(c):
         b1s.append(f32(2.0 * float(f32(math.cos(float(w))))))
     return {k: ", ".join(repr(float(v)) for v in vs) for k, vs in
             (("y1s", y1s), ("y2s", y2s), ("b1s", b1s))}
+
+
+def linexp_calc(rate, r):
+    """LFUGens.cpp LinExp_SetCalc: the calc function from the input rates. A pair whose
+    calc function reads both bounds per sample with only one at audio rate reads past the
+    other's single value (sc-findings 22): rejected."""
+    ar = {k: r[k] == "ar" for k in ("srclo", "srchi", "dstlo", "dsthi")}
+    if rate == "kr":
+        return "kr_i" if all(r[k] == "ir" for k in ar) else "kr_k"
+    src, dst = ar["srclo"] or ar["srchi"], ar["dstlo"] or ar["dsthi"]
+    if (src and not (ar["srclo"] and ar["srchi"])) or (dst and not (ar["dstlo"] and ar["dsthi"])):
+        raise ValueError("an audio-rate range needs both of its bounds at audio rate "
+                         "(scsynth reads the other past its value, sc-findings 22)")
+    if src or dst:
+        return "ar_a"   # next_aa / _ak / _ka: per-sample bounds where audio, libm pow
+    return "ar_i" if all(r[k] == "ir" for k in ar) else "ar_k"

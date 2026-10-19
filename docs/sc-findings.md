@@ -32,6 +32,7 @@ not yet confirmed by a render. Kind: **bug?** (looks unintended), **undocumented
 | 19 | `LocalIn` (server's first block) | outputs its uninitialised bus instead of the default when the synth starts at block 0 (e.g. NRT time 0) | bug? | measured, source |
 | 20 | `Formant` | phase sync product `phase1 * freq2` overflows int32: formant and bandwidth phases restart near 0 instead of at the fundamental's fraction | bug? | measured, source |
 | 21 | `Vibrato.ar`, `Wrap.ar`, `Fold.ar`, `Clip.ar`, `InRange.ar` (constant or kr input) | read the input as an audio buffer: past the single value of a constant or control wire (garbage, NaN); defaults like `Vibrato.ar(440)` are affected | bug | measured, source |
+| 22 | `LinExp.ar` (one bound of a range at audio rate) | the calc function reads both bounds per sample when either is audio rate: the other is read past its value (NaN, inf) | bug | measured, source |
 | 16 | `Ramp` | reads the input one sample past the segment; past the buffer end at a block boundary | bug? | source |
 
 ## 1. `Amplitude.kr` with an audio-rate input releases 64× too fast
@@ -335,3 +336,20 @@ likely affected; LinExp, which checks `checkSameRateAsFirstInput`, is not.
   `Clip_next_*`, `InRange_next` (`ZIN(0)`/`ZXP(in)`); `Osc.sc` `Vibrato`, `Trig.sc`
   `InRange`. Fix: `checkInputs { ^this.checkSameRateAsFirstInput }`-style checks requiring
   an audio-rate input for `.ar` (or calc functions reading `ZIN0(0)` otherwise).
+
+## 22. `LinExp.ar` with one audio-rate bound reads the other past its value
+
+`LinExp_SetCalc` picks the per-sample calc functions when *either* bound of a range is
+audio rate (`INRATE(1) == calc_FullRate || INRATE(2) == calc_FullRate`, likewise for
+dstlo/dsthi), and those (`LinExp_next_aa`, `_ak`, `_ka`) then read *both* bounds with
+`ZXP`. A constant or control-rate partner is read past its single value. Unlike finding
+21 this is not about the input: `LinExp` checks `checkSameRateAsFirstInput`.
+
+Measured (NRT, in = `DC.ar(0.5)`, 10 s): `LinExp.ar(in, 0, SinOsc.ar(1).range(0.9, 1.1),
+1, 10)` outputs NaN on 15150 samples; `LinExp.ar(in, 0, 1, 1, SinOsc.ar(1).range(9, 11))`
+on 371175 (and inf on 15150); with both bounds of the pair at audio rate (`DC.ar(0)`,
+`DC.ar(1)`) the output is correct.
+
+- Source: `server/plugins/LFUGens.cpp` `LinExp_SetCalc`, `LinExp_next_aa/_ak/_ka`. Fix:
+  read a bound per sample only when it is audio rate (or select on `&&` and add mixed
+  calc functions).

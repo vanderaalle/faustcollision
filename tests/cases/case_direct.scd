@@ -226,6 +226,28 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 			K2A.ar(Clip.kr(LFSaw.kr(0.2) * 3, -1, LFTri.kr(0.4)))
 		] * 0.5)
 	}),
+	// LinExp: constant bounds (nova pow at ar), control-rate bounds (per block), audio-rate
+	// bounds (both of a pair: sc-findings 22), control rate
+	SynthDef(\case_LinExp, {
+		var x = in.value, s = SinOsc.ar(0.3);
+		Out.ar(0, [
+			LinExp.ar(x, -1, 1, 20, 2000) * 0.001, LinExp.ar(s, Line.kr(-1, -0.5, 5), 1, 0.1, Line.kr(10, 3, 7)),
+			LinExp.ar(s, DC.ar(-1), SinOsc.ar(2) * 0.2 + 1, 0.1, 10), LinExp.ar(s, -1, 1, DC.ar(0.1), SinOsc.ar(0.5) + 3),
+			K2A.ar(LinExp.kr(LFTri.kr(0.2), -1, 1, 0.5, 4)), K2A.ar(LinExp.kr(LFTri.kr(0.2), -1, Line.kr(1, 2, 6), 0.5, 4))
+		] * 0.2)
+	}),
+	// InRange, InRect, Schmidt, ModDif: constant and kr bounds, audio and control rate
+	SynthDef(\case_InRange, {
+		var x = in.value * 2, s = SinOsc.ar(1.3);
+		Out.ar(0, [
+			InRange.ar(x, -0.2, 0.3), InRange.ar(s, LFTri.kr(0.4) * 0.5, 0.6),
+			InRect.ar(s, SinOsc.ar(0.7), Rect(-0.5, -0.3, 1, 0.9)),
+			Schmidt.ar(x, -0.1, 0.2), Schmidt.ar(s, LFTri.kr(0.3) * 0.4 - 0.2, 0.5),
+			ModDif.ar(x, 0.1, 0.5), ModDif.ar(s * 3, Line.kr(0, 1, 5), Line.kr(0.4, 1.3, 8)),
+			K2A.ar(InRange.kr(LFSaw.kr(0.5), 0, 0.5)), K2A.ar(Schmidt.kr(LFSaw.kr(0.5), -0.3, 0.3)),
+			K2A.ar(ModDif.kr(LFSaw.kr(0.5) * 2, 0.3, LFTri.kr(0.2) + 1.5))
+		] * 0.5)
+	}),
 	// Noise: statistics only (scsynth's generator is seeded per server). Each at ar and kr.
 	// Rates and densities stay >= 100/s: a statistical comparison needs ~1000 random events
 	// per render (LFNoise2 at 20 Hz over 10 s varies ±2.4 dB from seed to seed).

@@ -1816,3 +1816,26 @@ with {
 };
 uclip_sse(x, lo, hi) = select2(x < hi, hi, x) : \(m).(select2(m > lo, lo, m));
 uclip_std(x, lo, hi) = select2(hi < x, x, hi) : \(m).(select2(m < lo, m, lo));
+
+//------------------------------------------------------------------------------
+// LinExp (LFUGens.cpp:2252): dstlo * pow(dsthi / dstlo, in * rsrcrange - srclo * rsrcrange).
+// Constant bounds: coefficients from the constructor (exact divisions); ar runs nova
+// (vector pow: sc.npow), kr libm powf. Control-rate bounds, read per block: rsrcrange from
+// sc_reciprocal (rcp + Newton: sc.recip), dstratio a division at ar (nova_kk), dsthi *
+// recip(dstlo) at kr. Audio-rate bounds (aa/ak/ka): per sample, recip, libm pow.
+//------------------------------------------------------------------------------
+lx(x, rr, rml, dl, ratio, pw) = fmul(dl, pw(ratio, fadd(fmul(x, rr), rml)));
+linexp_i(x, sl, sh, dl, dh, pw) = lx(x, rr, fmul(rr, 0.0 - sl), dl, dh / dl, pw) with { rr = 1.0 / fsub(sh, sl); };
+linexp_kn(x, sl, sh, dl, dh) = lx(x, rr, fmul(rr, 0.0 - a2k(sl)), a2k(dl), a2k(dh) / a2k(dl), npow)
+with { rr = recip(fsub(a2k(sh), a2k(sl))); };
+linexp_kk(x, sl, sh, dl, dh) = lx(x, rr, fmul(rr, 0.0 - a2k(sl)), a2k(dl), fmul(a2k(dh), recip(a2k(dl))), pow)
+with { rr = recip(fsub(a2k(sh), a2k(sl))); };
+linexp_a(x, sl, sh, dl, dh) = lx(x, rr, fmul(rr, 0.0 - sl), dl, dh / dl, pow) with { rr = recip(fsub(sh, sl)); };
+
+// InRect, Schmidt, ModDif (LFUGens.cpp, TriggerUGens.cpp)
+inrect(x, y, l, t, r, b) = float((x >= l) & (x <= r) & (y >= t) & (y <= b));
+schmidt(x, lo, hi) = \(lv).(select2(lv == 1.0, select2(x > hi, lv, 1.0), select2(x < lo, lv, 0.0))) ~ _;
+// plain operators: with the opaque fmaf forms and a recursive mod, faust 2.70.3 segfaults
+// (docs/faust-notes.md); nothing here is reassociated, and md * 0.5 is exact
+moddif(x, dif, md) = mh - abs(d - mh)
+with { d = fmod(abs(x - dif), md); mh = md * 0.5; };
