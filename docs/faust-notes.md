@@ -120,3 +120,10 @@ Faust normalises products and quotients: `K * (r / a)^2 * (r / b)^2 / c`, writte
 every intermediate in float range, was merged back into `K * r^4 / (a^2 b^2 c)`, which
 overflows (AmpCompA's A-weighting: NaN from 1 kHz up). Chain the factors through opaque
 `fmul` (fmaf) so the compiler cannot recombine them.
+
+## Several band-limited kr oscillators in one program compile superlinearly
+
+Saw.kr, Pulse.kr and Blip.kr each compile in 5-16 s through DawDreamer; all three in one
+SynthDef took over 10 minutes (the ar ports showed the same with five Saws). Regression
+cases keep one band-limited oscillator per SynthDef; consumers with several should expect
+long compiles.

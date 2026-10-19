@@ -166,6 +166,14 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 			K2A.ar(LFDNoise1.kr(100)), TRand.ar(-1, 1, t), TIRand.ar(-5, 5, t) * 0.2, TExpRand.ar(0.1, 1, t),
 			CoinGate.ar(0.5, t), K2A.ar(TRand.kr(-1, 1, k)), K2A.ar(CoinGate.kr(0.5, k))] * 0.5) },
 		metadata: (specs: (freq: spec.(100, 5000, 500)), signals: [\silence])),
+	// Saw, Pulse, Blip at kr (below the 375 Hz limit of sc-findings 25): knob-swept frequency
+	// (N changes), a duty step at 1 s (one block late), a harmonic-count change. One SynthDef
+	// each: several band-limited kr oscillators in one Faust program compile for minutes.
+	SynthDef(\case_Saw_kr, { |freq = 20| Out.ar(0, K2A.ar(Saw.kr(freq)) * 0.3) }, metadata: (specs: (freq: spec.(0.5, 250, 20)))),
+	SynthDef(\case_Pulse_kr, { |freq = 20| Out.ar(0, K2A.ar(Pulse.kr(freq, 0.3 + (0.4 * (Line.kr(0, 1, 2) > 0.5)))) * 0.3) },
+		metadata: (specs: (freq: spec.(0.5, 250, 20)))),
+	SynthDef(\case_Blip_kr, { |freq = 20| Out.ar(0, K2A.ar(Blip.kr(freq, 3 + (5 * (Line.kr(0, 1, 2) > 0.5)))) * 0.3) },
+		metadata: (specs: (freq: spec.(0.5, 250, 20)))),
 	SynthDef(\case_Formlet, { |freq = 1000| Out.ar(0, Formlet.ar(in.value, freq, 0.005, 0.1) * 0.5) },
 		metadata: (specs: (freq: spec.(50, 12000, 1000)))),
 	// Lags and decays: knob-swept time, input signal (impulse/steps from the test signals)

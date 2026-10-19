@@ -798,9 +798,10 @@ inputs = ["freq"]
 # Port of OscUGens.cpp Saw: band-limited impulse train from the sine/cosecant tables
 # plus a 0.999 leaky integrator (hence falling, at half the level of an ideal saw).
 # freq is read per block; kernel crossfade when the harmonic count changes.
-faust = { ar = "sc.saw({freq})" }
+faust = { ar = "sc.saw({freq})", kr = "sc.saw_kr({freq})" }
 compare = "waveform"
 # bit-exact (measured) with opaque arithmetic and the exact harmonic count
+# kr: one step per block at SR / 64 (sc.*_kr; N = 0 above 375 Hz, sc-findings 25); measured ~2e-7
 tol = 1e-6
 case = "case_Saw"
 
@@ -1131,9 +1132,10 @@ case = "case_Delay2"
 tier = "direct"
 inputs = ["freq", "width"]
 # OscUGens.cpp: difference of two Saw kernels offset by width, leaky integrator
-faust = { ar = "sc.pulse({freq}, {width})" }
+faust = { ar = "sc.pulse({freq}, {width})", kr = "sc.pulse_kr({freq}, {width})" }
 compare = "waveform"
 # bit-exact (measured) with opaque arithmetic and the exact harmonic count
+# kr: one step per block at SR / 64 (sc.*_kr; N = 0 above 375 Hz, sc-findings 25); measured ~2e-7
 tol = 1e-6
 case = "case_Pulse"
 
@@ -1755,8 +1757,9 @@ case = "case_SyncSaw"
 tier = "direct"
 inputs = ["freq", "numharm"]
 # Saw's kernel without the integrator (sc.blit_*); freq and numharm read per block
-faust = { ar = "sc.blip({freq}, {numharm})" }
+faust = { ar = "sc.blip({freq}, {numharm})", kr = "sc.blip_kr({freq}, {numharm})" }
 compare = "waveform"
+# kr: one step per block at SR / 64 (sc.*_kr; N = 0 above 375 Hz, sc-findings 25); measured ~2e-7
 tol = 1e-6
 case = "case_Blip"
 

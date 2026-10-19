@@ -2847,3 +2847,78 @@ with { l = int(lo); r = int(hi) - l + 1; dr(s) = float(int(floor(frand(s) * floa
 texprand_clk(seed, lo, hi, trig, clk) = trigdraw_g(pow(hi / lo, frand(seed)) * lo, pow(hi / lo, frand(seed + 7)) * lo, trig, clk);
 coingate_clk(seed, prob, trig, clk) = machine(1, step, trig, 0, clk)
 with { step = \(pt).(select2((pt <= 0.0) & (trig > 0.0) & (frand(seed) < prob), 0.0, trig), trig); };
+
+//------------------------------------------------------------------------------
+// Saw, Pulse, Blip .kr (OscUGens.cpp): the same calc functions with one sample per block at
+// SAMPLERATE = SR / 64: increments from 2^28 / 750 (dinc_k), N = (int)(375 / freq), the
+// phase advancing once per block. On an N change the crossfade's single sample has xfade 0:
+// the previous kernel only. Saw/Pulse do not clamp N, Blip only below numharm: above
+// 375 Hz N = 0 and the output is inf/NaN (sc-findings 25), reproduced. Pulse adds its duty
+// offset slope after the sample: a duty change applies one block late (0 in the first).
+// Outputs held per block.
+//------------------------------------------------------------------------------
+dinc_k(f, shift) = int(nsgn(f)) * select2(s >= 0, select2(s < -24, ldiv(A >> (0 - s), 0, sr), 0), ldiv(A, s, sr))
+with { e = nfrexp_e(f); A = int(abs(nfrexp_m(f)) * 16777216.0); s = e - 24 + shift; sr = int(ma.SR / blocksize); };
+bl_N_k(fin) = q - (r < 0) + (r >= fin)
+with { cc = ma.SR / blocksize * 0.5; q = int(cc / fin); r = fmaf(0.0 - float(q), fin, cc); };
+iphase_k(inc) = (+(inc * krclk) ~ _) : mem;
+saw_kr(freq) = freq : \(fq).(pre(fq) : core) : ba.sAndH(krclk)
+with {
+    pre(fq) = n2, pn2, sc, psc, xf, p
+    with {
+        fin = bl_fin(fq); pfin = bl_prev(fin);
+        N = bl_N_k(fin); pN = bl_prev(N);
+        xf = (fin != pfin) & (N != pN);
+        inc = select2(xf, dinc_k(fin, 28), dinc_k(max(pfin, fin), 28));
+        p = iphase_k(int(inc));
+        n2 = 2 * N + 1; pn2 = 2 * pN + 1;
+        sc = 0.5 / float(N); psc = 0.5 / float(pN);
+    };
+    core = \(n2, pn2, sc, psc, xf, p).((\(fy).(select2(krclk, y1, y), y with {
+        y1 = select2(ba.time == 0, fy, -0.46);
+        a = fmul(fsub(blit_r(p, n2), 1.0), sc);
+        xa = fmul(fsub(blit_r(p, pn2), 1.0), psc);
+        y = select2(blit_t(p, n2), fadd(select2(xf, a, xa), fmul(0.999, y1)), fadd(1.0, fmul(0.999, y1)));
+    })) ~ _ : !, _);
+};
+pulse_kr(freq, width) = freq, width : \(fq, wd).(pre(fq, wd) : core) : ba.sAndH(krclk)
+with {
+    pre(fq, wd) = n2, pn2, sc, psc, xf, p, off
+    with {
+        fin = bl_fin(fq); pfin = bl_prev(fin);
+        N = bl_N_k(fin); pN = bl_prev(N);
+        xf = (fin != pfin) & (N != pN);
+        inc = select2(xf, dinc_k(fin, 28), dinc_k(max(pfin, fin), 28));
+        p = iphase_k(int(inc));
+        n2 = 2 * N + 1; pn2 = 2 * pN + 1;
+        sc = 0.5 / float(N); psc = 0.5 / float(pN);
+        nxt = int(a2k(wd) * 268435456.0);
+        off = select2(ba.time < blocksize, nxt@blocksize, 0);
+    };
+    core = \(n2, pn2, sc, psc, xf, p, off).((\(fy).(select2(krclk, y1, y), y with {
+        y1 = select2(ba.time == 0, fy, 0.0);
+        rsc = fadd(1.0 / fmul(sc, 1.0), 1.0);
+        pl(q) = select2(blit_t(q, n2), blit_r(q, n2), rsc);
+        k1(q) = fmul(fsub(blit_r(q, pn2), 1.0), psc);
+        px(q) = select2(blit_t(q, n2), k1(q), 1.0);
+        y = fadd(select2(xf, fmul(fsub(pl(p), pl(p + off)), sc), fsub(px(p), px(p + off))), fmul(0.999, y1));
+    })) ~ _ : !, _);
+};
+blip_kr(freq, numharm) = freq, numharm : \(fq, nh).(pre(fq, nh) : core) : ba.sAndH(krclk)
+with {
+    pre(fq, nh) = n2, pn2, sc, psc, xf, p
+    with {
+        fin = bl_fin(fq); pfin = bl_prev(fin);
+        h = int(a2k(nh)); ph = bl_prev(h);
+        Nof(f, k) = select2(k > bl_N_k(f), max(k, 1), bl_N_k(f));
+        N = Nof(fin, h); pN = bl_prev(N);
+        changed = (h != ph) | (fin != pfin);
+        xf = changed & (N != pN);
+        inc = select2(changed & (h > bl_N_k(fin)), dinc_k(fin, 28), dinc_k(max(pfin, fin), 28));
+        p = iphase_k(int(inc));
+        n2 = 2 * N + 1; pn2 = 2 * pN + 1;
+        sc = 0.5 / float(N); psc = 0.5 / float(pN);
+    };
+    core = \(n2, pn2, sc, psc, xf, p).(select2(blit_t(p, n2), select2(xf, a, xa), 1.0)
+    with { a = fmul(fsub(blit_r(p, n2), 1.0), sc); xa = fmul(fsub(blit_r(p, pn2), 1.0), psc); });
+};
