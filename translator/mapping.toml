@@ -2433,3 +2433,17 @@ faust = { ar = "sc.varlag({in}, {time}, {start})", kr = "sc.varlag_kr({in}, {tim
 compare = "waveform"
 tol = 1e-6
 case = "case_VarLag"
+
+[IEnvGen]
+tier = "direct"
+# the envelope is read once (constructor): the lookup is built by derive.ienvgen as a
+# Faust expression of the point; curvatures truncated to int (sc-findings 27); the hold
+# shape (stateful) is rejected; measured <= 1.3e-7
+inputs = ["index", "offset", "initLevel", "numStages", "totalDur"]
+variadic = { group = ["dur", "shape", "curve", "level"], constant = true }
+constant_inputs = ["offset", "initLevel", "numStages", "totalDur"]
+derive = "ienvgen"
+faust = { ar = "(max(sc.fsub({index}, {off}), 0.0) : \\(p).({expr}))", kr = "(max(sc.fsub({index}, {off}), 0.0) : \\(p).({expr}))" }
+compare = "waveform"
+tol = 1e-6
+case = "case_IEnvGen"

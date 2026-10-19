@@ -391,3 +391,57 @@ def ampcompa(c):
     scale = (float(f32(rootamp)) - minamp) / (level(root) - MIN)
     offset = minamp - scale * MIN
     return {"scale": repr(scale), "offset": repr(offset)}
+
+
+def ienvgen(c):
+    """LFUGens.cpp IEnvGen (3155-3260, GET_ENV_VAL 3172): the envelope is read once in the
+    constructor; this builds the lookup as a Faust expression of the point p = max(index -
+    offset, 0). Stage: the first j with p < cum_j (durations summed in float, as the C's
+    newtime); pos = (p - d0 - ... - dj + dj) / dj in sequential float steps; shapes as
+    GET_ENV_VAL, the curvature truncated to int (sc-findings 27). Hold depends on the
+    previous lookup: rejected."""
+    n = int(c["numStages"])
+    if n < 1:
+        raise ValueError("an envelope with no stages")
+    lv = [float(f32(c["initLevel"]))] + [float(f32(c[f"level{k}"])) for k in range(n)]
+    du = [float(f32(c[f"dur{k}"])) for k in range(n)]
+    sh = [int(f32(c[f"shape{k}"])) for k in range(n)]
+    cv = [int(f32(c[f"curve{k}"])) for k in range(n)]
+    if 8 in sh:
+        raise ValueError("the hold shape returns the previous lookup's level (stateful): not ported")
+    cum, acc = [], f32(0.0)
+    for d in du:
+        acc = f32(acc + f32(d)); cum.append(float(acc))
+    total = float(f32(c["totalDur"]))
+    r = repr
+    segs = []
+    for j in range(n):
+        s = "p"
+        for k in range(j + 1):
+            s = f"sc.fsub({s}, {r(du[k])})"
+        s = f"sc.fadd({s}, {r(du[j])})"
+        pos = f"({s} / {r(du[j])})"
+        b, e, shape, cu = lv[j], lv[j + 1], sh[j], cv[j]
+        if shape == 0:
+            v = r(e)
+        elif shape == 2:
+            v = f"({r(b)} * pow({r(e)} / {r(b)}, {pos}))"
+        elif shape == 3:
+            v = f"({r(b)} + ({r(e)} - {r(b)}) * (0.0 - cos(ma.PI * {pos}) * 0.5 + 0.5))"
+        elif shape == 4:
+            v = (f"({r(b)} + ({r(e)} - {r(b)}) * sin(ma.PI * 0.5 * {pos}))" if b < e
+                 else f"({r(e)} - ({r(e)} - {r(b)}) * sin(ma.PI * 0.5 - ma.PI * 0.5 * {pos}))")
+        elif shape == 5 and abs(float(cu)) >= 0.0001:
+            v = f"({r(b)} + ({r(e)} - {r(b)}) * ((1.0 - exp({pos} * {r(float(cu))})) / (1.0 - exp({r(float(cu))}))))"
+        elif shape == 6:
+            v = f"(({pos} * (sqrt({r(e)}) - sqrt({r(b)})) + sqrt({r(b)})) : \\(q).(q * q))"
+        elif shape == 7:
+            v = f"(({pos} * (pow({r(e)}, 0.3333333) - pow({r(b)}, 0.3333333)) + pow({r(b)}, 0.3333333)) : \\(q).(q * q * q))"
+        else:  # linear (1), default, and a curve with |curve| < 1 (truncated to 0)
+            v = f"({pos} * ({r(e)} - {r(b)}) + {r(b)})"
+        segs.append(v)
+    seg = segs[-1]
+    for j in range(n - 2, -1, -1):
+        seg = f"select2(p < {r(cum[j])}, {seg}, {segs[j]})"
+    expr = f"select2(p >= {r(total)}, select2(p <= 0.0, {seg}, {r(lv[0])}), {r(lv[n])})"
+    return {"expr": expr, "off": r(float(f32(c["offset"])))}

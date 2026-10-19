@@ -144,6 +144,12 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 	SynthDef(\case_VarLag, { |time = 0.05| var x = Latch.ar(in.value, Impulse.ar(3)), t = time * (1 + (0.5 * (Line.kr(0, 1, 1.4) > 0.5)));
 		Out.ar(0, [VarLag.ar(x, t, warp: \lin, start: 0), K2A.ar(VarLag.kr(A2K.kr(x), t, warp: \lin, start: 0.2))]) },
 		metadata: (specs: (time: spec.(0.002, 0.3, 0.05)))),
+	// IEnvGen: all shapes but hold, an integer and two fractional curvatures (truncated:
+	// sc-findings 27), a nonzero offset, the index running past both ends; ar and kr
+	SynthDef(\case_IEnvGen, { var idx = in.value.abs * 1.6 - 0.1;
+		var e1 = Env([0.1, 1, 0.3, 0.8, 0.05, 0.6, 0.2, 0.7, 0.4], [0.1, 0.15, 0.1, 0.2, 0.1, 0.15, 0.1, 0.1], [\step, \lin, \exp, \sin, \wel, \sqr, \cub, -4.5]);
+		var e2 = Env([0, 1, 0.2, 0.9], [0.3, 0.4, 0.3], [3, 0.7, -2], offset: 0.05);
+		Out.ar(0, [IEnvGen.ar(e1, idx), IEnvGen.ar(e2, idx), K2A.ar(IEnvGen.kr(e1, Latch.kr(idx, Impulse.kr(100))))]) }),
 	SynthDef(\case_Formlet, { |freq = 1000| Out.ar(0, Formlet.ar(in.value, freq, 0.005, 0.1) * 0.5) },
 		metadata: (specs: (freq: spec.(50, 12000, 1000)))),
 	// Lags and decays: knob-swept time, input signal (impulse/steps from the test signals)
