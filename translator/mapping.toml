@@ -2606,3 +2606,24 @@ faust = { ar_kk = "sc.pluck_g(0, 0, {in}, {trig}, {maxdelaytime}, {delaytime}, {
 compare = "waveform"
 tol = 2.1e-5
 case = "case_Pluck"
+
+[Sum3]
+tier = "direct"
+inputs = ["in0", "in1", "in2"]
+# MulAddUGens.cpp:288: (in0 + in1) + in2 (nova sum_vec), kr inputs ramped across the block
+# (ControlRateInput slope, as BinaryOpUGen); sclang inserts it when it merges additions
+kr_interpolate = true
+faust = "sc.fadd(sc.fadd({in0}, {in1}), {in2})"
+compare = "waveform"
+tol = 1e-6
+case = "case_Sum34"
+
+[Sum4]
+tier = "direct"
+inputs = ["in0", "in1", "in2", "in3"]
+# MulAddUGens.cpp:387: as Sum3 with four inputs
+kr_interpolate = true
+faust = "sc.fadd(sc.fadd(sc.fadd({in0}, {in1}), {in2}), {in3})"
+compare = "waveform"
+tol = 1e-6
+case = "case_Sum34"

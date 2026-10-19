@@ -185,6 +185,13 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 		Out.ar(0, [Pluck.ar(n, tk, 0.05, dt, 2, 0.4), Pluck.ar(n, ta, 0.05, dt * 1.5, 1, -0.3),
 			Pluck.ar(n, tk, 0.05, dt, 2, c), Pluck.ar(n, ta, 0.05, dt * 0.7, 3, c)] * 0.4) },
 		metadata: (specs: (dt: spec.(0.001, 0.04, 0.005)))),
+	// Sum3, Sum4 (sclang merges a + b + c into them): ar, ar with kr and constant terms, kr; and
+	// DynKlank (Ringz bank summed through Sum3/Sum4)
+	SynthDef(\case_Sum34, { |g = 0.5| var x = in.value, k = Latch.kr(x, Impulse.kr(20));
+		Out.ar(0, [Sum3(x, x.squared, x.abs), Sum4(x, x * 0.5, k, g), Sum3(x, k, 0.25), K2A.ar(Sum3(k, k * 2, g)),
+			DynKlank.ar(`[[400, 800, 1200], [0.3, 0.2, 0.1], [0.3, 0.2, 0.4]], x * 0.1),
+			DynKlank.ar(`[[300, 500, 700, 900, 1100], nil, [0.2]], x * 0.1, g + 0.5)]) },
+		metadata: (specs: (g: spec.(0, 1, 0.5, \lin)))),
 	SynthDef(\case_Formlet, { |freq = 1000| Out.ar(0, Formlet.ar(in.value, freq, 0.005, 0.1) * 0.5) },
 		metadata: (specs: (freq: spec.(50, 12000, 1000)))),
 	// Lags and decays: knob-swept time, input signal (impulse/steps from the test signals)
