@@ -1764,3 +1764,55 @@ with {
 // Vibrato.kr: one step per block (the same code, sample rate SR / blocksize)
 vibrato(x, rate, depth, delay, onset, iphase, trig) = vibrato_g(x, rate, depth, delay, onset, iphase, trig, 1, ma.SR);
 vibrato_kr(x, rate, depth, delay, onset, iphase, trig) = vibrato_g(x, rate, depth, delay, onset, iphase, trig, krclk, ma.SR / blocksize);
+
+//------------------------------------------------------------------------------
+// Per-block ramps of kr inputs, as UGens compute them.
+// kacc: CALCSLOPE from the accumulated value (Wrap, Fold: m_lo += slope per sample, the
+// value after a block is not reset to the target); starts at the first value.
+// novaramp: nova's slope_argument (Clip): from the previous block's value exactly, four
+// SSE lanes (v, v+s, v+2s, v+2s+s), each += 4s; s = (next - prev) / 64.
+//------------------------------------------------------------------------------
+kacc(x) = (\(v, s).(st(v, s))) ~ (_, _) : !, !, _
+with {
+    blk = ba.time % blocksize == 0;
+    st(v, s) = fadd(v0, s1), s1, v0
+    with {
+        v0 = select2(ba.time == 0, v, x);
+        s1 = select2(blk, s, fmul(fsub(x, v0), 1.0 / blocksize));
+    };
+};
+novaramp(x) = lane
+with {
+    j = ba.time % blocksize;
+    prv = select2(ba.time < blocksize, x@blocksize, x);
+    s = fmul(fsub(x, prv), 1.0 / blocksize);
+    s2 = fadd(s, s);
+    base = ba.selectn(4, j % 4, prv, fadd(prv, s), fadd(prv, s2), fadd(fadd(prv, s2), s));
+    lane = (\(y4).(select2(j < 4, fadd(y4, fmul(s, 4.0)), base))) ~ @(3);
+};
+
+//------------------------------------------------------------------------------
+// Wrap, Fold, Clip (LFUGens.cpp:1569...): the UGen forms of sc_wrap/sc_fold (one range
+// added or folded without a division where possible, else the floor form), in float.
+// Clip at ar runs nova's clip: SSE max(min(x, hi), lo), where a NaN x gives hi (minps
+// returns its second operand); at kr std::max(std::min(x, hi), lo) passes NaN.
+//------------------------------------------------------------------------------
+uwrap(x, lo, hi) = select2(x >= hi, select2(x < lo, x, select2(u >= lo, fl(u), u)), select2(d < hi, fl(d), d))
+with {
+    r = fsub(hi, lo);
+    d = fsub(x, r);
+    u = fadd(x, r);
+    fl(v) = select2(hi == lo, fsub(v, fmul(r, floor((v - lo) / r))), lo);
+};
+ufold(x, lo, hi) = select2(x >= hi, select2(x < lo, x, select2(u < hi, fl, u)), select2(d >= lo, fl, d))
+with {
+    r = fsub(hi, lo);
+    r2 = fmul(r, 2.0);
+    xl = fsub(x, lo);
+    d = fsub(fadd(hi, hi), x);
+    u = fsub(fadd(lo, lo), x);
+    c0 = fsub(xl, fmul(r2, floor(xl / r2)));
+    fl = select2(hi == lo, fadd(select2(c0 >= r, c0, fsub(r2, c0)), lo), lo);
+};
+uclip_sse(x, lo, hi) = select2(x < hi, hi, x) : \(m).(select2(m > lo, lo, m));
+uclip_std(x, lo, hi) = select2(hi < x, x, hi) : \(m).(select2(m < lo, m, lo));

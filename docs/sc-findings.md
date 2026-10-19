@@ -31,7 +31,7 @@ not yet confirmed by a render. Kind: **bug?** (looks unintended), **undocumented
 | 18 | `EnvGen` (audio-rate gate) | forced release (gate <= -1) during a segment corrupts the new segment and shortens it | bug? | measured, source |
 | 19 | `LocalIn` (server's first block) | outputs its uninitialised bus instead of the default when the synth starts at block 0 (e.g. NRT time 0) | bug? | measured, source |
 | 20 | `Formant` | phase sync product `phase1 * freq2` overflows int32: formant and bandwidth phases restart near 0 instead of at the fundamental's fraction | bug? | measured, source |
-| 21 | `Vibrato.ar` (constant or kr `freq`) | reads its input as an audio buffer: past the single value of a constant or control wire (garbage, NaN); the default `Vibrato.ar(440)` is affected | bug | measured, source |
+| 21 | `Vibrato.ar`, `Wrap.ar`, `Fold.ar`, `Clip.ar`, `InRange.ar` (constant or kr input) | read the input as an audio buffer: past the single value of a constant or control wire (garbage, NaN); defaults like `Vibrato.ar(440)` are affected | bug | measured, source |
 | 16 | `Ramp` | reads the input one sample past the segment; past the buffer end at a block boundary | bug? | source |
 
 ## 1. `Amplitude.kr` with an audio-rate input releases 64× too fast
@@ -310,7 +310,7 @@ product can also be exactly -2^31.
 - Source: `server/plugins/OscUGens.cpp` `Formant_next`. Fix: compute the products in
   int64 (or as `(int32)((double)phase1 * freq2 / freq1)`).
 
-## 21. `Vibrato.ar` reads a constant or control-rate input as an audio buffer
+## 21. Audio-rate UGens read a constant or control-rate input as an audio buffer
 
 `Vibrato_next` reads its input with `float* in = ZIN(0)` and `ZXP(in)` for every sample of
 the block, at any input rate. A constant or control-rate wire holds one value: the other 63
@@ -323,6 +323,15 @@ Measured (NRT, depth 0, so the output should equal the input): `Vibrato.ar(0.5, 
 others; with `LFNoise0.kr` as input, likewise; with `DC.ar(0.5)`, 0.5 throughout. The
 garbage depends on the memory layout, so it differs between servers and runs.
 
-- Source: `server/plugins/LFUGens.cpp` `Vibrato_next` (`ZIN(0)`/`ZXP(in)`), `Osc.sc`
-  `Vibrato`. Fix: a `checkInputs` requiring an audio-rate input for `.ar` (or a calc
-  function reading `ZIN0(0)` when the input is not audio rate).
+The same holds for `Wrap`, `Fold`, `Clip` and `InRange` (`Trig.sc`: `InRange` and its
+subclasses have no `checkInputs` either; their calc functions read `in` with `ZXP`).
+Measured (NRT, input 0.3, range 0..1): `Wrap.ar(0.3, 0, 1)`, `Fold.ar`, `Clip.ar` output
+0.3 on each block's first sample and then denormals, zeros and NaN (30300 NaN samples in
+10 s for Wrap and Fold); `InRange.ar` flips between 0 and 1; `Wrap.ar(LFNoise0.kr(..))`
+likewise; `Wrap.ar(DC.ar(0.3), 0, 1)` is correct. Other UGens built the same way are
+likely affected; LinExp, which checks `checkSameRateAsFirstInput`, is not.
+
+- Source: `server/plugins/LFUGens.cpp` `Vibrato_next`, `Wrap_next_*`, `Fold_next_*`,
+  `Clip_next_*`, `InRange_next` (`ZIN(0)`/`ZXP(in)`); `Osc.sc` `Vibrato`, `Trig.sc`
+  `InRange`. Fix: `checkInputs { ^this.checkSameRateAsFirstInput }`-style checks requiring
+  an audio-rate input for `.ar` (or calc functions reading `ZIN0(0)` otherwise).

@@ -271,9 +271,13 @@ def translate(sdef: SynthDef, meta: dict, table=None) -> Translation:
         def arg(name, v):
             x = expr(v)
             interp = e.get("kr_interpolate")
-            if u.rate == "ar" and (interp is True or (isinstance(interp, list) and name in interp)) \
-                    and isinstance(v, Ref) and ugens[v.ugen].rate == "kr":
+            krin = u.rate == "ar" and isinstance(v, Ref) and ugens[v.ugen].rate == "kr"
+            if krin and (interp is True or (isinstance(interp, list) and name in interp)):
                 return f"sc.kr2ar({x})"
+            # kr_wrap: {input: function} applied to a kr input of an ar UGen (the UGen's own
+            # per-block ramp of that input)
+            if krin and name in e.get("kr_wrap", {}):
+                return f"{e['kr_wrap'][name]}({x})"
             return x
         # {seed}: a per-node constant, so random operators get independent streams.
         # Signal arguments enter as wires of a lambda: Faust re-expands a named expression at

@@ -210,6 +210,22 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 		Vibrato.ar(DC.ar(1), 4, 0.1, 0.05, 0.1, 0, 0, 0.6, Impulse.kr(0.7)),
 		K2A.ar(Vibrato.kr(1, 2.5, 0.3, 0, 0.5, 0, 0))
 	] * 0.5) }),
+	// Wrap, Fold, Clip: constant, kr (ramped per block) and audio-rate bounds, inputs far
+	// outside the range (the floor branch), a degenerate range, control rate. Wrap/Fold's
+	// accumulated ramps start from the constructor value: kr bounds from Line (README)
+	SynthDef(\case_Wrap, {
+		var x = in.value * 3, s = SinOsc.ar(0.3) * 4;
+		Out.ar(0, [
+			Wrap.ar(x, -0.5, 0.5), Wrap.ar(s, Line.kr(-1, 0, 7), Line.kr(1.5, 0.2, 9)),
+			Wrap.ar(x, SinOsc.ar(2) * 0.3 - 0.5, 0.7), Wrap.ar(s, 0.2, 0.2),
+			Fold.ar(x, -0.5, 0.5), Fold.ar(s, Line.kr(-1, 0, 7), Line.kr(1.5, 0.2, 9)),
+			Fold.ar(s * 3, SinOsc.ar(2) * 0.3 - 0.5, 0.7), Fold.ar(s, 0.2, 0.2),
+			Clip.ar(x, -0.5, 0.5), Clip.ar(s, LFTri.kr(0.5).range(-1, 0), LFSaw.kr(0.3).range(0.2, 1.5)),
+			Clip.ar(x, SinOsc.ar(2) * 0.3 - 0.5, 0.7), Clip.ar(s, -0.3, LFTri.kr(1.1)),
+			K2A.ar(Wrap.kr(LFSaw.kr(0.2) * 3, -1, LFTri.kr(0.4) + 1.5)), K2A.ar(Fold.kr(LFSaw.kr(0.2) * 3, -1, 0.5)),
+			K2A.ar(Clip.kr(LFSaw.kr(0.2) * 3, -1, LFTri.kr(0.4)))
+		] * 0.5)
+	}),
 	// Noise: statistics only (scsynth's generator is seeded per server). Each at ar and kr.
 	// Rates and densities stay >= 100/s: a statistical comparison needs ~1000 random events
 	// per render (LFNoise2 at 20 Hz over 10 s varies ±2.4 dB from seed to seed).

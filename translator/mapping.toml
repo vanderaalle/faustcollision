@@ -1639,3 +1639,36 @@ self_hold = true
 compare = "waveform"
 tol = 1e-6
 case = "case_Vibrato"
+
+# Wrap, Fold, Clip (LFUGens.cpp): in is read per sample at ar, so it must be audio rate
+# there (sc-findings 21); kr lo/hi are ramped per block as each calc function does.
+[Wrap]
+tier = "direct"
+inputs = ["in", "lo", "hi"]
+ar_inputs = ["in"]
+kr_wrap = { lo = "sc.kacc", hi = "sc.kacc" }
+faust = { ar = "sc.uwrap({in}, {lo}, {hi})", kr = "sc.uwrap({in}, {lo}, {hi})" }
+compare = "waveform"
+tol = 1e-6
+case = "case_Wrap"
+
+[Fold]
+tier = "direct"
+inputs = ["in", "lo", "hi"]
+ar_inputs = ["in"]
+kr_wrap = { lo = "sc.kacc", hi = "sc.kacc" }
+faust = { ar = "sc.ufold({in}, {lo}, {hi})", kr = "sc.ufold({in}, {lo}, {hi})" }
+compare = "waveform"
+tol = 1e-6
+case = "case_Wrap"
+
+[Clip]
+tier = "direct"
+inputs = ["in", "lo", "hi"]
+ar_inputs = ["in"]
+# ar: nova's SSE clip (NaN in -> hi), ramps from the previous block's value; kr: std::min/max
+kr_wrap = { lo = "sc.novaramp", hi = "sc.novaramp" }
+faust = { ar = "sc.uclip_sse({in}, {lo}, {hi})", kr = "sc.uclip_std({in}, {lo}, {hi})" }
+compare = "waveform"
+tol = 1e-6
+case = "case_Wrap"
