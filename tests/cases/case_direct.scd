@@ -261,6 +261,21 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 			K2A.ar(ToggleFF.kr(Impulse.kr(3))), K2A.ar(SetResetFF.kr(Impulse.kr(3), Impulse.kr(1.3)))
 		] * 0.5)
 	}),
+	// PulseCount, PulseDivider, Stepper, Timer, ZeroCrossing, Sweep: audio and kr resets,
+	// constant resets, start offsets, wrapping steps, the four Sweep calc functions, kr
+	SynthDef(\case_PulseCount, {
+		var x = in.value, ia = Impulse.ar(17), ib = Impulse.ar(2.3), ik = Impulse.kr(1.7);
+		Out.ar(0, [
+			PulseCount.ar(ia, ib) * 0.05, PulseCount.ar(x, ik) * 0.01, PulseCount.ar(ia) * 0.001,
+			PulseDivider.ar(ia, 3), PulseDivider.ar(x, Line.kr(2, 7, 9), 1.5),
+			Stepper.ar(ia, ib, -3, 4, 3, 1) * 0.1, Stepper.ar(x, ik, 0, 7, -2) * 0.1, Stepper.ar(ia, 0, 2, 9, 5, 4) * 0.1,
+			Timer.ar(ia), Timer.ar(x), ZeroCrossing.ar(SinOsc.ar(Line.kr(100, 2000, 9))) * 0.001, ZeroCrossing.ar(x) * 0.001,
+			Sweep.ar(ia, 3), Sweep.ar(x, SinOsc.ar(0.4).range(0.5, 4)), Sweep.ar(ik, Line.kr(1, 5, 7)),
+			Sweep.ar(ik, SinOsc.ar(0.3).range(1, 2)), Sweep.ar(0, 0.1),
+			K2A.ar(PulseCount.kr(Impulse.kr(9), Impulse.kr(1))) * 0.1, K2A.ar(Stepper.kr(Impulse.kr(9), 0, 0, 5)) * 0.1,
+			K2A.ar(Sweep.kr(Impulse.kr(0.7), 2)), K2A.ar(Timer.kr(Impulse.kr(3)))
+		] * 0.5)
+	}),
 	// Noise: statistics only (scsynth's generator is seeded per server). Each at ar and kr.
 	// Rates and densities stay >= 100/s: a statistical comparison needs ~1000 random events
 	// per render (LFNoise2 at 20 Hz over 10 s varies ±2.4 dB from seed to seed).

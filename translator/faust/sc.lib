@@ -1901,3 +1901,112 @@ with {
 };
 setresetff(t, r) = setresetff_g(t, r, 1);
 setresetff_kr(t, r) = setresetff_g(t, r, krclk);
+
+//------------------------------------------------------------------------------
+// PulseCount, PulseDivider, Stepper, Timer, ZeroCrossing, Sweep (TriggerUGens.cpp).
+// A constant reset never rises after the constructor sample, so the calc functions for
+// constant resets (next_0, next_a0) are the general ones.
+//------------------------------------------------------------------------------
+// generic: a state machine `step` (state..., -> state..., out) of n wires, the constructor
+// running one sample from `init` (ctor = 1), stepping where clk
+csm(n, step, init, ctor, clk) = run ~ si.bus(n) : par(i, n, !), _ : ba.sAndH(clk)
+with {
+    first = init : step : par(i, n, _), !;
+    st0 = (init, first) : selbus(n, ctor);
+    run = (si.bus(n), st0) : selbus(n, ba.time == 0)
+        <: ((si.bus(n), (step : par(i, n, _), !)) : selbus(n, clk)), (step : par(i, n, !), _);
+};
+rise(p, c) = (p <= 0) & (c > 0);
+
+// PulseCount: level += 1 per trigger, reset (priority) to 0.
+pulsecount_g(t0, r0, clk) = csm(3, step, (0.0, 0.0, 0.0), 1, clk)
+with {
+    t = fadd(t0, 0.0); r = fadd(r0, 0.0);
+    step(l, p, q) = nl, t, r, nl with { nl = select2(rise(q, r), select2(rise(p, t), l, l + 1.0), 0.0); };
+};
+pulsecount(t, r) = pulsecount_g(t, r, 1);
+pulsecount_kr(t, r) = pulsecount_g(t, r, krclk);
+
+// PulseDivider: counter from floor(start + 0.5) (double); a 1 every div triggers.
+floor05(x) = select2((f == q) & (e < 0), f, f - 1.0)
+with { q = twosum(x, 0.5) : _, !; e = twosum(x, 0.5) : !, _; f = floor(q); };
+pulsedivider_g(t0, dv, start, clk) = csm(2, step, (int(floor05(initv(start))), 0.0), 1, clk)
+with {
+    t = fadd(t0, 0.0);
+    d = int(a2k(dv));
+    step(c, p) = select2(rise(p, t), c, select2(c + 1 >= d, c + 1, 0)), t, float(rise(p, t) & (c + 1 >= d));
+};
+pulsedivider(t, dv, start) = pulsedivider_g(t, dv, start, 1);
+pulsedivider_kr(t, dv, start) = pulsedivider_g(t, dv, start, krclk);
+
+// Stepper: int wrap of level + step into [zmin, zmax] per trigger; reset to resetval.
+imod(a, h) = select2(a >= h, select2(a < 0, a, select2(a + h >= 0, gen, a + h)), select2(a - h < h, gen, a - h))
+with { c = a % h; gen = select2(h == 0, select2(c < 0, c, c + h), 0); };
+iwrap(a, lo, hi) = imod(a - lo, hi - lo + 1) + lo;
+stepper_g(t0, r0, zmin, zmax, stp, rv, clk) = csm(3, step, (float(int(initv(rv))), 0.0, 0.0), 1, clk)
+with {
+    t = fadd(t0, 0.0); r = fadd(r0, 0.0);
+    lo = int(a2k(zmin)); hi = int(a2k(zmax)); s = int(a2k(stp)); v = int(a2k(rv));
+    step(l, p, q) = nl, t, r, nl
+    with { nl = select2(rise(q, r), select2(rise(p, t), l, float(iwrap(int(l) + s, lo, hi))), float(iwrap(v, lo, hi))); };
+};
+stepper(t, r, a, b, s, v) = stepper_g(t, r, a, b, s, v, 1);
+stepper_kr(t, r, a, b, s, v) = stepper_g(t, r, a, b, s, v, krclk);
+
+// Timer / ZeroCrossing: the sub-sample time between rises. Timer: sampledur (double) *
+// (frac + counter - prevfrac); ZeroCrossing: samplerate / (...), rises after > 4 samples.
+// No constructor sample; previn starts at the input's first value.
+// x * d rounded once, d a double given as a pair
+dmulpr(x, dh, dl) = fadd(p, fmaf(x, dl, fmaf(x, dh, 0.0 - p))) with { p = x * dh; };
+tzc_g(x0, zc, sr, clk) = csm(4, step, (0, initv(x), 0.0, 0.0), 0, clk)
+with {
+    x = fadd(x0, 0.0);
+    sdh = 1.0 / float(sr);
+    sdl = fmaf(0.0 - sdh, float(sr), 1.0) / float(sr);   // 1/sr - sdh, the double's low part
+    step(c, p, pf, l) = select2(go, c1, 0), x, select2(go, pf, fr), nl, nl
+    with {
+        c1 = c + 1;
+        go = rise(p, x) & select2(zc, 1, c1 > 4);
+        fr = (0.0 - p) / (x - p);
+        v = fsub(fadd(fr, float(c1)), pf);
+        nl = select2(go, l, select2(zc, dmulpr(v, sdh, sdl), float(sr) / v));
+    };
+};
+timer(x) = tzc_g(x, 0, ma.SR, 1);
+timer_kr(x) = tzc_g(x, 0, ma.SR / blocksize, krclk);
+zerocrossing(x) = tzc_g(x, 1, ma.SR, 1);
+zerocrossing_kr(x) = tzc_g(x, 1, ma.SR / blocksize, krclk);
+
+// Sweep: a double level (pair) rising by rate * sampledur per sample, restarting at
+// frac * rate on a trigger. Audio-rate trig: checked per sample, the restart sample is
+// frac * rate; kr/constant trig: at the block start, then rate is added on that sample too.
+// Audio-rate rate: a float product per sample; kr: a double (rate * SAMPLEDUR).
+sweep_g(t0, rate, tra, rta, sr, clk) = csm(3, step, (0.0, 0.0, initv(t)), 0, clk)
+with {
+    t = fadd(t0, 0.0);
+    sdh = 1.0 / float(sr);
+    sdl = fmaf(0.0 - sdh, float(sr), 1.0) / float(sr);
+    sdf = float(1.0 / sr);
+    // the increment as a pair: float product (ar rate) or rate * SAMPLEDUR in double
+    rk = a2k(rate);
+    kh = rk * sdh; kl = fmaf(rk, sdh, 0.0 - kh) + rk * sdl;
+    ih = select2(rta, kh, fmul(rate, sdf));
+    il = select2(rta, kl, 0.0);
+    step(h, l, p) = nh, nl, t, fadd(nh, nl)
+    with {
+        rs = rise(p, t);   // a held kr trig can only rise at a block start
+        fr = (0.0 - p) / (t - p);
+        // frac * rate: ar rate a float product; kr a float times a double
+        sh = select2(rta, fr * ih, fmul(fr, ih));
+        sl = select2(rta, fmaf(fr, ih, 0.0 - fr * ih) + fr * il, 0.0);
+        ah = dadd2(h, l, ih, il) : _, !;
+        al = dadd2(h, l, ih, il) : !, _;
+        // ar trig: restart value as is; kr trig: restart then add
+        bh = dadd2(sh, sl, ih, il) : _, !;
+        bl = dadd2(sh, sl, ih, il) : !, _;
+        nh = select2(rs, ah, select2(tra, bh, sh));
+        nl = select2(rs, al, select2(tra, bl, sl));
+    };
+};
+sweep(t, rate, tra, rta) = sweep_g(t, rate, tra, rta, ma.SR, 1);
+sweep_kr(t, rate) = sweep_g(t, rate, 0, 0, ma.SR / blocksize, krclk);

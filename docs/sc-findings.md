@@ -31,7 +31,7 @@ not yet confirmed by a render. Kind: **bug?** (looks unintended), **undocumented
 | 18 | `EnvGen` (audio-rate gate) | forced release (gate <= -1) during a segment corrupts the new segment and shortens it | bug? | measured, source |
 | 19 | `LocalIn` (server's first block) | outputs its uninitialised bus instead of the default when the synth starts at block 0 (e.g. NRT time 0) | bug? | measured, source |
 | 20 | `Formant` | phase sync product `phase1 * freq2` overflows int32: formant and bandwidth phases restart near 0 instead of at the fundamental's fraction | bug? | measured, source |
-| 21 | `Vibrato.ar`, `Wrap.ar`, `Fold.ar`, `Clip.ar`, `InRange.ar` (constant or kr input) | read the input as an audio buffer: past the single value of a constant or control wire (garbage, NaN); defaults like `Vibrato.ar(440)` are affected | bug | measured, source |
+| 21 | `Vibrato.ar`, `Wrap.ar`, `Fold.ar`, `Clip.ar`, `InRange.ar`, `ToggleFF.ar`, `PulseDivider.ar` (constant or kr input) | read the input as an audio buffer: past the single value of a constant or control wire (garbage, NaN); defaults like `Vibrato.ar(440)` are affected | bug | measured, source |
 | 22 | `LinExp.ar` (one bound of a range at audio rate) | the calc function reads both bounds per sample when either is audio rate: the other is read past its value (NaN, inf) | bug | measured, source |
 | 16 | `Ramp` | reads the input one sample past the segment; past the buffer end at a block boundary | bug? | source |
 
@@ -329,8 +329,11 @@ subclasses have no `checkInputs` either; their calc functions read `in` with `ZX
 Measured (NRT, input 0.3, range 0..1): `Wrap.ar(0.3, 0, 1)`, `Fold.ar`, `Clip.ar` output
 0.3 on each block's first sample and then denormals, zeros and NaN (30300 NaN samples in
 10 s for Wrap and Fold); `InRange.ar` flips between 0 and 1; `Wrap.ar(LFNoise0.kr(..))`
-likewise; `Wrap.ar(DC.ar(0.3), 0, 1)` is correct. Other UGens built the same way are
-likely affected; LinExp, which checks `checkSameRateAsFirstInput`, is not.
+likewise; `Wrap.ar(DC.ar(0.3), 0, 1)` is correct. `ToggleFF.ar` and `PulseDivider.ar`
+(no `checkInputs`) with `Impulse.kr(5)` as trigger read past it too: `PulseDivider.ar(k, 2)`
+outputs 22750 ones in 10 s instead of 25 (with `T2A.ar(k)`: 25). LinExp, TDelay,
+SetResetFF, PulseCount, Stepper, Timer and ZeroCrossing are protected: sclang rejects a
+non-audio first input ("first input is not audio rate").
 
 - Source: `server/plugins/LFUGens.cpp` `Vibrato_next`, `Wrap_next_*`, `Fold_next_*`,
   `Clip_next_*`, `InRange_next` (`ZIN(0)`/`ZXP(in)`); `Osc.sc` `Vibrato`, `Trig.sc`

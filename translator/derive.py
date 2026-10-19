@@ -196,3 +196,10 @@ def linexp_calc(rate, r):
     if src or dst:
         return "ar_a"   # next_aa / _ak / _ka: per-sample bounds where audio, libm pow
     return "ar_i" if all(r[k] == "ir" for k in ar) else "ar_k"
+
+
+def sweep_calc(rate, r):
+    """TriggerUGens.cpp Sweep_Ctor: by the trig and rate input rates."""
+    if rate == "kr":
+        return "kr"
+    return ("a" if r["trig"] == "ar" else "k") + ("a" if r["rate"] == "ar" else "k")

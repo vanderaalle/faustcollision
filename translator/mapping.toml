@@ -1772,3 +1772,67 @@ self_hold = true
 compare = "waveform"
 tol = 1e-6
 case = "case_Trig"
+
+[PulseCount]
+tier = "direct"
+inputs = ["trig", "reset"]
+ar_inputs = ["trig"]
+faust = { ar = "sc.pulsecount({trig}, {reset})", kr = "sc.pulsecount_kr({trig}, {reset})" }
+self_hold = true
+compare = "waveform"
+tol = 1e-6
+case = "case_PulseCount"
+
+[PulseDivider]
+tier = "direct"
+inputs = ["trig", "div", "start"]
+ar_inputs = ["trig"]
+faust = { ar = "sc.pulsedivider({trig}, {div}, {start})", kr = "sc.pulsedivider_kr({trig}, {div}, {start})" }
+self_hold = true
+compare = "waveform"
+tol = 1e-6
+case = "case_PulseCount"
+
+[Stepper]
+tier = "direct"
+inputs = ["trig", "reset", "min", "max", "step", "resetval"]
+# an ar Stepper with a kr trig runs next_aa, reading trig and reset per sample: rejected
+ar_inputs = ["trig"]
+faust = { ar = "sc.stepper({trig}, {reset}, {min}, {max}, {step}, {resetval})", kr = "sc.stepper_kr({trig}, {reset}, {min}, {max}, {step}, {resetval})" }
+self_hold = true
+compare = "waveform"
+tol = 1e-6
+case = "case_PulseCount"
+
+[Timer]
+tier = "direct"
+inputs = ["trig"]
+ar_inputs = ["trig"]
+faust = { ar = "sc.timer({trig})", kr = "sc.timer_kr({trig})" }
+self_hold = true
+compare = "waveform"
+tol = 1e-6
+case = "case_PulseCount"
+
+[ZeroCrossing]
+tier = "direct"
+inputs = ["in"]
+ar_inputs = ["in"]
+faust = { ar = "sc.zerocrossing({in})", kr = "sc.zerocrossing_kr({in})" }
+self_hold = true
+compare = "waveform"
+tol = 1e-6
+case = "case_PulseCount"
+
+[Sweep]
+tier = "direct"
+inputs = ["trig", "rate"]
+# the calc function by the trig and rate rates (derive.sweep_calc); double level on pairs.
+# Measured: bit-exact with an audio-rate rate; with a kr rate (a double increment) rare
+# 1-ulp flips (pair vs double accumulation: up to 287 samples in 10 s).
+template_by = "sweep_calc"
+faust = { aa = "sc.sweep({trig}, {rate}, 1, 1)", ak = "sc.sweep({trig}, {rate}, 1, 0)", ka = "sc.sweep({trig}, {rate}, 0, 1)", kk = "sc.sweep({trig}, {rate}, 0, 0)", kr = "sc.sweep_kr({trig}, {rate})" }
+self_hold = true
+compare = "waveform"
+tol = 1e-6
+case = "case_PulseCount"
