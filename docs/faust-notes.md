@@ -113,3 +113,10 @@ through `ffunction` (`isnanf`, `isinff` from <math.h>), which the compiler canno
 Related: Faust arithmetic does not flush subnormals (only `-ftz` on recursive states),
 while scsynth runs with flush-to-zero: a product like `x * 1e-39` is subnormal in Faust
 and 0 in scsynth.
+
+## Algebraic normalisation can undo an overflow-avoiding regrouping
+
+Faust normalises products and quotients: `K * (r / a)^2 * (r / b)^2 / c`, written to keep
+every intermediate in float range, was merged back into `K * r^4 / (a^2 b^2 c)`, which
+overflows (AmpCompA's A-weighting: NaN from 1 kHz up). Chain the factors through opaque
+`fmul` (fmaf) so the compiler cannot recombine them.

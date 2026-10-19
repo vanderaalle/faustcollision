@@ -360,3 +360,34 @@ def server_info(c):
     the sample rate is fixed at translation time (SR)."""
     return {"sr": repr(float(f32(SR))), "cr": repr(float(f32(SR / 64))), "sdur": repr(float(f32(1.0 / SR))),
             "cdur": repr(float(f32(64.0 / SR))), "rps": repr(float(f32(2.0 * math.pi / SR)))}
+
+
+def ampcomp_calc(rate, r):
+    """LFUGens.cpp AmpComp_Ctor: AmpComp_next when root and exp are constants, else
+    AmpComp_next_kk."""
+    return f'{rate}_{"i" if r["root"] == "ir" and r["exp"] == "ir" else "k"}'
+
+
+def ampcomp(c):
+    """AmpComp_Ctor: rootmul = pow(root, exp) (float pow), exponent = -1.f * exp."""
+    root, ex = f32(c["root"]), f32(c["exp"])
+    return {"rootmul": repr(float(f32(np.power(root, ex)))), "xb": repr(float(f32(-1.0) * ex))}
+
+
+def ampcompa(c):
+    """AmpCompA_Ctor: rootLevel = AmpCompA_calcLevel(root) in double; scale = (rootAmp -
+    minAmp) / (rootLevel - MINLEVEL), offset = minAmp - scale * MINLEVEL (doubles), used
+    as doubles with a double level (here: their float values)."""
+    K = 3.5041384 * 10e15
+    C1, C2, C3, C4 = 20.598997 ** 2, 107.65265 ** 2, 737.86223 ** 2, 12194.217 ** 2
+    MIN = -0.1575371167435
+
+    def level(f):
+        r = f * f
+        lv = K * r * r * r * r
+        n1, n2 = C1 + r, C4 + r
+        return 1.0 - math.sqrt(lv / (n1 * n1 * (C2 + r) * (C3 + r) * n2 * n2))
+    root = float(f32(c["root"])); minamp = float(f32(c["minAmp"])); rootamp = float(f32(c["rootAmp"]))
+    scale = (float(f32(rootamp)) - minamp) / (level(root) - MIN)
+    offset = minamp - scale * MIN
+    return {"scale": repr(scale), "offset": repr(offset)}

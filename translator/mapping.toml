@@ -2397,3 +2397,28 @@ faust = { ar = "sc.lag3ud({in}, {lagTimeU}, {lagTimeD})", kr = "sc.lag3ud_kr({in
 compare = "waveform"
 tol = 3e-4
 case = "case_LagUDn"
+
+[AmpComp]
+tier = "direct"
+inputs = ["freq", "root", "exp"]
+# two calc functions by the root/exp rates (derive.ampcomp_calc), float pow; measured <= 1.0e-7
+template_by = "ampcomp_calc"
+derive_when_constant = ["root", "exp"]
+derive = "ampcomp"
+faust = { ar_i = "sc.ampcomp_i({freq}, {rootmul}, {xb})", kr_i = "sc.ampcomp_i({freq}, {rootmul}, {xb})", ir_i = "sc.ampcomp_i({freq}, {rootmul}, {xb})" }
+faust_var = { ar_k = "sc.ampcomp_k({freq}, {root}, {exp})", kr_k = "sc.ampcomp_k({freq}, {root}, {exp})", ir_k = "sc.ampcomp_k({freq}, {root}, {exp})" }
+compare = "waveform"
+tol = 1e-6
+case = "case_AmpComp"
+
+[AmpCompA]
+tier = "direct"
+inputs = ["freq", "root", "minAmp", "rootAmp"]
+# root, minAmp, rootAmp read once (constructor): scale and offset from derive.ampcompa
+constant_inputs = ["root", "minAmp", "rootAmp"]
+derive = "ampcompa"
+# level in float (scsynth: double), regrouped against overflow; measured 2.6e-7
+faust = { ar = "sc.ampcompa({freq}, {scale}, {offset})", kr = "sc.ampcompa({freq}, {scale}, {offset})", ir = "sc.ampcompa({freq}, {scale}, {offset})" }
+compare = "waveform"
+tol = 1e-6
+case = "case_AmpComp"

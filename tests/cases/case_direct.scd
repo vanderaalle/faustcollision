@@ -134,6 +134,11 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 		Out.ar(0, [Lag2UD.ar(in.value, 0.005 * scale, 0.08 * scale), Lag3UD.ar(in.value, 0.005 * scale, 0.08 * scale),
 			K2A.ar(Lag2UD.kr(k, 0.01 * scale, 0.1 * scale)), K2A.ar(Lag3UD.kr(k, 0.01 * scale, 0.1 * scale))]) },
 		metadata: (specs: (scale: spec.(0.1, 10, 1)))),
+	// AmpComp (constant root/exp: next; kr root: next_kk), AmpCompA, ar and kr, over the audio range
+	SynthDef(\case_AmpComp, { |root = 261.6| var f = in.value.abs * 15000 + 30, k = Latch.kr(f, Impulse.kr(50));
+		Out.ar(0, [AmpComp.ar(f, 261.6, 0.3333), AmpComp.ar(f, root, 0.5), AmpCompA.ar(f, 1000, 0.32, 1),
+			K2A.ar(AmpComp.kr(k, 440, 0.3333)), K2A.ar(AmpCompA.kr(k, 0, 0.32, 1))] * 0.2) },
+		metadata: (specs: (root: spec.(50, 2000, 261.6)))),
 	SynthDef(\case_Formlet, { |freq = 1000| Out.ar(0, Formlet.ar(in.value, freq, 0.005, 0.1) * 0.5) },
 		metadata: (specs: (freq: spec.(50, 12000, 1000)))),
 	// Lags and decays: knob-swept time, input signal (impulse/steps from the test signals)

@@ -2671,3 +2671,19 @@ lag2ud(x, tu, td) = lagudn_g(2, x, kcoef(dec60(tu), 1), kcoef(dec60(td), 1), 1);
 lag3ud(x, tu, td) = lagudn_g(3, x, kcoef(dec60(tu), 1), kcoef(dec60(td), 1), 1);
 lag2ud_kr(x, tu, td) = lagudn_g(2, x, dec60k(tu), dec60k(td), 0);
 lag3ud_kr(x, tu, td) = lagudn_g(3, x, dec60k(tu), dec60k(td), 0);
+
+//------------------------------------------------------------------------------
+// AmpComp (LFUGens.cpp:2142): constant root and exp -> AmpComp_next: rootmul = pow(root,
+// exp) and out = pow(freq, -exp) * rootmul; otherwise AmpComp_next_kk: pow(root / freq,
+// exp). Float pow (both arguments float); negative freq sign-mirrored.
+// AmpCompA (LFUGens.cpp:2182): the A-weighting level in double, 1 - sqrt(K r^4 / (n1^2
+// (C2 + r) (C3 + r) n2^2)), r = freq^2; scale and offset from the constructor (derive).
+// In float K r^4 overflows: regrouped as K (r / n1)^2 (r / n2)^2 / ((C2 + r) (C3 + r)).
+//------------------------------------------------------------------------------
+spowf(a, b) = select2(a >= 0.0, 0.0 - pow(0.0 - a, b), pow(a, b));
+ampcomp_i(freq, rootmul, xb) = fmul(spowf(freq, xb), rootmul);
+ampcomp_k(freq, root, ex) = spowf(root / freq, ex);
+// (opaque products: Faust otherwise re-merges the factors into r^4 and overflows to inf / inf)
+ampcompa_level(f) = 1.0 - sqrt(fmul(fmul(fmul(fmul(3.5041384e16, q1), q1), q2), q2) / ((107.65265 * 107.65265 + r) * (737.86223 * 737.86223 + r)))
+with { r = f * f; q1 = r / (20.598997 * 20.598997 + r); q2 = r / (12194.217 * 12194.217 + r); };
+ampcompa(freq, scale, offset) = ampcompa_level(freq) * scale + offset;
