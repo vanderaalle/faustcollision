@@ -1373,8 +1373,9 @@ case = "case_APF"
 tier = "direct"
 inputs = ["in", "lagTime"]
 # long times put the coefficient within ~1e-4 of 1: float floor 1.6e-4 measured at 0.5 s
-faust = { ar = "sc.lag({in}, {lagTime})" }
+faust = { ar = "sc.lag({in}, {lagTime})", kr = "sc.lag_kr({in}, {lagTime})" }
 compare = "waveform"
+# kr: one step per block (sc.*_kr), measured 2.5e-06 (float coefficient and state)
 tol = 3e-4
 case = "case_Lag"
 
@@ -1382,8 +1383,9 @@ case = "case_Lag"
 tier = "direct"
 inputs = ["in", "lagTime"]
 # long times put the coefficient within ~1e-4 of 1: float floor 1.6e-4 measured at 0.5 s
-faust = { ar = "sc.lag2({in}, {lagTime})" }
+faust = { ar = "sc.lag2({in}, {lagTime})", kr = "sc.lag2_kr({in}, {lagTime})" }
 compare = "waveform"
+# kr: one step per block (sc.*_kr), measured 4.8e-06 (float coefficient and state)
 tol = 3e-4
 case = "case_Lag2"
 
@@ -1391,8 +1393,9 @@ case = "case_Lag2"
 tier = "direct"
 inputs = ["in", "lagTime"]
 # long times put the coefficient within ~1e-4 of 1: float floor 1.6e-4 measured at 0.5 s
-faust = { ar = "sc.lag3({in}, {lagTime})" }
+faust = { ar = "sc.lag3({in}, {lagTime})", kr = "sc.lag3_kr({in}, {lagTime})" }
 compare = "waveform"
+# kr: one step per block (sc.*_kr), measured 6.1e-06 (float coefficient and state)
 tol = 3e-4
 case = "case_Lag3"
 
@@ -1400,8 +1403,9 @@ case = "case_Lag3"
 tier = "direct"
 inputs = ["in", "lagTimeU", "lagTimeD"]
 # long times put the coefficient within ~1e-4 of 1: float floor 1.6e-4 measured at 0.5 s
-faust = { ar = "sc.lagud({in}, {lagTimeU}, {lagTimeD})" }
+faust = { ar = "sc.lagud({in}, {lagTimeU}, {lagTimeD})", kr = "sc.lagud_kr({in}, {lagTimeU}, {lagTimeD})" }
 compare = "waveform"
+# kr: one step per block (sc.*_kr), measured 1.7e-06 (float coefficient and state)
 tol = 3e-4
 case = "case_LagUD"
 
@@ -1409,8 +1413,9 @@ case = "case_LagUD"
 tier = "direct"
 inputs = ["in", "decayTime"]
 # long times put the coefficient within ~1e-4 of 1: float floor 1.6e-4 measured at 0.5 s
-faust = { ar = "sc.decay({in}, {decayTime})" }
+faust = { ar = "sc.decay({in}, {decayTime})", kr = "sc.decay_kr({in}, {decayTime})" }
 compare = "waveform"
+# kr: one step per block (sc.*_kr), measured 7.0e-06 (float coefficient and state)
 tol = 3e-4
 case = "case_Decay"
 
@@ -1418,24 +1423,27 @@ case = "case_Decay"
 tier = "direct"
 inputs = ["in", "attackTime", "decayTime"]
 # long times put the coefficient within ~1e-4 of 1: float floor 1.6e-4 measured at 0.5 s
-faust = { ar = "sc.decay2({in}, {attackTime}, {decayTime})" }
+faust = { ar = "sc.decay2({in}, {attackTime}, {decayTime})", kr = "sc.decay2_kr({in}, {attackTime}, {decayTime})" }
 compare = "waveform"
+# kr: one step per block (sc.*_kr), measured 7.3e-06 (float coefficient and state)
 tol = 3e-4
 case = "case_Decay2"
 
 [Integrator]
 tier = "direct"
 inputs = ["in", "coef"]
-faust = { ar = "sc.integrator({in}, {coef})" }
+faust = { ar = "sc.integrator({in}, {coef})", kr = "sc.integrator_kr({in}, {coef})" }
 compare = "waveform"
+# kr: one step per block (sc.*_kr), measured 5.2e-07 (float coefficient and state)
 tol = 1e-4
 case = "case_Integrator"
 
 [Slew]
 tier = "direct"
 inputs = ["in", "up", "dn"]
-faust = { ar = "sc.slew({in}, {up}, {dn})" }
+faust = { ar = "sc.slew({in}, {up}, {dn})", kr = "sc.slew_kr({in}, {up}, {dn})" }
 compare = "waveform"
+# kr: one step per block (sc.*_kr), measured 6.9e-07 (float coefficient and state)
 tol = 1e-4
 case = "case_Slew"
 

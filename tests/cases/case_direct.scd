@@ -113,6 +113,14 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 		Out.ar(0, p[0].asClass.ar(in.value, *(p[1] * scale)) * 0.5) },
 		metadata: (specs: (scale: spec.(0.1, 10, 1))))
 } ++ [
+	// Lags, decays, integrator, slew at kr: one step per block; a time doubling at 1 s
+	// (Lag* apply a change at once, Decay/Decay2/Integrator one block late)
+	SynthDef(\case_Lag_kr, { |scale = 1|
+		var k = Latch.kr(in.value, Impulse.kr(50)), m = scale * (1 + (Line.kr(0, 1, 2) > 0.5));
+		Out.ar(0, K2A.ar([Lag.kr(k, 0.05 * m), Lag2.kr(k, 0.05 * m), Lag3.kr(k, 0.05 * m), LagUD.kr(k, 0.005 * m, 0.1 * m),
+			Decay.kr(k, 0.2 * m), Decay2.kr(k, 0.005 * m, 0.2 * m), Integrator.kr(k * 0.1, 0.99 - (0.04 * (m > scale))),
+			Slew.kr(k, 200 / m, 100 / m)])) },
+		metadata: (specs: (scale: spec.(0.1, 10, 1)))),
 	SynthDef(\case_Integrator, { |coef = 0.99| Out.ar(0, Integrator.ar(in.value * 0.1, coef)) },
 		metadata: (specs: (coef: spec.(0.5, 0.999, 0.99, \lin)))),
 	SynthDef(\case_Slew, { |up = 200| Out.ar(0, Slew.ar(in.value, up, up * 0.5)) },
