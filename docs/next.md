@@ -9,37 +9,32 @@ XLine; dynamics; reverbs; Klank, PitchShift, LocalIn/LocalOut; Wrap, Fold, Clip,
 InRange, InRect, Schmidt, ModDif; triggers (Trig ... T2A); panners (Pan2, LinPan2,
 Balance2, XFade2, LinXFade2, Rotate2, Pan4); LPZ1/2, HPZ1/2, BPZ2, BRZ2, Slope, FOS, SOS;
 MidEQ; BEQSuite (BLowPass ... BHiShelf) at every input rate (next_aa: sc-findings 24).
+Census failures fixed: kr UGens fed by audio read the block's first sample (a2k; krhold
+only for kr_block entries: Amplitude, Pitch, T2K); EnvGen's audio-rate envelope inputs at
+the block start; LocalIn.kr held per block; Pan4.kr compile error (opaque inputs).
 Rejected with an explanation (tier "rejected"): T2K, Peak.kr of audio.
 
 ## Next, in order
 Each step has a prepared plan (and, where noted, code) in docs/plans/: apply, build, test,
 set tolerances from the measured floors, full suite, commit, bump vairi.
-1. Census failures (report/census.md, regenerated with BEQSuite next_aa included):
-   - Pan4.kr: Faust compile error (0/0 after constant folding in sc.pan4_kr).
-   - Splay.kr (-> Pan2.kr + operators): waveform 1.44: Pan2.kr is probably wrong (the
-     regression case covers Pan2.ar only); add a Pan2.kr case.
-   - VarLag.ar with the default warp (-> EnvGen + Changed + Impulse): waveform 0.066.
-   - LocalIn.kr / LocalOut.kr: waveform 1.24, probably sc-findings 19 (probes start at
-     block 0); confirm, then give the census probe a startBlock or mark it.
-   Explained: T2K (rejected), Vibrato (random rateVariation default), Pitch.kr (finding 9).
-2. Median (code: plans/median.md).
-3. Select, Sanitize, DetectSilence, Linen (code; Linen compiles, shape checked):
+1. Median (code: plans/median.md).
+2. Select, Sanitize, DetectSilence, Linen (code; Linen compiles, shape checked):
    plans/select-sanitize-linen-detectsilence.md.
-4. Lag, Lag2, Lag3, LagUD, Decay, Decay2, Integrator, Slew .kr (code sketch, checks resolved):
+3. Lag, Lag2, Lag3, LagUD, Decay, Decay2, Integrator, Slew .kr (code sketch, checks resolved):
    plans/lag-family-kr.md.
-5. Filter .kr (LPF ... OneZero; two groups, sc-findings 28): plans/filters-kr.md.
+4. Filter .kr (LPF ... OneZero; two groups, sc-findings 28): plans/filters-kr.md.
    Finding 28 measured on all seven; issue draft 16.
-6. Delays, combs, allpasses .kr: plans/delays-kr.md.
-7. Saw, Pulse, Blip .kr (core refactor; sc-findings 25): plans/blit-kr.md.
-8. VarLag (\lin only; sc-findings 26), IEnvGen (sc-findings 27): plans/varlag.md,
+5. Delays, combs, allpasses .kr: plans/delays-kr.md.
+6. Saw, Pulse, Blip .kr (core refactor; sc-findings 25): plans/blit-kr.md.
+7. VarLag (\lin only; sc-findings 26), IEnvGen (sc-findings 27): plans/varlag.md,
    plans/ienvgen.md.
-9. Small remaining classes (census, unmapped): MoogFF.kr (plans/moogff-kr.md); server info
+8. Small remaining classes (census, unmapped): MoogFF.kr (plans/moogff-kr.md); server info
    constants (SampleRate, SampleDur, ControlRate, ControlDur, RadiansPerSample,
    SubsampleOffset: trivial, plans/server-info.md); Ramp (sc-findings 16, measured); Lag2UD, Lag3UD, AmpComp,
    AmpCompA, MantissaMask, Hasher: plans/small-classes.md.
-10. Random UGens (statistics only; plans/random.md), chaos oscillators, DynKlank, grains, Pluck,
+9. Random UGens (statistics only; plans/random.md), chaos oscillators, DynKlank, grains, Pluck,
    Hilbert/FreqShift, ambisonic panners: lower priority.
-11. Issue drafts: docs/issues/ covers 4, 5, 11, 15, 17-28; file them upstream.
+10. Issue drafts: docs/issues/ covers 4, 5, 11, 15, 17-28; file them upstream.
 
 ## Working method (keeps cost down)
 - Read the scsynth source of the UGen (and nova-simd where a nova calc function runs).

@@ -818,6 +818,8 @@ case = "case_MoogFF"
 
 [Amplitude]
 tier = "approximate"
+# kr fed by audio: Amplitude_next_atok* loop over the full audio block (FilterUGens.cpp:3530); known only at the block end -> krhold
+kr_block = true
 inputs = ["in", "attackTime", "releaseTime"]
 # -20 dB time constants (measured). SC's .kr loops over the audio block with control-rate
 # coefficients, so its times are 1/blocksize of the stated ones; the port reproduces that.
@@ -831,6 +833,8 @@ case = "case_Amplitude"
 
 [Pitch]
 tier = "handwritten"
+# kr fed by audio: Pitch_next_a reads the whole audio block (DelayUGens.cpp:1685); known only at the block end -> krhold
+kr_block = true
 inputs = ["in", "initFreq", "minFreq", "maxFreq", "execFreq", "maxBinsPerOctave", "median",
           "ampThreshold", "peakThreshold", "downSample", "clar"]
 require = { execFreq = 100.0, maxBinsPerOctave = 16.0, median = 1.0, peakThreshold = 0.5, downSample = 1.0, clar = 0.0 }
@@ -2071,6 +2075,8 @@ case = "case_Peak"
 
 [T2K]
 tier = "rejected"
+# kr fed by audio: the block's maximum (TriggerUGens.cpp:2405); known only at the block end -> krhold
+kr_block = true
 # not ported: scsynth takes the maximum of the current audio block (T2K.kr runs after its
 # input); a causal port is one block late, up to 35 dB off for trigger trains (measured).
 # derive.not_causal rejects it with that explanation.

@@ -24,8 +24,9 @@ Current status and next steps: `docs/next.md` (read it first when resuming).
 
 ## Semantics fixed so far
 
-- kr UGens fed by audio are held per block, one block late (`sc.krhold`); kr UGens fed only
-  by kr inputs are sampled at the block start (`sc.a2k`); BinaryOpUGen and K2A ramp kr
+- kr UGens read an audio input's first sample of the current block (`sc.a2k`); those whose
+  kr calc function consumes the whole audio block (`kr_block`: Amplitude, Pitch) are held one
+  block late (`sc.krhold`); kr UGens fed only by kr inputs are sampled at the block start (`sc.a2k`); BinaryOpUGen and K2A ramp kr
   inputs across the block like scsynth (`sc.kr2ar`).
 - Constructor samples (most UGens compute one sample in the constructor) are modelled per UGen.
 - Not modelled: the constructor-time value of an input. Where scsynth reads an input in the
