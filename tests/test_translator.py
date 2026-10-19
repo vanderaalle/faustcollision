@@ -70,3 +70,9 @@ def test_peak_kr_of_audio_is_rejected():
     g = graph(UGen(2, "Peak", "kr", 0, [Ref(1, 0), Const(0.0)], ["kr"]), UGen(3, "K2A", "ar", 0, [Ref(2, 0)], ["ar"]))
     with pytest.raises(TranslationError, match="Peak.kr of an audio input"):
         translate(g, {})
+
+
+def test_beq_all_audio_coefficients_are_rejected():
+    g = graph(UGen(2, "BLowPass", "ar", 0, [Ref(1, 0), Ref(1, 0), Ref(1, 0)], ["ar"]))
+    with pytest.raises(TranslationError, match="next_aa"):
+        translate(g, {})

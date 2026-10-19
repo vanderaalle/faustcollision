@@ -173,7 +173,8 @@ def translate(sdef: SynthDef, meta: dict, table=None) -> Translation:
             if cname not in specs:
                 raise TranslationError(f"control '{cname}' is used but has no spec in the SynthDef metadata")
             controls[cname] = specs[cname]
-            return _ident(cname)
+            # prefixed: a bare name can clash with stdfaust's environments (db, ba, ma...)
+            return f"ctl_{_ident(cname)}"
         return names[key]
 
     for u in ugens:
@@ -349,7 +350,7 @@ def translate(sdef: SynthDef, meta: dict, table=None) -> Translation:
         scale = {"lin": "", "linear": "", "exp": "[scale:log]", "exponential": "[scale:log]"}.get(s.get("warp", "lin"))
         if scale is None:
             raise TranslationError(f"control '{cname}': unsupported warp {s.get('warp')}")
-        head.append(f'{cname} = hslider("{cname}{scale}", {default!r}, {lo!r}, {hi!r}, {(hi - lo) / 10000!r});')
+        head.append(f'ctl_{cname} = hslider("{cname}{scale}", {default!r}, {lo!r}, {hi!r}, {(hi - lo) / 10000!r});')
     proc = f"process({', '.join(ins)})" if ins else "process"
     body = [f"{proc} = {', '.join(results)}", "with {", *lines, "};"] if lines else [f"{proc} = {', '.join(results)};"]
     if feedback:

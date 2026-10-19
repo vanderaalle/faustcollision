@@ -97,3 +97,10 @@ only where reassociation would change the result.
 **libfaust 2.85 (DawDreamer) asserts in `mterm.cpp`** on a state machine fed a constant
 (`sc.trig1(1.0, ...)`), where the 2.70 CLI compiles it. Pass such inputs through the
 opaque `fadd(x, 0.0)`.
+
+## A top-level name can clash with stdfaust's environments
+
+`import("stdfaust.lib")` defines `ba`, `db`, `de`, `fi`, `ma`, `os`, `si`... A generated
+definition with one of these names (a SynthDef control called `db`) fails to compile:
+"redefinition of symbols are not allowed : db". Generated control identifiers are
+prefixed (`ctl_db`); the slider label keeps the SynthDef's name.

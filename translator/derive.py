@@ -250,3 +250,99 @@ def section_calc(rate, r):
     if r["_cls"] == "SOS" and all(v == "ir" for v in co):
         return "i"
     return "k"
+
+
+# BEQSuite (FilterUGens.cpp:4193-5100): the constructors' double coefficients, from float
+# inputs, in the C operation order; w0 = twopi * (double)freq * SAMPLEDUR.
+_TWOPI = math.pi * 2.0
+_SDUR = 1.0 / SR
+
+
+def _w0(c):
+    return _TWOPI * float(f32(c["freq"])) * _SDUR
+
+
+def _beq(a0, a1, a2, b1, b2):
+    out = {}
+    for k, v in (("a0", a0), ("a1", a1), ("a2", a2), ("b1", b1), ("b2", b2)):
+        out[f"{k}h"], out[f"{k}l"] = _pair(v)
+    return out
+
+
+def blowpass(c):
+    w0 = _w0(c); cosw0 = math.cos(w0); i = 1. - cosw0
+    alpha = math.sin(w0) * 0.5 * float(f32(c["rq"])); b0rz = 1. / (1. + alpha)
+    a0 = i * 0.5 * b0rz
+    return _beq(a0, i * b0rz, a0, cosw0 * 2. * b0rz, (1. - alpha) * -b0rz)
+
+
+def bhipass(c):
+    w0 = _w0(c); cosw0 = math.cos(w0); i = 1. + cosw0
+    alpha = math.sin(w0) * 0.5 * float(f32(c["rq"])); b0rz = 1. / (1. + alpha)
+    a0 = i * 0.5 * b0rz
+    return _beq(a0, -i * b0rz, a0, cosw0 * 2. * b0rz, (1. - alpha) * -b0rz)
+
+
+def _bwalpha(w0, bw):
+    sinw0 = math.sin(w0)
+    return sinw0 * (math.sinh((0.34657359027997 * float(f32(bw)) * w0) / sinw0))
+
+
+def bbandpass(c):
+    w0 = _w0(c); alpha = _bwalpha(w0, c["bw"]); b0rz = 1. / (1. + alpha)
+    a0 = alpha * b0rz
+    return _beq(a0, 0.0, -a0, math.cos(w0) * 2. * b0rz, (1. - alpha) * -b0rz)
+
+
+def bbandstop(c):
+    w0 = _w0(c); alpha = _bwalpha(w0, c["bw"]); b0rz = 1. / (1. + alpha)
+    b1 = 2. * b0rz * math.cos(w0)
+    return _beq(b0rz, -b1, b0rz, b1, (1. - alpha) * -b0rz)
+
+
+def ballpass(c):
+    w0 = _w0(c); alpha = math.sin(w0) * 0.5 * float(f32(c["rq"])); b0rz = 1. / (1. + alpha)
+    a0 = (1. - alpha) * b0rz; b1 = 2. * b0rz * math.cos(w0)
+    return _beq(a0, -b1, 1., b1, -a0)
+
+
+def bpeakeq(c):
+    a = math.pow(10., float(f32(c["db"])) * 0.025)
+    w0 = _w0(c); alpha = math.sin(w0) * 0.5 * float(f32(c["rq"]))
+    b0rz = 1. / (1. + (alpha / a)); b1 = 2. * b0rz * math.cos(w0)
+    return _beq((1. + (alpha * a)) * b0rz, -b1, (1. - (alpha * a)) * b0rz, b1, (1. - (alpha / a)) * -b0rz)
+
+
+def _shelf(c):
+    a = math.pow(10., float(f32(c["db"])) * 0.025)
+    w0 = _w0(c); cosw0 = math.cos(w0); sinw0 = math.sin(w0)
+    alpha = sinw0 * 0.5 * math.sqrt((a + (1. / a)) * (float(f32(c["rs"])) - 1.) + 2.)
+    return a, (a + 1.) * cosw0, (a - 1.) * cosw0, 2. * math.sqrt(a) * alpha
+
+
+def blowshelf(c):
+    a, i, j, k = _shelf(c)
+    b0rz = 1. / ((a + 1.) + j + k)
+    return _beq(a * ((a + 1.) - j + k) * b0rz, 2. * a * ((a - 1.) - i) * b0rz, a * ((a + 1.) - j - k) * b0rz,
+                2. * ((a - 1.) + i) * b0rz, ((a + 1.) + j - k) * -b0rz)
+
+
+def bhishelf(c):
+    a, i, j, k = _shelf(c)
+    b0rz = 1. / ((a + 1.) - j + k)
+    return _beq(a * ((a + 1.) + j + k) * b0rz, -2. * a * ((a - 1.) + i) * b0rz, a * ((a + 1.) + j - k) * b0rz,
+                -2. * ((a - 1.) - i) * b0rz, ((a + 1.) - j - k) * -b0rz)
+
+
+def beq_calc(rate, r):
+    """BEQSuite constructors: next_aa(a) when every coefficient input is audio rate, else
+    next_kk (constants: next_ii, or next_kk without a change: the same). next_aa reads the
+    inputs once per 3-sample group, at offsets that depend on the class and on the data
+    (docs/next.md): not ported yet."""
+    if rate != "ar":
+        raise ValueError("only .ar exists")
+    co = [v for k, v in r.items() if k not in ("in", "_cls")]
+    if all(v == "ar" for v in co):
+        raise ValueError("all coefficient inputs at audio rate (next_aa) are not ported yet: "
+                         "make one of them control rate")
+    return "ar_i" if all(v == "ir" for v in co) else "ar_k"

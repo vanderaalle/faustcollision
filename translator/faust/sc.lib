@@ -766,6 +766,11 @@ with { p = f * 2.0 * ma.PI / ma.SR; t = tan(bw * p * 0.5); };
 bpf(x, f, bw) = iir2(\(xx, y1, y2).(xx + b1 * y1 + b2 * y2 <: _, a0 * (_ - y2)), x, x)
 with { a0 = fcoef((bpfc(f, bw) : _, !, !)); b1 = fcoef((bpfc(f, bw) : !, _, !)); b2 = fcoef((bpfc(f, bw) : !, !, _)); };
 
+// MidEQ (FilterUGens.cpp:2556): BPF's resonator, a0 scaled by amp = dbamp(db) - 1 (dbamp in
+// float: sc_dbamp(float32)), out = in + a0 (y0 - y2). a0 ramps as the product, like scsynth.
+mideq(x, f, bw, db) = iir2(\(xx, y1, y2).(xx + b1 * y1 + b2 * y2 <: _, xx + a0 * (_ - y2)), x, x)
+with { a0 = fcoef((bpfc(f, bw) : _, !, !) * (pow(10.0, db * 0.05) - 1.0)); b1 = fcoef((bpfc(f, bw) : !, _, !)); b2 = fcoef((bpfc(f, bw) : !, !, _)); };
+
 // BRF: C = tan(p bw / 2), a0 = 1 / (1 + C), a1 = -2 cos p a0, b2 = (1 - C) a0;
 // ay = a1 y1, y0 = in - ay - b2 y2, out = a0 (y0 + y2) + ay.
 brfc(f, bw) = 1.0 / (1.0 + C), 0.0 - (2.0 - (2.0 * C + 2.0 * s2(p)) / (1.0 + C)), 1.0 - 2.0 * C / (1.0 + C)
@@ -2304,3 +2309,55 @@ sos_kr(x, a0, a1, a2, b1, b2) = sos_g(x, (a0, 0.0, a1, 0.0, a2, 0.0, b1, 0.0, b2
 fos_a(x, a0, a1, b1) = sos_g(x, (a0, 0.0, a1, 0.0, 0.0, 0.0, b1, 0.0, 0.0, 0.0), 1);
 fos_k(x, a0, a1, b1) = sos_g(x, (fosramp(a2k(a0)), fosramp(a2k(a1)), 0.0, 0.0, fosramp(a2k(b1)), 0.0, 0.0), 1);
 fos_kr(x, a0, a1, b1) = sos_g(x, (a0, 0.0, a1, 0.0, 0.0, 0.0, b1, 0.0, 0.0, 0.0), krclk);
+
+//------------------------------------------------------------------------------
+// BEQSuite (FilterUGens.cpp:4166): BLowPass ... BHiShelf. scsynth computes RBJ coefficients
+// in double and runs BPerformFilterLoop (the SOS loop): sos_g. Constant inputs: exact
+// coefficient pairs from translator/derive.py. Otherwise (next_kk) the coefficients are
+// float expressions arranged as base + e (base 0, +-1, +-2, or A^2 for BHiShelf) held as
+// exact pairs: the low-frequency gain hangs on sums like 1 - b1 - b2 ~ w0^2, which then
+// keep the float precision of the small terms. Each takes (f, q, db) and gives the 10
+// wires a0, a1, a2, b1, b2 as pairs; s2(w) = 1 - cos w.
+//------------------------------------------------------------------------------
+beqw(f) = f * (2.0 * ma.PI / ma.SR);
+cp(base, e) = twosum(base, e);
+negp(h, l) = 0.0 - h, 0.0 - l;
+sinhf = ffunction(float sinhf|sinh|sinhl (float), <math.h>, "");
+// alpha = sin w * 0.5 * rq, D = 1 + alpha: b1 = 2 cos w / D, b2 = -(1 - alpha) / D
+bqb1p(c2, al, D) = cp(2.0, 0.0 - (2.0 * al + 2.0 * c2) / D);
+bqb2p(al, D) = cp(-1.0, 2.0 * al / D);
+blpc(f, q, d) = cp(0.0, c2 * 0.5 / D), cp(0.0, c2 / D), cp(0.0, c2 * 0.5 / D), bqb1p(c2, al, D), bqb2p(al, D)
+with { w = beqw(f); c2 = s2(w); al = sin(w) * 0.5 * q; D = 1.0 + al; };
+bhpc(f, q, d) = cp(0.0, i * 0.5 / D), cp(0.0, 0.0 - i / D), cp(0.0, i * 0.5 / D), bqb1p(c2, al, D), bqb2p(al, D)
+with { w = beqw(f); c2 = s2(w); i = 2.0 - c2; al = sin(w) * 0.5 * q; D = 1.0 + al; };
+ballc(f, q, d) = a0, (bqb1p(c2, al, D) : negp), 1.0, 0.0, bqb1p(c2, al, D), (a0 : negp)
+with { w = beqw(f); c2 = s2(w); al = sin(w) * 0.5 * q; D = 1.0 + al; a0 = cp(1.0, 0.0 - 2.0 * al / D); };
+// bandwidth in octaves: alpha = sin w sinh(ln2/2 bw w / sin w)
+bwal(w, bw) = sin(w) * sinhf(0.34657359027997 * bw * w / sin(w));
+bbpc(f, bw, d) = cp(0.0, al / D), 0.0, 0.0, cp(0.0, 0.0 - al / D), bqb1p(c2, al, D), bqb2p(al, D)
+with { w = beqw(f); c2 = s2(w); al = bwal(w, bw); D = 1.0 + al; };
+bbsc(f, bw, d) = a0, (bqb1p(c2, al, D) : negp), a0, bqb1p(c2, al, D), bqb2p(al, D)
+with { w = beqw(f); c2 = s2(w); al = bwal(w, bw); D = 1.0 + al; a0 = cp(1.0, 0.0 - al / D); };
+// BPeakEQ: A = 10^(db/40), be = alpha / A, D = 1 + be; a0 = (1 + alpha A) / D, a2 = (1 - alpha A) / D
+bpkc(f, q, db) = cp(1.0, (al * A - be) / D), (bqb1p(c2, be, D) : negp), cp(1.0, 0.0 - (al * A + be) / D),
+                 bqb1p(c2, be, D), bqb2p(be, D)
+with { w = beqw(f); c2 = s2(w); A = pow(10.0, db * 0.025); al = sin(w) * 0.5 * q; be = al / A; D = 1.0 + be; };
+// shelves: alpha = sin w * 0.5 * sqrt((A + 1/A)(rs - 1) + 2), k = 2 sqrt(A) alpha;
+// with cos w = 1 - c2 the RBJ terms regroup around 1, -2, 1 (low) and A^2 (-2, 1) (high)
+shk(w, rs, A) = 2.0 * sqrt(A) * sin(w) * 0.5 * sqrt((A + 1.0 / A) * (rs - 1.0) + 2.0);
+blshc(f, rs, db) = cp(1.0, (A - 1.0) * ((A + 1.0) * c2 + k) / D), cp(-2.0, (2.0 * (A * A + 1.0) * c2 + 2.0 * k) / D),
+                   cp(1.0, (A + 1.0) * ((A - 1.0) * c2 - k) / D), cp(2.0, 0.0 - (4.0 * c2 + 2.0 * k) / D), cp(-1.0, 2.0 * k / D)
+with { w = beqw(f); c2 = s2(w); A = pow(10.0, db * 0.025); k = shk(w, rs, A); D = 2.0 * A - (A - 1.0) * c2 + k; };
+bhshc(f, rs, db) = (P : dadd2B(0.0 - A * (A - 1.0) * ((A + 1.0) * c2 + k) / D, 0.0)),
+                   (P : negp : \(h, l).(h * 2.0, l * 2.0) : dadd2B(2.0 * A * ((A * A + 1.0) * c2 + A * k) / D, 0.0)),
+                   (P : dadd2B(0.0 - A * (A + 1.0) * ((A - 1.0) * c2 + k) / D, 0.0)),
+                   cp(2.0, 0.0 - (4.0 * A * c2 + 2.0 * k) / D), cp(-1.0, 2.0 * k / D)
+with { w = beqw(f); c2 = s2(w); A = pow(10.0, db * 0.025); k = shk(w, rs, A); D = 2.0 + (A - 1.0) * c2 + k;
+       P = dmul2(A, 0.0, A, 0.0); };
+// next_kk: the target from the inputs' value at the block start; on a change scsynth adds
+// (next - prev) / 21 after each 3-sample group (mFilterLoops), the 64th sample at prev + 21
+// slopes, and stores the target: prev + g (next - prev) / 21, g = min(j / 3, 21).
+beqramp(h, l) = dadd2(h, l, 0.0 - ph, 0.0 - pl) : \(dh, dl).(ddivf(dh, dl, 21.0))
+    : \(qh, ql).(dmul2(qh, ql, g, 0.0)) : \(mh, ml).(dadd2(ph, pl, mh, ml))
+with { ph = kprev(h); pl = kprev(l); g = float(min(int((ba.time % blocksize) / 3), 21)); };
+beq_k(cf, x, f, q, d) = sos_g(x, (cf(a2k(f), a2k(q), a2k(d)) : par(i, 5, beqramp)), 1);
