@@ -2460,3 +2460,23 @@ faust = { ar = "sc.rampseg({in}, {lagTime})", kr = "sc.rampseg_kr({in}, {lagTime
 compare = "waveform"
 tol = 1e-6
 case = "case_Ramp"
+
+[MantissaMask]
+tier = "direct"
+inputs = ["in", "bits"]
+# .ar reads `in` per sample whatever its rate (no checkInputs, sc-findings 21): audio only;
+# bits clipped to 0..23 (outside, the C's shift count is out of range)
+ar_inputs = ["in"]
+faust = { ar = "sc.mantissamask({in}, {bits})", kr = "sc.mantissamask({in}, {bits})" }
+compare = "waveform"
+tol = 0
+case = "case_MantissaMask"
+
+[Hasher]
+tier = "direct"
+inputs = ["in"]
+# the input's bit pattern rebuilt arithmetically (no bitcast in Faust); integer hash exact
+faust = { ar = "sc.hasher({in})", kr = "sc.hasher({in})" }
+compare = "waveform"
+tol = 0
+case = "case_MantissaMask"

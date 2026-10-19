@@ -155,6 +155,10 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 	// and kr
 	SynthDef(\case_Ramp, { Out.ar(0, [Ramp.ar(in.value, 0.01001), Ramp.ar(in.value, 0.00501),
 		K2A.ar(Ramp.kr(Latch.kr(in.value, Impulse.kr(40)), 0.02))]) }),
+	// MantissaMask (bits 0, 3, 10, 23; kr) and Hasher (ar, kr) on the test signal
+	SynthDef(\case_MantissaMask, { var k = Latch.kr(in.value, Impulse.kr(100));
+		Out.ar(0, [MantissaMask.ar(in.value, 3), MantissaMask.ar(in.value, 0), MantissaMask.ar(in.value, 10),
+			MantissaMask.ar(in.value, 23), K2A.ar(MantissaMask.kr(k, 5)), Hasher.ar(in.value), K2A.ar(Hasher.kr(k))]) }),
 	SynthDef(\case_Formlet, { |freq = 1000| Out.ar(0, Formlet.ar(in.value, freq, 0.005, 0.1) * 0.5) },
 		metadata: (specs: (freq: spec.(50, 12000, 1000)))),
 	// Lags and decays: knob-swept time, input signal (impulse/steps from the test signals)

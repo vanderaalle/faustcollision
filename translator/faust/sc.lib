@@ -2780,3 +2780,27 @@ with {
 };
 rampseg(x, per) = ramp_g(1, x, per, ma.SR, 1);
 rampseg_kr(x, per) = ramp_g(0, x, per, srk, krclk) : ba.sAndH(krclk);
+
+//------------------------------------------------------------------------------
+// MantissaMask (NoiseUGens.cpp:872): keeps the sign, the exponent and the top `bits`
+// mantissa bits (mask = -1 << (23 - bits)): |x| = m 2^e, m in [0.5, 1) (nfrexp), truncated
+// to bits + 1 significant bits. bits read per block, clipped to 0..23 here (outside, the C
+// shifts by a negative or > 23 count). Zero and subnormals give 0.
+// Hasher (NoiseUGens.cpp:851): Thomas Wang's integer hash (Hash.h) of the input's bit
+// pattern, rebuilt from sign, exponent and mantissa (normal floats; zero; -0.0 has the
+// sign bit); out = float(0x40000000 | (h >> 9)) - 3, i.e. 2 + (h >> 9) / 2^22 - 3.
+//------------------------------------------------------------------------------
+mantissamask(x, bits) = select2(abs(x) >= ma.MIN, 0.0 * x, select2(b >= 23, nsgn(x) * floor(abs(nfrexp_m(x)) * s) / s * pow(2.0, float(nfrexp_e(x))), x))
+with { b = max(0, min(23, int(a2k(bits)))); s = pow(2.0, float(b + 1)); };
+fbits(x) = select2(abs(x) >= ma.MIN, sb, sb + ((nfrexp_e(x) + 126) << 23) + int((abs(nfrexp_m(x)) * 2.0 - 1.0) * 8388608.0))
+with { sb = select2(nsgn(x) < 0.0, 0, 0 - 2147483647 - 1); };
+whash(k) = h6
+with {
+    h1 = k + (xor(k << 15, -1));
+    h2 = xor(h1, lsr(h1, 10));
+    h3 = h2 + (h2 << 3);
+    h4 = xor(h3, lsr(h3, 6));
+    h5 = h4 + xor(h4 << 11, -1);
+    h6 = xor(h5, lsr(h5, 16));
+};
+hasher(x) = 2.0 + float(lsr(whash(fbits(x)), 9)) * (1.0 / 4194304.0) - 3.0;
