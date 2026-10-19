@@ -93,3 +93,7 @@ quotient with the exact remainder `fmaf(-q, b, a)` (`sc.bl_N`).
 `fmod` combined with opaque `fmaf` operations when the modulus is a recursive signal
 (`sc.moddif` fed by a per-block ramp). Plain operators there compile; use the opaque forms
 only where reassociation would change the result.
+
+**libfaust 2.85 (DawDreamer) asserts in `mterm.cpp`** on a state machine fed a constant
+(`sc.trig1(1.0, ...)`), where the 2.70 CLI compiles it. Pass such inputs through the
+opaque `fadd(x, 0.0)`.

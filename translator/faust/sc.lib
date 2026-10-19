@@ -1839,3 +1839,65 @@ schmidt(x, lo, hi) = \(lv).(select2(lv == 1.0, select2(x > hi, lv, 1.0), select2
 // (docs/faust-notes.md); nothing here is reassociated, and md * 0.5 is exact
 moddif(x, dif, md) = mh - abs(d - mh)
 with { d = fmod(abs(x - dif), md); mh = md * 0.5; };
+
+//------------------------------------------------------------------------------
+// Trig, Trig1, TDelay, ToggleFF, SetResetFF (TriggerUGens.cpp). A trigger is a rise from
+// <= 0 to > 0. The constructor runs one sample (except ToggleFF): its state is the
+// starting point, so an initial trigger's count includes it. clk: the steps (1, or once per
+// block at kr); sr: the UGen's rate.
+//------------------------------------------------------------------------------
+// Trig (lv = 1: level of the trigger) / Trig1 (lv = 0: 1): out for dur * sr + .5 samples
+// ((long) of a float sum: sr is mSampleRate cast to float); --counter ? level : 0, so the
+// last counted sample outputs 0 and ignores triggers.
+trig_g(lv, t0, dur, clk, sr) = (\(c, p, l).(run(c, p, l))) ~ (_, _, _) : !, !, !, _ : ba.sAndH(clk)
+with {
+    t = fadd(t0, 0.0);  // opaque: libfaust 2.85 asserts (mterm.cpp) on a constant trigger
+    n = max(1, int(fadd(fmul(dur, float(sr)), 0.5)));
+    step(c, p, l) = select2(c > 0, select2(rise, 0, n), c - 1), t, l1,
+                    select2(c > 0, select2(rise, 0.0, l1), select2(c - 1 != 0, 0.0, l))
+    with {
+        rise = (t > 0) & (p <= 0);
+        l1 = select2(c > 0, select2(rise, l, select2(lv, 1.0, t)), l);
+    };
+    first = step(0, 0.0, 0.0) : _, _, _, !;
+    run(c, p, l) = (c, p, l), first : selbus(3, ba.time == 0) : \(c1, p1, l1).(
+        ((c1, p1, l1), (step(c1, p1, l1) : _, _, _, !) : selbus(3, clk)), (step(c1, p1, l1) : !, !, !, _));
+};
+trig(t, dur) = trig_g(1, t, a2k(dur), 1, ma.SR);
+trig1(t, dur) = trig_g(0, t, a2k(dur), 1, ma.SR);
+trig_kr(t, dur) = trig_g(1, t, a2k(dur), krclk, ma.SR / blocksize);
+trig1_kr(t, dur) = trig_g(0, t, a2k(dur), krclk, ma.SR / blocksize);
+
+// TDelay: a single 1 dur seconds after a trigger ((long)(dur * SR + .5f), double);
+// triggers are ignored while counting.
+tdelay_g(t0, dur, clk, sr) = (\(c, p).(run(c, p))) ~ (_, _) : !, !, _ : ba.sAndH(clk)
+with {
+    t = fadd(t0, 0.0);
+    n = max(1, int(tmul05(dur, sr)));
+    step(c, p) = select2(c > 1, select2(c <= 0, 0, select2(rise, 0, n)), c - 1), t, float(c == 1)
+    with { rise = (t > 0) & (p <= 0); };
+    first = step(0, 0.0) : _, _, !;
+    run(c, p) = (c, p), first : selbus(2, ba.time == 0) : \(c1, p1).(
+        ((c1, p1), (step(c1, p1) : _, _, !) : selbus(2, clk)), (step(c1, p1) : !, !, _));
+};
+tdelay(t, dur) = tdelay_g(t, a2k(dur), 1, ma.SR);
+tdelay_kr(t, dur) = tdelay_g(t, a2k(dur), krclk, ma.SR / blocksize);
+
+// ToggleFF: no constructor sample.
+toggleff_g(t, clk) = (\(l, p).(nl, select2(clk, p, t), nl with {
+        nl = select2(clk & (p <= 0) & (t > 0), l, 1.0 - l); })) ~ (_, _) : !, !, _;
+toggleff(t) = toggleff_g(fadd(t, 0.0), 1);
+toggleff_kr(t) = toggleff_g(fadd(t, 0.0), krclk);
+
+// SetResetFF: a reset rise (priority) sets 0, a trigger rise 1.
+setresetff_g(t0, r0, clk) = (\(l, p, q).(run(l, p, q))) ~ (_, _, _) : !, !, !, _ : ba.sAndH(clk)
+with {
+    t = fadd(t0, 0.0); r = fadd(r0, 0.0);
+    step(l, p, q) = nl, t, r, nl
+    with { nl = select2((q <= 0) & (r > 0), select2((p <= 0) & (t > 0), l, 1.0), 0.0); };
+    first = step(0.0, 0.0, 0.0) : _, _, _, !;
+    run(l, p, q) = (l, p, q), first : selbus(3, ba.time == 0) : \(l1, p1, q1).(
+        ((l1, p1, q1), (step(l1, p1, q1) : _, _, _, !) : selbus(3, clk)), (step(l1, p1, q1) : !, !, !, _));
+};
+setresetff(t, r) = setresetff_g(t, r, 1);
+setresetff_kr(t, r) = setresetff_g(t, r, krclk);

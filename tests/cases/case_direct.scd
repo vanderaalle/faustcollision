@@ -248,6 +248,19 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 			K2A.ar(ModDif.kr(LFSaw.kr(0.5) * 2, 0.3, LFTri.kr(0.2) + 1.5))
 		] * 0.5)
 	}),
+	// Trig, Trig1, TDelay, ToggleFF, SetResetFF: audio and control-rate triggers, an initial
+	// trigger (counted from the constructor sample), retriggers while counting, control rate
+	SynthDef(\case_Trig, {
+		var x = in.value, ia = Impulse.ar(13), ik = Impulse.kr(5);
+		Out.ar(0, [
+			Trig.ar(x, 0.01), Trig.ar(ik * 0.6, 0.05), Trig1.ar(x, 0.003), Trig1.ar(ia, 0.1),
+			Trig1.ar(DC.ar(1), 0.02), Trig.ar(ik, Line.kr(0.01, 0.3, 8)),
+			TDelay.ar(x, 0.002), TDelay.ar(ia, 0.05), TDelay.ar(DC.ar(1), 0.01),
+			ToggleFF.ar(x), ToggleFF.ar(ia), SetResetFF.ar(x, ia), SetResetFF.ar(ia, Impulse.kr(3.3)),
+			K2A.ar(Trig1.kr(Impulse.kr(2), 0.2)), K2A.ar(TDelay.kr(Impulse.kr(2), 0.1)),
+			K2A.ar(ToggleFF.kr(Impulse.kr(3))), K2A.ar(SetResetFF.kr(Impulse.kr(3), Impulse.kr(1.3)))
+		] * 0.5)
+	}),
 	// Noise: statistics only (scsynth's generator is seeded per server). Each at ar and kr.
 	// Rates and densities stay >= 100/s: a statistical comparison needs ~1000 random events
 	// per render (LFNoise2 at 20 Hz over 10 s varies ±2.4 dB from seed to seed).

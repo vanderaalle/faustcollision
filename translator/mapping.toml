@@ -1723,3 +1723,52 @@ faust = { ar = "sc.moddif({x}, {y}, {mod})", kr = "sc.moddif({x}, {y}, {mod})" }
 compare = "waveform"
 tol = 1e-6
 case = "case_InRange"
+
+# Trigger UGens (TriggerUGens.cpp): state machines, the constructor sample included
+[Trig]
+tier = "direct"
+inputs = ["in", "dur"]
+faust = { ar = "sc.trig({in}, {dur})", kr = "sc.trig_kr({in}, {dur})" }
+self_hold = true
+compare = "waveform"
+tol = 1e-6
+case = "case_Trig"
+
+[Trig1]
+tier = "direct"
+inputs = ["in", "dur"]
+faust = { ar = "sc.trig1({in}, {dur})", kr = "sc.trig1_kr({in}, {dur})" }
+self_hold = true
+compare = "waveform"
+tol = 1e-6
+case = "case_Trig"
+
+[TDelay]
+tier = "direct"
+inputs = ["in", "dur"]
+faust = { ar = "sc.tdelay({in}, {dur})", kr = "sc.tdelay_kr({in}, {dur})" }
+self_hold = true
+compare = "waveform"
+tol = 1e-6
+case = "case_Trig"
+
+[ToggleFF]
+tier = "direct"
+inputs = ["trig"]
+# trig is read per sample at any rate (sc-findings 21)
+ar_inputs = ["trig"]
+faust = { ar = "sc.toggleff({trig})", kr = "sc.toggleff_kr({trig})" }
+self_hold = true
+compare = "waveform"
+tol = 1e-6
+case = "case_Trig"
+
+[SetResetFF]
+tier = "direct"
+inputs = ["trig", "reset"]
+ar_inputs = ["trig"]
+faust = { ar = "sc.setresetff({trig}, {reset})", kr = "sc.setresetff_kr({trig}, {reset})" }
+self_hold = true
+compare = "waveform"
+tol = 1e-6
+case = "case_Trig"
