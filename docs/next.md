@@ -24,7 +24,7 @@ set tolerances from the measured floors, full suite, commit, bump vairi.
 1. Saw, Pulse, Blip .kr (core refactor; sc-findings 25): plans/blit-kr.md.
 2. VarLag (\lin only; sc-findings 26), IEnvGen (sc-findings 27): plans/varlag.md,
    plans/ienvgen.md.
-3. Small remaining classes (census, unmapped): MoogFF.kr (plans/moogff-kr.md); Ramp (sc-findings 16, measured); MantissaMask, Hasher:
+3. Small remaining classes (census, unmapped): MoogFF.kr (plans/moogff-kr.md: a Faust miscompilation to understand first); Ramp (sc-findings 16, measured); MantissaMask, Hasher:
    plans/small-classes.md.
 4. Random UGens (statistics only; plans/random.md), chaos oscillators, DynKlank, grains, Pluck,
    Hilbert/FreqShift, ambisonic panners: lower priority.
