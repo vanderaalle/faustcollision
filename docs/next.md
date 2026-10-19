@@ -10,7 +10,7 @@ InRange, InRect, Schmidt, ModDif; triggers (Trig ... T2A); panners (Pan2, LinPan
 Balance2, XFade2, LinXFade2, Rotate2, Pan4); LPZ1/2, HPZ1/2, BPZ2, BRZ2, Slope, FOS, SOS;
 MidEQ; BEQSuite (BLowPass ... BHiShelf) at every input rate (next_aa: sc-findings 24).
 Median, Select, Sanitize, Linen, DetectSilence; Lag, Lag2, Lag3, LagUD, Decay, Decay2,
-Integrator, Slew at kr; Lag2UD, Lag3UD (sc-findings 30); AmpComp, AmpCompA.
+Integrator, Slew at kr; Lag2UD, Lag3UD (sc-findings 30); AmpComp, AmpCompA; VarLag (sc-findings 26).
 Filters at kr (LPF ... LeakDC, sc-findings 28 timing); delays, combs, allpasses, Delay1/2 at kr.
 SampleRate, SampleDur, ControlRate, ControlDur, RadiansPerSample, SubsampleOffset (sc-findings 29).
 Census failures fixed: kr UGens fed by audio read the block's first sample (a2k; krhold
@@ -22,8 +22,7 @@ Rejected with an explanation (tier "rejected"): T2K, Peak.kr of audio.
 Each step has a prepared plan (and, where noted, code) in docs/plans/: apply, build, test,
 set tolerances from the measured floors, full suite, commit, bump vairi.
 1. Saw, Pulse, Blip .kr (core refactor; sc-findings 25): plans/blit-kr.md.
-2. VarLag (\lin only; sc-findings 26), IEnvGen (sc-findings 27): plans/varlag.md,
-   plans/ienvgen.md.
+2. IEnvGen (sc-findings 27): plans/ienvgen.md.
 3. Small remaining classes (census, unmapped): MoogFF.kr (plans/moogff-kr.md: a Faust miscompilation to understand first); Ramp (sc-findings 16, measured); MantissaMask, Hasher:
    plans/small-classes.md.
 4. Random UGens (statistics only; plans/random.md), chaos oscillators, DynKlank, grains, Pluck,

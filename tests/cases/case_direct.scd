@@ -139,6 +139,11 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 		Out.ar(0, [AmpComp.ar(f, 261.6, 0.3333), AmpComp.ar(f, root, 0.5), AmpCompA.ar(f, 1000, 0.32, 1),
 			K2A.ar(AmpComp.kr(k, 440, 0.3333)), K2A.ar(AmpCompA.kr(k, 0, 0.32, 1))] * 0.2) },
 		metadata: (specs: (root: spec.(50, 2000, 261.6)))),
+	// VarLag (warp \\lin): steps of the input (new ramps, some mid-ramp), a time change at 0.7 s
+	// (mid-ramp or after it: sc-findings 26); ar and kr
+	SynthDef(\case_VarLag, { |time = 0.05| var x = Latch.ar(in.value, Impulse.ar(3)), t = time * (1 + (0.5 * (Line.kr(0, 1, 1.4) > 0.5)));
+		Out.ar(0, [VarLag.ar(x, t, warp: \lin, start: 0), K2A.ar(VarLag.kr(A2K.kr(x), t, warp: \lin, start: 0.2))]) },
+		metadata: (specs: (time: spec.(0.002, 0.3, 0.05)))),
 	SynthDef(\case_Formlet, { |freq = 1000| Out.ar(0, Formlet.ar(in.value, freq, 0.005, 0.1) * 0.5) },
 		metadata: (specs: (freq: spec.(50, 12000, 1000)))),
 	// Lags and decays: knob-swept time, input signal (impulse/steps from the test signals)

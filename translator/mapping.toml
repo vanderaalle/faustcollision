@@ -2422,3 +2422,14 @@ faust = { ar = "sc.ampcompa({freq}, {scale}, {offset})", kr = "sc.ampcompa({freq
 compare = "waveform"
 tol = 1e-6
 case = "case_AmpComp"
+
+[VarLag]
+tier = "direct"
+inputs = ["in", "time", "start"]
+# warp \lin only (other warps build EnvGen in sclang); ramp in double (pairs); the ar
+# rescale after the ramp's end is reproduced (sc-findings 26); measured ar 1.4e-9, kr 2.4e-7 (K2A)
+self_hold = true
+faust = { ar = "sc.varlag({in}, {time}, {start})", kr = "sc.varlag_kr({in}, {time}, {start})" }
+compare = "waveform"
+tol = 1e-6
+case = "case_VarLag"

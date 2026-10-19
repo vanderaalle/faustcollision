@@ -2687,3 +2687,57 @@ ampcomp_k(freq, root, ex) = spowf(root / freq, ex);
 ampcompa_level(f) = 1.0 - sqrt(fmul(fmul(fmul(fmul(3.5041384e16, q1), q1), q2), q2) / ((107.65265 * 107.65265 + r) * (737.86223 * 737.86223 + r)))
 with { r = f * f; q1 = r / (20.598997 * 20.598997 + r); q2 = r / (12194.217 * 12194.217 + r); };
 ampcompa(freq, scale, offset) = ampcompa_level(freq) * scale + offset;
+
+//------------------------------------------------------------------------------
+// VarLag (FilterUGens.cpp:860; only `warp: \lin` creates the UGen): the input and time are
+// read once per block (*in = in[0]). A new input value starts a linear ramp: counter =
+// max(1, (int)(time * SR)) (double product, tmul), slope = (in - level) / counter (double);
+// a time change with the input unchanged rescales: counter = max(1, (int)(counter * sf)),
+// slope /= sf, sf = time / oldTime (float at ar). Per sample: out = level; if counter > 0
+// then level += slope, counter -= 1, else level = target (only if the ramp was running at
+// the block start). At ar the rescale also runs when the ramp has ended, adding one stale
+// step (sc-findings 26); at kr (next_1, one step per block) it is skipped when counter is 0
+// and the snap to the target is unconditional. Level and slope are doubles: float pairs.
+// Constructor: level = start, the ramp toward in[0] set up, output start.
+//------------------------------------------------------------------------------
+varlag_g(isar, x, t, st, sr, clk) = loop ~ si.bus(8) : par(i, 8, !), _
+with {
+    t0 = ba.time == 0;
+    xi = a2k(x); ti = a2k(t);
+    c0 = max(1, int(tmul(ti, sr)));
+    s0h = dadd2(xi, 0.0, 0.0 - st, 0.0) : \(dh, dl).(ddivf(dh, dl, float(c0))) : _, !;
+    s0l = dadd2(xi, 0.0, 0.0 - st, 0.0) : \(dh, dl).(ddivf(dh, dl, float(c0))) : !, _;
+    // state: level h/l, slope h/l, counter, target, time, active (ramp running at block start)
+    loop(lh0, ll0, sh0, sl0, ct0, mi0, mt0, ac0) = nlh, nll, nsh, nsl, nct, mi, mt, ac, out
+    with {
+        lh1 = select2(t0, lh0, st); ll1 = select2(t0, ll0, 0.0);
+        sh1 = select2(t0, sh0, s0h); sl1 = select2(t0, sl0, s0l);
+        ct1 = select2(t0, ct0, c0); mi1 = select2(t0, mi0, xi); mt1 = select2(t0, mt0, ti);
+        bs = clk & (ba.time > 0);                 // block start (the constructor set up block 0)
+        newin = bs & (xi != mi1);
+        retime = bs & (xi == mi1) & (ti != mt1) & ((isar == 1) | (ct1 != 0));
+        cn = max(1, int(tmul(ti, sr)));
+        nh = dadd2(xi, 0.0, 0.0 - lh1, 0.0 - ll1) : \(dh, dl).(ddivf(dh, dl, float(cn))) : _, !;
+        nl = dadd2(xi, 0.0, 0.0 - lh1, 0.0 - ll1) : \(dh, dl).(ddivf(dh, dl, float(cn))) : !, _;
+        sf = ti / mt1;
+        cr = max(1, int(float(ct1) * sf));
+        rh = ddivf(sh1, sl1, sf) : _, !; rl = ddivf(sh1, sl1, sf) : !, _;
+        ct = select2(newin, select2(retime, ct1, cr), cn);
+        sh = select2(newin, select2(retime, sh1, rh), nh);
+        sl = select2(newin, select2(retime, sl1, rl), nl);
+        mi = select2(newin, mi1, xi);
+        mt = select2(newin | retime | (bs & (ti != mt1)), mt1, ti);
+        ac = select2(clk, select2(t0, ac0, 1), ct > 0);
+        out = lh1;
+        // the step (every sample at ar; once per block at kr)
+        go = select2(isar == 1, clk, 1);
+        stepping = go & (ct > 0);
+        snap = go & (ct <= 0) & ((isar == 0) | (ac == 1));
+        ah = dadd2(lh1, ll1, sh, sl) : _, !; al = dadd2(lh1, ll1, sh, sl) : !, _;
+        nlh = select2(stepping, select2(snap, lh1, mi), ah);
+        nll = select2(stepping, select2(snap, ll1, 0.0), al);
+        nsh = sh; nsl = sl; nct = select2(stepping, ct, ct - 1);
+    };
+};
+varlag(x, t, st) = varlag_g(1, x, t, st, ma.SR, ba.time % blocksize == 0);
+varlag_kr(x, t, st) = varlag_g(0, x, t, st, srk, krclk) : ba.sAndH(krclk);   // out = the level at the block start
