@@ -108,6 +108,15 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 	SynthDef(\case_DetectSilence, { |amp = 0.01| Out.ar(0, [DetectSilence.ar(in.value, 0.01, 0.05),
 		DetectSilence.ar(in.value, amp, 0.0007), K2A.ar(DetectSilence.kr(Latch.kr(in.value, Impulse.kr(100)), 0.02, 0.7))]) },
 		metadata: (specs: (amp: spec.(0.0001, 0.5, 0.01)))),
+	// Filters at kr: a kr input changing every block or so; knob-swept frequency, stepping up at
+	// 1 s (immediate group: new coefficients at once; late group: one block later)
+	SynthDef(\case_filters_kr, { |freq = 40|
+		var k = Latch.kr(in.value, Impulse.kr(400)), st = Line.kr(0, 1, 2) > 0.5, f = freq * (1 + st);
+		Out.ar(0, K2A.ar([LPF.kr(k, f), HPF.kr(k, f), RLPF.kr(k, f, 0.3), RHPF.kr(k, f, 0.3), BPF.kr(k, f, 0.5),
+			BRF.kr(k, f, 0.5), Resonz.kr(k, f, 0.1), Ringz.kr(k, f, 0.2) * 0.1, Formlet.kr(k, f, 0.005, 0.1) * 0.1,
+			TwoPole.kr(k, f, 0.9) * 0.1, TwoZero.kr(k, f, 0.9), APF.kr(k, f, 0.9), MidEQ.kr(k, f, 0.5, 6),
+			OnePole.kr(k, 0.9 - (0.4 * st)), OneZero.kr(k, 0.5 * st - 0.2), LeakDC.kr(k, 0.9 + (0.05 * st))])) },
+		metadata: (specs: (freq: spec.(5, 150, 40)))),
 	SynthDef(\case_Formlet, { |freq = 1000| Out.ar(0, Formlet.ar(in.value, freq, 0.005, 0.1) * 0.5) },
 		metadata: (specs: (freq: spec.(50, 12000, 1000)))),
 	// Lags and decays: knob-swept time, input signal (impulse/steps from the test signals)

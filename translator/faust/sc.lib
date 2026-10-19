@@ -2548,3 +2548,69 @@ integrator_kr(x, coef) = rec1_kr(\(xx, y1, b).(xx + b * y1), 0.0, x, kprev(coef)
 // float sampleDur (64 / SR rounded to float), products in float; level in double: use pairs if the floor demands
 slew_kr(x, up, dn) = rec1_kr(\(xx, l, b).(l + max(0.0 - fmul(dn, sd), min(fmul(up, sd), xx - l))), x, x, 0)
 with { sd = float(blocksize) / ma.SR; };
+
+//------------------------------------------------------------------------------
+// Filters .kr (FilterUGens.cpp): one sample per block at SR / 64, state zapped every step.
+// LPF, HPF, RLPF, RHPF, BPF, BRF, Formlet, LeakDC have a _next_1 that uses new
+// coefficients at once. Resonz, Ringz, TwoPole, TwoZero, MidEQ run their ar function with
+// mFilterLoops = 0 / mFilterSlope = 0, OneZero and OnePole add their CALCSLOPE step after
+// the sample: the block's sample uses the old coefficients, the new ones apply from the
+// next block (sc-findings 28): kprev. APF.kr is the identity (finding 28). Steps and
+// initial states as the ar ports'.
+//------------------------------------------------------------------------------
+radk(f) = f * 2.0 * ma.PI / srk;
+decr1k(t) = select2(t == 0, 0.0 - expm1f(log(0.001) / (t * srk)), 1.0);
+// two-state recursion (as iir2) stepped at block starts
+iir2_kr(step, init, x) = (loop ~ (_, _)) : !, !, _
+with {
+    first = ba.time == 0;
+    loop(fy1, fy2) = (x, z1, z2) : step : \(y0, out).(select2(krclk, z1, zap(y0)), select2(krclk, z2, zap(z1)), out)
+    with { z1 = select2(first, fy1, zap(init)); z2 = select2(first, fy2, 0.0); };
+};
+// the previous block's value of a kr signal (x itself in the first block)
+kx1(x) = select2(ba.time < blocksize, x@blocksize, x);
+// immediate group
+lpf_kr(x, f) = iir2_kr(\(xx, y1, y2).(xx + b1 * y1 + b2 * y2 <: _, a0 * (_ + 2.0 * y1 + y2)), x, x)
+with { a0 = lpfc(f, 2.0 * ma.PI / srk) : _, !, !; b1 = lpfc(f, 2.0 * ma.PI / srk) : !, _, !; b2 = lpfc(f, 2.0 * ma.PI / srk) : !, !, _; };
+hpf_kr(x, f) = iir2_kr(\(xx, y1, y2).(xx + b1 * y1 + b2 * y2 <: _, a0 * (_ - 2.0 * y1 + y2)), x, x)
+with { a0 = hpfc(f, 2.0 * ma.PI / srk) : _, !, !; b1 = hpfc(f, 2.0 * ma.PI / srk) : !, _, !; b2 = hpfc(f, 2.0 * ma.PI / srk) : !, !, _; };
+rlpfck(f, rq) = (1.0 + C) * s2(p) * 0.25, 2.0 - (2.0 * s2(p) + e2 * cos(p)), -1.0 + e2
+with { p = radk(f); D = tan(p * max(0.001, rq) * 0.5); e2 = 2.0 * D / (1.0 + D); C = 1.0 - e2; };
+rhpfck(f, rq) = (1.0 + C) * (2.0 - s2(p)) * 0.25, 2.0 - (2.0 * s2(p) + e2 * cos(p)), -1.0 + e2
+with { p = radk(f); D = tan(p * max(0.001, rq) * 0.5); e2 = 2.0 * D / (1.0 + D); C = 1.0 - e2; };
+rlpf_kr(x, f, rq) = iir2_kr(\(xx, y1, y2).(a0 * xx + b1 * y1 + b2 * y2 <: _, _ + 2.0 * y1 + y2), a0 * x, x)
+with { a0 = rlpfck(f, rq) : _, !, !; b1 = rlpfck(f, rq) : !, _, !; b2 = rlpfck(f, rq) : !, !, _; };
+rhpf_kr(x, f, rq) = iir2_kr(\(xx, y1, y2).(a0 * xx + b1 * y1 + b2 * y2 <: _, _ - 2.0 * y1 + y2), a0 * x, x)
+with { a0 = rhpfck(f, rq) : _, !, !; b1 = rhpfck(f, rq) : !, _, !; b2 = rhpfck(f, rq) : !, !, _; };
+bpfck(f, bw) = t / (1.0 + t), 2.0 - (2.0 * t + 2.0 * s2(p)) / (1.0 + t), -1.0 + 2.0 * t / (1.0 + t)
+with { p = radk(f); t = tan(bw * p * 0.5); };
+bpf_kr(x, f, bw) = iir2_kr(\(xx, y1, y2).(xx + b1 * y1 + b2 * y2 <: _, a0 * (_ - y2)), x, x)
+with { a0 = bpfck(f, bw) : _, !, !; b1 = bpfck(f, bw) : !, _, !; b2 = bpfck(f, bw) : !, !, _; };
+brfck(f, bw) = 1.0 / (1.0 + C), 0.0 - (2.0 - (2.0 * C + 2.0 * s2(p)) / (1.0 + C)), 1.0 - 2.0 * C / (1.0 + C)
+with { p = radk(f); C = tan(bw * p * 0.5); };
+brf_kr(x, f, bw) = iir2_kr(\(xx, y1, y2).(xx - a1 * y1 - b2 * y2 <: _, a0 * (_ + y2) + a1 * y1), x, x)
+with { a0 = brfck(f, bw) : _, !, !; a1 = brfck(f, bw) : !, _, !; b2 = brfck(f, bw) : !, !, _; };
+formlet_kr(x, f, at, dt) = (iir2_kr(\(xx, y1, y2).(xx + b01 * y1 + b02 * y2 <: _, _ - y2), x, x)
+                          - iir2_kr(\(xx, y1, y2).(xx + b11 * y1 + b12 * y2 <: _, _ - y2), x, x)) * 0.25
+with {
+    b01 = resb1(decr1k(dt), radk(f)); b02 = resb2(decr1k(dt));
+    b11 = resb1(decr1k(at), radk(f)); b12 = resb2(decr1k(at));
+};
+leakdc_kr(x, coef) = rec1_kr(\(xx, y1, b).(xx - kx1(x) + b * y1), 0.0, x, coef);
+// late group
+res2_kr(a0, b1, b2, x) = iir2_kr(\(xx, y1, y2).(xx + b1 * y1 + b2 * y2 <: _, a0 * (_ - y2)), x, x);
+resonz_kr(x, f, rq) = res2_kr(kprev(e2 * 0.5), kprev(resb1(r1, radk(f))), kprev(resb2(r1)), x)
+with { r1 = radk(f) * rq * 0.5; e2 = r1 * (2.0 - r1); };
+ringz_kr(x, f, dt) = res2_kr(0.5, kprev(resb1(decr1k(dt), radk(f))), kprev(resb2(decr1k(dt))), x);
+twopole_kr(x, f, r) = iir2_kr(\(xx, y1, y2).(xx + b1 * y1 + b2 * y2 <: _, _), x, x)
+with { b1 = kprev(2.0 * r - 2.0 * r * s2(radk(f))); b2 = kprev(0.0 - r * r); };
+twozero_kr(x, f, r) = x + b1 * x1 + b2 * (x1@blocksize)
+with { b1 = kprev(0.0 - (2.0 * r - 2.0 * r * s2(radk(f)))); b2 = kprev(r * r); x1 = kx1(x); };
+mideq_kr(x, f, bw, db) = iir2_kr(\(xx, y1, y2).(xx + b1 * y1 + b2 * y2 <: _, xx + a0 * (_ - y2)), x, x)
+with { a0 = kprev((bpfck(f, bw) : _, !, !) * (pow(10.0, db * 0.05) - 1.0)); b1 = kprev((bpfck(f, bw) : !, _, !)); b2 = kprev((bpfck(f, bw) : !, !, _)); };
+onezero_kr(x, coef) = select2((p >= 0) & (n >= 0),
+                        select2((p <= 0) & (n <= 0), (1.0 - abs(p)) * x + p * x1, x + p * (x1 + x)),
+                        x + p * (x1 - x))
+with { n = coef; p = kprev(coef); x1 = kx1(x); };
+onepole_kr(x, coef) = rec1_kr(\(xx, y1, b).(onepole_step(xx, kprev(b), kprev(b), b, y1)), x * (1.0 - coef), x, coef);
+apf_kr(x, f, r) = x;

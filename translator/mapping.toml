@@ -1039,8 +1039,9 @@ tier = "direct"
 inputs = ["in", "freq"]
 # Butterworth biquad; freq read per block, coefficients moved in 21 steps of 3 samples.
 # Float state at 30 Hz: 1.5e-4 measured (a float64 run of the same recursion is exact).
-faust = { ar = "sc.lpf({in}, {freq})" }
+faust = { ar = "sc.lpf({in}, {freq})", kr = "sc.lpf_kr({in}, {freq})" }
 compare = "waveform"
+# kr: one sample per block at SR / 64, new coefficients at once (_next_1); measured 9.8e-06
 tol = 5e-4
 case = "case_LPF"
 
@@ -1048,8 +1049,9 @@ case = "case_LPF"
 tier = "direct"
 inputs = ["in", "freq"]
 # float state at 30 Hz: up to 8e-5 measured
-faust = { ar = "sc.hpf({in}, {freq})" }
+faust = { ar = "sc.hpf({in}, {freq})", kr = "sc.hpf_kr({in}, {freq})" }
 compare = "waveform"
+# kr: one sample per block at SR / 64, new coefficients at once (_next_1); measured 3.7e-06
 tol = 2e-4
 case = "case_HPF"
 
@@ -1057,24 +1059,27 @@ case = "case_HPF"
 tier = "direct"
 inputs = ["in", "coef"]
 # kr/constant coef: a different formula for coef < 0 (OnePole_next_k); audio coef: one formula
-faust = { ar = "sc.onepole({in}, {coef})", "ar<coef:ar" = "sc.onepole_ar({in}, {coef})" }
+faust = { ar = "sc.onepole({in}, {coef})", "ar<coef:ar" = "sc.onepole_ar({in}, {coef})", kr = "sc.onepole_kr({in}, {coef})" }
 compare = "waveform"
+# kr: one sample per block at SR / 64, new coefficients one block late (sc-findings 28); measured 2.1e-07
 tol = 1e-4
 case = "case_OnePole"
 
 [OneZero]
 tier = "direct"
 inputs = ["in", "coef"]
-faust = { ar = "sc.onezero({in}, {coef})" }
+faust = { ar = "sc.onezero({in}, {coef})", kr = "sc.onezero_kr({in}, {coef})" }
 compare = "waveform"
+# kr: one sample per block at SR / 64, new coefficients one block late (sc-findings 28); measured 1.8e-07
 tol = 1e-5
 case = "case_OneZero"
 
 [LeakDC]
 tier = "direct"
 inputs = ["in", "coef"]
-faust = { ar = "sc.leakdc({in}, {coef})" }
+faust = { ar = "sc.leakdc({in}, {coef})", kr = "sc.leakdc_kr({in}, {coef})" }
 compare = "waveform"
+# kr: one sample per block at SR / 64, new coefficients at once (_next_1); measured 2.4e-07
 tol = 1e-4
 case = "case_LeakDC"
 
@@ -1154,8 +1159,9 @@ tier = "direct"
 inputs = ["in", "freq", "rq"]
 # coefficients in float can differ from scsynth's doubles by 1 ulp; at 50 Hz that moves
 # the gain by up to ~0.3%: tol is twice the measured worst case (the 50 Hz setting)
-faust = { ar = "sc.rlpf({in}, {freq}, {rq})" }
+faust = { ar = "sc.rlpf({in}, {freq}, {rq})", kr = "sc.rlpf_kr({in}, {freq}, {rq})" }
 compare = "waveform"
+# kr: one sample per block at SR / 64, new coefficients at once (_next_1); measured 1.0e-05
 tol = 1.5e-2
 case = "case_RLPF"
 
@@ -1164,8 +1170,9 @@ tier = "direct"
 inputs = ["in", "freq", "rq"]
 # coefficients in float can differ from scsynth's doubles by 1 ulp; at 50 Hz that moves
 # the gain by up to ~0.3%: tol is twice the measured worst case (the 50 Hz setting)
-faust = { ar = "sc.rhpf({in}, {freq}, {rq})" }
+faust = { ar = "sc.rhpf({in}, {freq}, {rq})", kr = "sc.rhpf_kr({in}, {freq}, {rq})" }
 compare = "waveform"
+# kr: one sample per block at SR / 64, new coefficients at once (_next_1); measured 6.0e-06
 tol = 1e-2
 case = "case_RHPF"
 
@@ -1174,8 +1181,9 @@ tier = "direct"
 inputs = ["in", "freq", "rq"]
 # coefficients in float can differ from scsynth's doubles by 1 ulp; at 50 Hz that moves
 # the gain by up to ~0.3%: tol is twice the measured worst case (the 50 Hz setting)
-faust = { ar = "sc.bpf({in}, {freq}, {rq})" }
+faust = { ar = "sc.bpf({in}, {freq}, {rq})", kr = "sc.bpf_kr({in}, {freq}, {rq})" }
 compare = "waveform"
+# kr: one sample per block at SR / 64, new coefficients at once (_next_1); measured 9.5e-06
 tol = 2.5e-3
 case = "case_BPF"
 
@@ -1184,8 +1192,9 @@ tier = "direct"
 inputs = ["in", "freq", "rq", "db"]
 # BPF's coefficients in float vs scsynth's doubles: measured 3.8e-4 worst (50 Hz on
 # bass_di), ~6e-6 at 1 kHz and above; tol twice the worst case
-faust = { ar = "sc.mideq({in}, {freq}, {rq}, {db})" }
+faust = { ar = "sc.mideq({in}, {freq}, {rq}, {db})", kr = "sc.mideq_kr({in}, {freq}, {rq}, {db})" }
 compare = "waveform"
+# kr: one sample per block at SR / 64, new coefficients one block late (sc-findings 28); measured 2.0e-06
 tol = 8e-4
 case = "case_MidEQ"
 
@@ -1194,8 +1203,9 @@ tier = "direct"
 inputs = ["in", "freq", "rq"]
 # coefficients in float can differ from scsynth's doubles by 1 ulp; at 50 Hz that moves
 # the gain by up to ~0.3%: tol is twice the measured worst case (the 50 Hz setting)
-faust = { ar = "sc.brf({in}, {freq}, {rq})" }
+faust = { ar = "sc.brf({in}, {freq}, {rq})", kr = "sc.brf_kr({in}, {freq}, {rq})" }
 compare = "waveform"
+# kr: one sample per block at SR / 64, new coefficients at once (_next_1); measured 1.6e-05
 tol = 4e-3
 case = "case_BRF"
 
@@ -1321,8 +1331,9 @@ tier = "direct"
 inputs = ["in", "freq", "bwr"]
 # coefficients in float can differ from scsynth's doubles by 1 ulp; at 50 Hz that moves
 # the gain by up to ~0.3%: tol is twice the measured worst case (the 50 Hz setting)
-faust = { ar = "sc.resonz({in}, {freq}, {bwr})" }
+faust = { ar = "sc.resonz({in}, {freq}, {bwr})", kr = "sc.resonz_kr({in}, {freq}, {bwr})" }
 compare = "waveform"
+# kr: one sample per block at SR / 64, new coefficients one block late (sc-findings 28); measured 8.5e-05
 tol = 2e-2
 case = "case_Resonz"
 
@@ -1331,8 +1342,9 @@ tier = "direct"
 inputs = ["in", "freq", "decaytime"]
 # coefficients in float can differ from scsynth's doubles by 1 ulp; at 50 Hz that moves
 # the gain by up to ~0.3%: tol is twice the measured worst case (the 50 Hz setting)
-faust = { ar = "sc.ringz({in}, {freq}, {decaytime})" }
+faust = { ar = "sc.ringz({in}, {freq}, {decaytime})", kr = "sc.ringz_kr({in}, {freq}, {decaytime})" }
 compare = "waveform"
+# kr: one sample per block at SR / 64, new coefficients one block late (sc-findings 28); measured 3.8e-06
 tol = 5e-3
 case = "case_Ringz"
 
@@ -1341,24 +1353,27 @@ tier = "direct"
 inputs = ["in", "freq", "attacktime", "decaytime"]
 # coefficients in float can differ from scsynth's doubles by 1 ulp; at 50 Hz that moves
 # the gain by up to ~0.3%: tol is twice the measured worst case (the 50 Hz setting)
-faust = { ar = "sc.formlet({in}, {freq}, {attacktime}, {decaytime})" }
+faust = { ar = "sc.formlet({in}, {freq}, {attacktime}, {decaytime})", kr = "sc.formlet_kr({in}, {freq}, {attacktime}, {decaytime})" }
 compare = "waveform"
+# kr: one sample per block at SR / 64, new coefficients at once (_next_1); measured 1.7e-06
 tol = 4e-4
 case = "case_Formlet"
 
 [TwoPole]
 tier = "direct"
 inputs = ["in", "freq", "radius"]
-faust = { ar = "sc.twopole({in}, {freq}, {radius})" }
+faust = { ar = "sc.twopole({in}, {freq}, {radius})", kr = "sc.twopole_kr({in}, {freq}, {radius})" }
 compare = "waveform"
+# kr: one sample per block at SR / 64, new coefficients one block late (sc-findings 28); measured 1.8e-06
 tol = 1e-4
 case = "case_TwoPole"
 
 [TwoZero]
 tier = "direct"
 inputs = ["in", "freq", "radius"]
-faust = { ar = "sc.twozero({in}, {freq}, {radius})" }
+faust = { ar = "sc.twozero({in}, {freq}, {radius})", kr = "sc.twozero_kr({in}, {freq}, {radius})" }
 compare = "waveform"
+# kr: one sample per block at SR / 64, new coefficients one block late (sc-findings 28); measured 2.1e-07
 tol = 1e-4
 case = "case_TwoZero"
 
@@ -1366,8 +1381,9 @@ case = "case_TwoZero"
 tier = "direct"
 inputs = ["in", "freq", "radius"]
 # reproduces scsynth"s unrolled-loop indexing (docs/sc-findings.md #15)
-faust = { ar = "sc.apf({in}, {freq}, {radius})" }
+faust = { ar = "sc.apf({in}, {freq}, {radius})", kr = "sc.apf_kr({in}, {freq}, {radius})" }
 compare = "waveform"
+# kr: one sample per block at SR / 64, the identity (sc-findings 28); measured 1.0e-07
 tol = 1e-4
 case = "case_APF"
 
