@@ -207,7 +207,10 @@ def translate(sdef: SynthDef, meta: dict, table=None) -> Translation:
                 # without a LocalOut the bus is never written: the default, every block
                 src = f"fb{u.index}_{k}" if local_outs[u.rate] else "0.0"
                 fn = "sc.localin" if local_outs[u.rate] else "sc.localin_unwritten"
-                lines.append(f"    u{u.index}_{k} = {fn}({expr(d)}, {src});")
+                # kr: the bus value at the block start (LocalOut.kr wrote its input's first
+                # sample of the previous block), held over the block
+                hold = "sc.a2k" if u.rate == "kr" else ""
+                lines.append(f"    u{u.index}_{k} = {hold}({fn}({expr(d)}, {src}));")
             continue
         if kind == "input":
             if u.cls != "In":
@@ -313,12 +316,15 @@ def translate(sdef: SynthDef, meta: dict, table=None) -> Translation:
         if wires:
             body = f"({', '.join(wires.values())}) : \\({', '.join('w_' + k for k in wires)}).({body})"
         if u.rate == "kr" and not e.get("self_hold"):
-            # A kr output changes once per block. Fed by audio, the value must come from the
-            # previous block (causality): krhold. Fed only by kr inputs (already per block),
-            # sample at the block start: a2k. For pure operators that is the identity; for
-            # random and stateful ones it gives one value per block, as in scsynth.
+            # A kr output changes once per block. A kr unit runs one sample per block and
+            # reads in[0] of an audio input: the current block's first sample, known at the
+            # block start, so a2k (measured: Splay.kr -> Pan2.kr of an audio input). Entries
+            # whose kr calc function consumes the whole audio block (kr_block: Amplitude's
+            # atok, Pitch_next_a) cannot be known before the block ends: the previous
+            # block's value (causality), krhold. For pure operators a2k is the identity;
+            # for random and stateful ones it gives one value per block, as in scsynth.
             fed_by_audio = any(isinstance(v, Ref) and ugens[v.ugen].rate == "ar" for v in u.inputs)
-            hold = "sc.krhold" if fed_by_audio else "sc.a2k"
+            hold = "sc.krhold" if fed_by_audio and e.get("kr_block") else "sc.a2k"
             body = f"{hold}({body})" if n_out_of(e) == 1 else f"({body}) : par(i, {n_out_of(e)}, {hold})"
         node = f"u{u.index}"
         n_out = n_out_of(e)

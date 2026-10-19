@@ -1033,8 +1033,11 @@ with {
 };
 envgen_ak(n, gate, ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves) =
     envgen(n, a2k(gate), ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves, ma.SR, krclk, 1, 0);
+// every input but the gate is read with ZIN0 when a segment starts: the block's first
+// sample (a2k), also for audio-rate levels (census: VarLag's EnvGen, 0.066 -> 5e-9)
 envgen_aa(n, gate, ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves) =
-    envgen(n, gate, ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves, ma.SR, 1, 1, 1);
+    envgen(n, gate, a2k(ls), a2k(lb), a2k(ts), a2k(ilev), reln, loopn, (levels : par(i, n, a2k)),
+           (times : par(i, n, a2k)), (shapes : par(i, n, a2k)), (curves : par(i, n, a2k)), ma.SR, 1, 1, 1);
 // (the machine's output between steps already shows the next state: hold it per block)
 envgen_kr(n, gate, ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves) =
     envgen(n, a2k(gate), ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves, ma.SR / blocksize, 1, krclk, 0) : a2k;
@@ -2199,7 +2202,8 @@ with {
 };
 pan4(x, xp, yp, lv) = pan4gains(a2k(xp), a2k(yp), a2k(lv)) : par(i, 4, \(g).(fmul(x, gacc(g, ch))))
 with { ch = kchanged(a2k(xp)) | kchanged(a2k(yp)) | kchanged(a2k(lv)); };
-pan4_kr(x, xp, yp, lv) = pan4gains(xp, yp, lv) : par(i, 4, \(g).(fmul(x, kst(g, ch))))
+// opaque inputs: constant xp/yp let Faust fold a discarded branch to x / 0 (compile error)
+pan4_kr(x, xp, yp, lv) = pan4gains(fadd(xp, 0.0), fadd(yp, 0.0), lv) : par(i, 4, \(g).(fmul(x, kst(g, ch))))
 with {
     ch = kchanged(xp) | kchanged(yp) | kchanged(lv);
     // one sample per block: out with the stored gain; then, if an input changed, the stored

@@ -58,6 +58,9 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 	SynthDef(\case_Saw_ar, { Out.ar(0, Saw.ar(in.value.abs * 500 + 100) * 0.5) }),
 	// Latch: audio-rate trigger, kr trigger (Impulse.kr), control rate
 	SynthDef(\case_Latch, { Out.ar(0, [Latch.ar(in.value, in.value), Latch.ar(in.value, Impulse.kr(30)), K2A.ar(Latch.kr(in.value, Impulse.kr(10)))]) }),
+	// Pan2.kr of an audio input (reads the block's first sample: a2k, not krhold), and Splay.kr
+	// (a pseudo-UGen: Pan2.kr per channel plus operators)
+	SynthDef(\case_Pan2_kr_audio, { Out.ar(0, K2A.ar(Pan2.kr(in.value, 0.3, 0.8)) ++ K2A.ar(Splay.kr([in.value, in.value * 0.5]))) }),
 	// Pan2: kr pos (knob), audio-rate pos, kr level
 	SynthDef(\case_Pan2, { |pos = 0| Out.ar(0, Pan2.ar(in.value, pos, 0.7) ++ Pan2.ar(in.value, in.value, 0.5)) },
 		metadata: (specs: (pos: spec.(-1, 1, 0, \lin)))),
@@ -113,6 +116,15 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 		metadata: (specs: (knob: ControlSpec(-1, 1, \lin, 0, 0.2)))),
 	SynthDef(\case_XLine, { Out.ar(0, [XLine.ar(0.01, 1, 0.7), XLine.ar(1, 0.001, 0.3), K2A.ar(XLine.kr(1, 0.1, 0.5))]) }),
 	// EnvGen: all shapes, audio-rate and kr gates, release node with loop, .kr
+	// EnvGen with audio-rate levels and a gate rising mid-block (levels read at the block's first
+	// sample), and VarLag's default warp, which sclang builds from EnvGen + Changed + Impulse
+	SynthDef(\case_EnvGen_arlevels, { Out.ar(0, [EnvGen.ar(Env([in.value, in.value.neg, 0], [0.01, 0.02], 3), in.value.abs > 0.2),
+		VarLag.ar(in.value, 0.1)]) }),
+	// Pan4.kr with constant positions (compile-time zero denominators in discarded branches)
+	SynthDef(\case_Pan4_kr_const, { Out.ar(0, K2A.ar(Pan4.kr(Latch.kr(in.value, Impulse.kr(50)), 0, 0))) }),
+	// LocalIn.kr / LocalOut.kr fed by audio: LocalOut.kr writes its input's first sample of the
+	// block, LocalIn.kr holds it over the next block (census probe: 1.24 -> exact)
+	SynthDef(\case_LocalIn_kr_audio, { var fb = LocalIn.kr(1, 0); LocalOut.kr(in.value + K2A.ar(fb * 0.5)); Out.ar(0, K2A.ar(fb)) }),
 	SynthDef(\case_EnvGen, {
 		var trig = Impulse.kr(1.5);
 		Out.ar(0, [

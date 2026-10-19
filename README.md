@@ -74,7 +74,7 @@ LinXFade2, Rotate2, Pan4), Amplitude, MoogFF, Klank, PitchShift, LocalIn/LocalOu
 Census (`translator.census`, `report/census.md`): of the 215 core UGen classes in scope,
 470 probes (one per class and rate, plus every operator); 312 pass, 149 unmapped (mostly
 the `.kr` of filters, lags and delays, then random, chaos, grain and ambisonic UGens), 9
-failing: 5 with fixes in progress, 4 explained (T2K and Vibrato rejected by design, Pitch.kr
+failing at the time: 5 since fixed, 4 explained (T2K and Vibrato rejected by design, Pitch.kr
 the substitute tracker). `docs/next.md` lists the queue. Unmapped UGens are a translation
 error naming the class: nothing is translated by guesswork. Excluded by design: buffers,
 buses, demand rate, FFT.
