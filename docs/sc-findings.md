@@ -40,6 +40,7 @@ not yet confirmed by a render. Kind: **bug?** (looks unintended), **undocumented
 | 26 | `VarLag.ar` (`warp: \lin`) | a time change after the ramp ended adds one stale slope step | bug? | measured, source |
 | 27 | `IEnvGen` | curvatures truncated to integers | bug? | measured, source |
 | 28 | `Resonz.kr`, `Ringz.kr`, `TwoPole.kr`, `TwoZero.kr`, `APF.kr`, `MidEQ.kr`, `OneZero.kr` | coefficient changes apply one block late; `APF.kr` passes its input through | undocumented | measured, source |
+| 29 | `SubsampleOffset` | 0.5, not 0, for a synth scheduled exactly on a sample; 0 for an untimestamped command | convention | measured, source |
 
 ## 1. `Amplitude.kr` with an audio-rate input releases 64× too fast
 
@@ -500,3 +501,17 @@ float product). `OneZero.kr` is late for another reason: `OneZero_next` adds its
 CALCSLOPE step after the sample (slope factor 1 at control rate), also bit-exact.
 
 - Kind: undocumented (Resonz ... OneZero); bug? (APF.kr, a consequence of finding 15).
+
+## 29. `SubsampleOffset` is 0.5 for a synth scheduled exactly on a sample
+
+For timestamped commands the scheduler computes `diffTime = (schedTime - oscTime) *
+oscToSamples + 0.5`, takes `mSampleOffset = floor(diffTime)` and `mSubsampleOffset =
+diffTime - floor(diffTime)`: the start sample is rounded to the nearest, and a start
+exactly on a sample boundary reports 0.5. Commands without a timestamp set 0. The help
+describes it only as the offset from the synth start within one sample.
+
+Measured: `SubsampleOffset.ir` in an NRT score with `/s_new` at time 0 is 0.5.
+
+- Source: `server/scsynth/SC_World.cpp:691` (NRT), `SC_Jack.cpp:453-465`, `SC_PortAudio.cpp`,
+  `SC_CoreAudio.cpp` (real time: same formula; 0 when nothing is scheduled).
+- Translation: 0.5 (the scheduled value, as in the NRT references).

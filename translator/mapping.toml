@@ -2318,3 +2318,63 @@ faust = { ar = "sc.detectsilence({in}, {amp}, {time})", kr = "sc.detectsilence_k
 compare = "waveform"
 tol = 0
 case = "case_DetectSilence"
+
+[SampleRate]
+tier = "direct"
+# DelayUGens.cpp:434-448: written once by the constructor (a double cast to float); the
+# sample rate is fixed at translation time (derive.SR)
+derive = "server_info"
+faust = { ir = "{sr}" }
+compare = "waveform"
+tol = 0
+case = "case_ServerInfo"
+
+[SampleDur]
+tier = "direct"
+# DelayUGens.cpp:434-448: written once by the constructor (a double cast to float); the
+# sample rate is fixed at translation time (derive.SR)
+derive = "server_info"
+faust = { ir = "{sdur}" }
+compare = "waveform"
+tol = 0
+case = "case_ServerInfo"
+
+[ControlRate]
+tier = "direct"
+# DelayUGens.cpp:434-448: written once by the constructor (a double cast to float); the
+# sample rate is fixed at translation time (derive.SR)
+derive = "server_info"
+faust = { ir = "{cr}" }
+compare = "waveform"
+tol = 0
+case = "case_ServerInfo"
+
+[ControlDur]
+tier = "direct"
+# DelayUGens.cpp:434-448: written once by the constructor (a double cast to float); the
+# sample rate is fixed at translation time (derive.SR)
+derive = "server_info"
+faust = { ir = "{cdur}" }
+compare = "waveform"
+tol = 0
+case = "case_ServerInfo"
+
+[RadiansPerSample]
+tier = "direct"
+# DelayUGens.cpp:434-448: written once by the constructor (a double cast to float); the
+# sample rate is fixed at translation time (derive.SR)
+derive = "server_info"
+faust = { ir = "{rps}" }
+compare = "waveform"
+tol = 0
+case = "case_ServerInfo"
+
+[SubsampleOffset]
+tier = "direct"
+# the synth's start offset within a sample: scsynth gives frac(offset + 0.5) for a
+# timestamped start (SC_World.cpp:691), so 0.5 for a start exactly on a sample, as in NRT;
+# 0 for an untimestamped command (sc-findings 29). The port gives the scheduled value 0.5.
+faust = { ir = "0.5" }
+compare = "waveform"
+tol = 0
+case = "case_ServerInfo"

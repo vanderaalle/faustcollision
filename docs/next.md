@@ -12,6 +12,7 @@ MidEQ; BEQSuite (BLowPass ... BHiShelf) at every input rate (next_aa: sc-finding
 Median, Select, Sanitize, Linen, DetectSilence; Lag, Lag2, Lag3, LagUD, Decay, Decay2,
 Integrator, Slew at kr.
 Filters at kr (LPF ... LeakDC, sc-findings 28 timing); delays, combs, allpasses, Delay1/2 at kr.
+SampleRate, SampleDur, ControlRate, ControlDur, RadiansPerSample, SubsampleOffset (sc-findings 29).
 Census failures fixed: kr UGens fed by audio read the block's first sample (a2k; krhold
 only for kr_block entries: Amplitude, Pitch, T2K); EnvGen's audio-rate envelope inputs at
 the block start; LocalIn.kr held per block; Pan4.kr compile error (opaque inputs).
@@ -23,9 +24,7 @@ set tolerances from the measured floors, full suite, commit, bump vairi.
 1. Saw, Pulse, Blip .kr (core refactor; sc-findings 25): plans/blit-kr.md.
 2. VarLag (\lin only; sc-findings 26), IEnvGen (sc-findings 27): plans/varlag.md,
    plans/ienvgen.md.
-3. Small remaining classes (census, unmapped): MoogFF.kr (plans/moogff-kr.md); server info
-   constants (SampleRate, SampleDur, ControlRate, ControlDur, RadiansPerSample,
-   SubsampleOffset: trivial, plans/server-info.md); Ramp (sc-findings 16, measured); Lag2UD, Lag3UD, AmpComp,
+3. Small remaining classes (census, unmapped): MoogFF.kr (plans/moogff-kr.md); Ramp (sc-findings 16, measured); Lag2UD, Lag3UD, AmpComp,
    AmpCompA, MantissaMask, Hasher: plans/small-classes.md.
 4. Random UGens (statistics only; plans/random.md), chaos oscillators, DynKlank, grains, Pluck,
    Hilbert/FreqShift, ambisonic panners: lower priority.

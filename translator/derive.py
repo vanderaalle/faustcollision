@@ -353,3 +353,10 @@ def median(c):
     if n == 0:
         raise ValueError("length < 1 makes Median_InsertMedian index values[-1]")
     return {"n": n}
+
+
+def server_info(c):
+    """DelayUGens.cpp:434-448: values the constructor writes once, doubles cast to float;
+    the sample rate is fixed at translation time (SR)."""
+    return {"sr": repr(float(f32(SR))), "cr": repr(float(f32(SR / 64))), "sdur": repr(float(f32(1.0 / SR))),
+            "cdur": repr(float(f32(64.0 / SR))), "rps": repr(float(f32(2.0 * math.pi / SR)))}

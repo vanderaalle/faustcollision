@@ -126,6 +126,9 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 			AllpassN.kr(k, 0.2, t, 1), AllpassL.kr(k, 0.2, t, 1), AllpassC.kr(k, 0.2, t, 1),
 			Delay1.kr(k), Delay2.kr(k), DelayN.kr(k, 0.2, 0)] * 0.5)) },
 		metadata: (specs: (dt: spec.(0.003, 0.13, 0.05)))),
+	// Server info constants (scaled to ~1 so the waveform score is meaningful)
+	SynthDef(\case_ServerInfo, { Out.ar(0, DC.ar(1) * [SampleRate.ir / 48000, SampleDur.ir * 48000, ControlRate.ir / 750,
+		ControlDur.ir * 750, RadiansPerSample.ir * 7639.437, SubsampleOffset.ir]) }),
 	SynthDef(\case_Formlet, { |freq = 1000| Out.ar(0, Formlet.ar(in.value, freq, 0.005, 0.1) * 0.5) },
 		metadata: (specs: (freq: spec.(50, 12000, 1000)))),
 	// Lags and decays: knob-swept time, input signal (impulse/steps from the test signals)
