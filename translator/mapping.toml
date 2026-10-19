@@ -2212,3 +2212,57 @@ self_hold = true
 compare = "waveform"
 tol = 1e-6
 case = "case_SOS"
+
+[Median]
+tier = "direct"
+# sorted window (odd-even transposition sort); bit-exact (case scores <= 8e-8 come from K2A)
+inputs = ["length", "in"]
+constant_inputs = ["length"]
+derive = "median"
+faust = { ar = "sc.median({n}, {in})", kr = "sc.median_kr({n}, {in})" }
+compare = "waveform"
+tol = 1e-6
+case = "case_Median"
+
+[Select]
+tier = "direct"
+# clip((int)which, 0, n - 1); bit-exact
+inputs = ["which"]
+variadic = { group = ["in"] }
+faust = { ar = "sc.select({n}, {which}, ({ins}))", kr = "sc.select({n}, {which}, ({ins}))" }
+compare = "waveform"
+tol = 0
+case = "case_Select"
+
+[Sanitize]
+tier = "direct"
+# NaN/inf via isnanf/isinff (the JIT assumes no NaNs); subnormals flushed first, as
+# scsynth's flush-to-zero leaves none (measured); bit-exact
+inputs = ["in", "replace"]
+faust = { ar = "sc.sanitize({in}, {replace})", kr = "sc.sanitize({in}, {replace})" }
+compare = "waveform"
+tol = 0
+case = "case_Sanitize"
+
+[Linen]
+tier = "direct"
+# per-block state machine; level and slope in double (float pairs), as Linen's struct;
+# kr values within 1.5e-14 of scsynth
+inputs = ["gate", "attackTime", "susLevel", "releaseTime", "doneAction"]
+require = { doneAction = 0.0 }
+self_hold = true
+faust = { kr = "sc.linen_kr({gate}, {attackTime}, {susLevel}, {releaseTime})" }
+compare = "waveform"
+tol = 1e-7
+case = "case_Linen"
+
+[DetectSilence]
+tier = "direct"
+# counter armed by the first sample above amp (documented); bit-exact
+inputs = ["in", "amp", "time", "doneAction"]
+require = { doneAction = 0.0 }
+self_hold = true
+faust = { ar = "sc.detectsilence({in}, {amp}, {time})", kr = "sc.detectsilence_kr({in}, {amp}, {time})" }
+compare = "waveform"
+tol = 0
+case = "case_DetectSilence"

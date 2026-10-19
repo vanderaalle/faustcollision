@@ -344,3 +344,12 @@ def beq_calc(rate, r):
     if all(v == "ar" for v in co):
         return "ar_a"
     return "ar_i" if all(v == "ir" for v in co) else "ar_k"
+
+
+def median(c):
+    """FilterUGens.cpp Median_Ctor: size = sc_clip((int)length, 0, kMAXMEDIANSIZE = 32).
+    Size 0 indexes values[-1] in Median_InsertMedian: rejected."""
+    n = min(max(int(c["length"]), 0), 32)
+    if n == 0:
+        raise ValueError("length < 1 makes Median_InsertMedian index values[-1]")
+    return {"n": n}

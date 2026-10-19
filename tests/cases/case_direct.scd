@@ -84,6 +84,27 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 	SynthDef(\case_MidEQ, { |freq = 1000, db = 6|
 		Out.ar(0, [MidEQ.ar(in.value, freq, 0.5, db), MidEQ.ar(in.value, in.value.abs * 3000 + 200, 0.3, -12)] * 0.5) },
 		metadata: (specs: (freq: spec.(50, 12000, 1000), db: spec.(-24, 24, 6, \lin)))),
+	// Median: odd and even lengths (even: the upper middle), the 32 clip; kr over block values
+	SynthDef(\case_Median, { Out.ar(0, [Median.ar(3, in.value), Median.ar(8, in.value), Median.ar(40, in.value),
+		K2A.ar(Median.kr(5, Latch.kr(in.value, Impulse.kr(200))))]) }),
+	// Select: kr which (next_k), audio which (next_a), out-of-range and negative which (clip), kr
+	SynthDef(\case_Select, { |which = 1| Out.ar(0, [Select.ar(which, [in.value, in.value.abs, in.value.neg]),
+		Select.ar(in.value * 3, [in.value, DC.ar(0.25), in.value.squared]), Select.ar(in.value * 8 - 2, [in.value, DC.ar(-0.5)]),
+		K2A.ar(Select.kr(Latch.kr(in.value, Impulse.kr(3)) * 4, [DC.kr(0.1), DC.kr(0.2), DC.kr(0.3)]))]) },
+		metadata: (specs: (which: spec.(-1, 4, 1, \lin)))),
+	// Sanitize: inf/NaN from a division by a 0/1 gate, a subnormal from a tiny product; kr replace; .kr
+	SynthDef(\case_Sanitize, { Out.ar(0, [Sanitize.ar(in.value / (in.value.abs > 0.1), 0.5),
+		Sanitize.ar(in.value * 1e-39, -0.5), Sanitize.ar(in.value / (in.value.abs > 0.1), Latch.kr(in.value, Impulse.kr(5))),
+		K2A.ar(Sanitize.kr(Latch.kr(in.value, Impulse.kr(50)) / (Latch.kr(in.value, Impulse.kr(50)).abs > 0.1), -0.25))]) }),
+	// Linen: gate from the test signal (rises, falls, forced release via gate <= -1), attack
+	// longer than some gates (the attack completes before release)
+	SynthDef(\case_Linen, { |att = 0.05| var g = Latch.kr(in.value, Impulse.kr(20)) * 4;
+		Out.ar(0, [K2A.ar(Linen.kr(g, att, 0.8, 0.1)), K2A.ar(Linen.kr(g.clip(-1.05, 1), 0.7, 0.5, 0.3))]) },
+		metadata: (specs: (att: spec.(0.001, 1, 0.05)))),
+	// DetectSilence: constant amp/time (next), kr amp (next_k), .kr; time with a product near an integer
+	SynthDef(\case_DetectSilence, { |amp = 0.01| Out.ar(0, [DetectSilence.ar(in.value, 0.01, 0.05),
+		DetectSilence.ar(in.value, amp, 0.0007), K2A.ar(DetectSilence.kr(Latch.kr(in.value, Impulse.kr(100)), 0.02, 0.7))]) },
+		metadata: (specs: (amp: spec.(0.0001, 0.5, 0.01)))),
 	SynthDef(\case_Formlet, { |freq = 1000| Out.ar(0, Formlet.ar(in.value, freq, 0.005, 0.1) * 0.5) },
 		metadata: (specs: (freq: spec.(50, 12000, 1000)))),
 	// Lags and decays: knob-swept time, input signal (impulse/steps from the test signals)

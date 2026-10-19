@@ -2394,3 +2394,120 @@ with {
     };
 };
 beq_a(cf, extra, keep, x, f, q, d) = sos_g(x, (beqsel(extra, keep, f, q, d) : cf), 1);
+
+//------------------------------------------------------------------------------
+// Median (FilterUGens.cpp:2622): the last n inputs kept sorted by insertion; out =
+// values[n >> 1] (the upper middle for even n). The window starts filled with the first
+// input (Median_InitMedian; the constructor inserts it once more, which changes nothing
+// with equal values). Here: an odd-even transposition sort of the n delayed values.
+// n = clip((int)length, 0, 32) is read once (derive.median; 0 is rejected).
+//------------------------------------------------------------------------------
+mce = _, _ <: min, max;
+mstage(n, 0) = par(i, int(n / 2), mce), si.bus(n % 2);
+mstage(n, 1) = _, par(i, int((n - 1) / 2), mce), si.bus(1 - n % 2);
+msort(1) = _;
+msort(n) = seq(r, n, mstage(n, r % 2));
+mwin(n, d, x) = par(k, n, select2(ba.time < k * d, x@(k * d), x0)) with { x0 = ba.sAndH(ba.time == 0, x); };
+median(n, x) = mwin(n, 1, x) : msort(n) : ba.selector(int(n / 2), n);
+median_kr(n, x) = mwin(n, blocksize, x) : msort(n) : ba.selector(int(n / 2), n);
+//------------------------------------------------------------------------------
+// Select (OscUGens.cpp:487): out = input[clip((int)which, 0, n - 1)] ((int32) truncates).
+// .ar with audio-rate which: per sample (next_a); otherwise the block's value (next_k:
+// kr signals are already per block); .kr: next_1.
+//------------------------------------------------------------------------------
+select(n, w, ins) = ins : ba.selectn(n, max(0, min(n - 1, int(w))));
+
+//------------------------------------------------------------------------------
+// Sanitize (TestUGens.cpp:167): infinite, NaN and subnormal samples become `replace`
+// (std::fpclassify). scsynth runs with flush-to-zero, so a subnormal never reaches it (the
+// upstream arithmetic already gave 0; measured: in * 1e-39 -> 0, not `replace`); the Faust
+// graph does not flush, so subnormals are flushed here first. NaN/inf through the C
+// library: the JIT assumes no NaNs, so comparisons cannot detect them (faust-notes).
+//------------------------------------------------------------------------------
+isnanf = ffunction(int isnanf(float), <math.h>, "");
+isinff = ffunction(int isinff(float), <math.h>, "");
+sanitize(x, r) = select2((isnanf(x) != 0) | (isinff(x) != 0), select2((x != 0.0) & (abs(x) < ma.MIN), x, 0.0), r);
+
+//------------------------------------------------------------------------------
+// DetectSilence (FilterUGens.cpp): the counter starts at -1 and arms when |in| > amp
+// (documented); armed, it counts samples with |in| <= amp and outputs 1 from the
+// endCounter-th on (until |in| > amp again). endCounter = (int32)(SAMPLERATE * time) in
+// double. Constant amp/time: read once (next), else per block (next_k): a2k. kr: one step
+// per block (clk), SAMPLERATE = SR / 64. Constructor output 0 (ClearUnitOutputs).
+//------------------------------------------------------------------------------
+detsil_g(x, th, tm, sr, clk) = (\(c).(step(c))) ~ _ : !, _ : ba.sAndH(clk)
+with {
+    n = iprod(tm, sr);
+    step(c0) = c2, out
+    with {
+        c = select2(ba.time == 0, c0, -1);
+        loud = abs(x) > th;
+        c1 = select2(loud, select2(c >= 0, c, c + 1), 0);
+        c2 = select2(clk, c, c1);
+        out = select2(loud | (c < 0), float(c1 >= n), 0.0);
+    };
+};
+detectsilence(x, th, tm) = detsil_g(x, a2k(th), a2k(tm), ma.SR, 1);
+detectsilence_kr(x, th, tm) = detsil_g(x, th, tm, ma.SR / blocksize, krclk);
+
+
+//------------------------------------------------------------------------------
+// (int)(a * b) for a float a and an exact b, as the double product C computes: the float
+// product can round up to an integer (0.7f * 750 = 525 in float, 524.99999 in double);
+// the exact remainder fmaf(a, b, -p) tells.
+//------------------------------------------------------------------------------
+iprod(a, b) = int(p) - ((p == floor(p)) & (fmaf(a, b, 0.0 - p) < 0.0) & (p > 0.0)) with { p = fmul(a, b); };
+
+//------------------------------------------------------------------------------
+// Linen (LFUGens.cpp, Linen_next_k; .kr only): one step per block, SAMPLERATE = SR / 64.
+// Stages: 0 attack, 1 sustain, 2 release, 3 done (outputs 0 once), 4 idle (0). A gate rise
+// starts the attack from the current level: counter = max(1, (int)(attack * SR)), slope =
+// (sus - level) / counter. Only the sustain stage reads the gate for release (gate <= -1:
+// forced, time -gate - 1; gate <= 0: releaseTime), so a gate that closes during the attack
+// still reaches sus first. The constructor runs one step from (stage 4, or 1 when gate <=
+// -1; level 0; prevGate 0); the first block steps again from its state.
+//------------------------------------------------------------------------------
+// one step: (stage, level, slope, counter, prevGate) -> same, plus the output
+// level and slope are doubles in the C struct (m_slope, m_level): float pairs here; the
+// output is (float)level.
+// one step: (stage, level h/l, slope h/l, counter, prevGate) -> same, plus the output
+linen_step(g, at, sl, rt, st0, lh0, ll0, sh0, sl0, ct0, pg) = st2, lh2, ll2, sh2, slo2, ct2, g, out
+with {
+    srk = ma.SR / blocksize;
+    rise = (pg <= 0.0) & (g > 0.0);
+    ca = max(1, iprod(at, srk));
+    st = select2(rise, st0, 0); ct = select2(rise, ct0, ca);
+    // attack slope (sus - level) / counter in double
+    ah = dadd2(sl, 0.0, 0.0 - lh0, 0.0 - ll0) : \(dh, dl).(ddivf(dh, dl, float(ca))) : _, !;
+    al = dadd2(sl, 0.0, 0.0 - lh0, 0.0 - ll0) : \(dh, dl).(ddivf(dh, dl, float(ca))) : !, _;
+    sh = select2(rise, sh0, ah); sl1 = select2(rise, sl0, al);
+    ramp = (st == 0) | (st == 2);
+    out = select2(st >= 3, lh0, 0.0);
+    rc = max(1, select2(g <= -1.0, iprod(rt, srk), iprod(0.0 - g - 1.0, srk)));
+    rel = (st == 1) & (g <= 0.0);
+    rh = ddivf(0.0 - lh0, 0.0 - ll0, float(rc)) : _, !;
+    rl = ddivf(0.0 - lh0, 0.0 - ll0, float(rc)) : !, _;
+    ctr = ct - 1;
+    nh = dadd2(lh0, ll0, sh, sl1) : _, !; nl = dadd2(lh0, ll0, sh, sl1) : !, _;
+    lh2 = select2(ramp, lh0, nh); ll2 = select2(ramp, ll0, nl);
+    st2 = select2(ramp, select2(rel, select2(st == 3, st, 4), 2), st + (ctr == 0));
+    ct2 = select2(ramp, select2(rel, ct, rc), ctr);
+    sh2 = select2(ramp, select2(rel, sh, rh), sh); slo2 = select2(ramp, select2(rel, sl1, rl), sl1);
+};
+// state (7 wires) plus the held output, stepped at block starts; at time 0 the incoming
+// state is the constructor's step from the initial state. The step is one box wired with
+// lambdas: selecting its outputs by index re-expands it per output (compile blowup).
+linen_kr(g, at, sl, rt) = loop ~ si.bus(8) : par(i, 8, !), _
+with {
+    t0 = ba.time == 0;
+    step = linen_step(g, at, sl, rt);
+    ctor = (select2(g <= -1.0, 4, 1), 0.0, 0.0, 0.0, 0.0, 0, 0.0) : step;
+    loop(a0, a1, a2, a3, a4, a5, a6, ho) = (ctor, a0, a1, a2, a3, a4, a5, a6)
+        : \(c0, c1, c2, c3, c4, c5, c6, c7, b0, b1, b2, b3, b4, b5, b6).(
+            (select2(t0, b0, c0), select2(t0, b1, c1), select2(t0, b2, c2), select2(t0, b3, c3),
+             select2(t0, b4, c4), select2(t0, b5, c5), select2(t0, b6, c6)) : step
+            : \(n0, n1, n2, n3, n4, n5, n6, n7).(
+                select2(krclk, b0, n0), select2(krclk, b1, n1), select2(krclk, b2, n2), select2(krclk, b3, n3),
+                select2(krclk, b4, n4), select2(krclk, b5, n5), select2(krclk, b6, n6),
+                select2(krclk, ho, n7), select2(krclk, ho, n7)));
+};

@@ -104,3 +104,12 @@ opaque `fadd(x, 0.0)`.
 definition with one of these names (a SynthDef control called `db`) fails to compile:
 "redefinition of symbols are not allowed : db". Generated control identifiers are
 prefixed (`ctl_db`); the slider label keeps the SynthDef's name.
+
+## NaN cannot be detected with comparisons
+
+libfaust's JIT (DawDreamer) optimises as if no value were NaN: `x != x`, or "fails every
+comparison" tests, do not see a NaN (Sanitize passed 0/0 through). Use the C library
+through `ffunction` (`isnanf`, `isinff` from <math.h>), which the compiler cannot fold.
+Related: Faust arithmetic does not flush subnormals (only `-ftz` on recursive states),
+while scsynth runs with flush-to-zero: a product like `x * 1e-39` is subnormal in Faust
+and 0 in scsynth.
