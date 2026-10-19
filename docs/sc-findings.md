@@ -4,7 +4,7 @@ Behaviour of scsynth (SuperCollider 3.13.0) that the documentation does not stat
 found by comparing renders sample by sample or by porting the C++. Source references
 are to the `Version-3.13.0` tag (`~/src/supercollider`).
 
-Issue drafts for #4, #5, #11, #15, #17-#28: `docs/issues/`.
+Issue drafts for #4, #5, #11, #15, #17-#28, #30: `docs/issues/`.
 
 Status: **measured** = confirmed on scsynth NRT renders; **source** = read in the C++,
 not yet confirmed by a render. Kind: **bug?** (looks unintended), **undocumented**,
@@ -41,6 +41,7 @@ not yet confirmed by a render. Kind: **bug?** (looks unintended), **undocumented
 | 27 | `IEnvGen` | curvatures truncated to integers | bug? | measured, source |
 | 28 | `Resonz.kr`, `Ringz.kr`, `TwoPole.kr`, `TwoZero.kr`, `APF.kr`, `MidEQ.kr`, `OneZero.kr` | coefficient changes apply one block late; `APF.kr` passes its input through | undocumented | measured, source |
 | 29 | `SubsampleOffset` | 0.5, not 0, for a synth scheduled exactly on a sample; 0 for an untimestamped command | convention | measured, source |
+| 30 | `Lag3UD` | the third stage picks its up/down time by comparing stages 1 and 2, not its own input and state | bug? | measured, source |
 
 ## 1. `Amplitude.kr` with an audio-rate input releases 64× too fast
 
@@ -515,3 +516,18 @@ Measured: `SubsampleOffset.ir` in an NRT score with `/s_new` at time 0 is 0.5.
 - Source: `server/scsynth/SC_World.cpp:691` (NRT), `SC_Jack.cpp:453-465`, `SC_PortAudio.cpp`,
   `SC_CoreAudio.cpp` (real time: same formula; 0 when nothing is scheduled).
 - Translation: 0.5 (the scheduled value, as in the NRT references).
+
+## 30. `Lag3UD`'s third stage tests the wrong stages
+
+Each stage of `Lag2UD`/`Lag3UD` uses the up time when its input is above its state, else the
+down time. In `Lag3UD_next` the third stage tests `y1a > y1b` (stage 1 against stage 2,
+both just updated) instead of `y1b > y1c` (its own input against its state), in both the
+fixed- and the changing-time loops; `Lag2UD` is right.
+
+Measured (NRT, `Lag3UD.ar(LFPulse.ar(7, 0, 0.3) + (LFNoise0.ar(40) * 0.3), 0.005, 0.08)`,
+2 s): a double simulation with the C's test is bit-exact (0 differing samples from block
+10 on); with the intended test it differs on 45813 samples, by up to 0.2.
+
+- Source: `server/plugins/FilterUGens.cpp` `Lag3UD_next` (`if (y1a > y1b) { y1c = y1b + b1u
+  * (y1c - y1b); }`). Fix: `if (y1b > y1c)`.
+- Translation: reproduced (`sc.lag3ud`).

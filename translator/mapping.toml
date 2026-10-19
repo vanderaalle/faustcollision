@@ -2378,3 +2378,22 @@ faust = { ir = "0.5" }
 compare = "waveform"
 tol = 0
 case = "case_ServerInfo"
+
+[Lag2UD]
+tier = "direct"
+inputs = ["in", "lagTimeU", "lagTimeD"]
+# two LagUD stages; coefficients and floor as LagUD (measured ar 6.7e-5, kr 1.4e-6)
+faust = { ar = "sc.lag2ud({in}, {lagTimeU}, {lagTimeD})", kr = "sc.lag2ud_kr({in}, {lagTimeU}, {lagTimeD})" }
+compare = "waveform"
+tol = 3e-4
+case = "case_LagUDn"
+
+[Lag3UD]
+tier = "direct"
+inputs = ["in", "lagTimeU", "lagTimeD"]
+# three LagUD stages; the third tests stages 1 and 2 (sc-findings 30); coefficients and
+# floor as LagUD (measured ar 7.2e-5, kr 2.8e-5)
+faust = { ar = "sc.lag3ud({in}, {lagTimeU}, {lagTimeD})", kr = "sc.lag3ud_kr({in}, {lagTimeU}, {lagTimeD})" }
+compare = "waveform"
+tol = 3e-4
+case = "case_LagUDn"

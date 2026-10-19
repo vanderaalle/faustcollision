@@ -10,7 +10,7 @@ InRange, InRect, Schmidt, ModDif; triggers (Trig ... T2A); panners (Pan2, LinPan
 Balance2, XFade2, LinXFade2, Rotate2, Pan4); LPZ1/2, HPZ1/2, BPZ2, BRZ2, Slope, FOS, SOS;
 MidEQ; BEQSuite (BLowPass ... BHiShelf) at every input rate (next_aa: sc-findings 24).
 Median, Select, Sanitize, Linen, DetectSilence; Lag, Lag2, Lag3, LagUD, Decay, Decay2,
-Integrator, Slew at kr.
+Integrator, Slew at kr; Lag2UD, Lag3UD (sc-findings 30).
 Filters at kr (LPF ... LeakDC, sc-findings 28 timing); delays, combs, allpasses, Delay1/2 at kr.
 SampleRate, SampleDur, ControlRate, ControlDur, RadiansPerSample, SubsampleOffset (sc-findings 29).
 Census failures fixed: kr UGens fed by audio read the block's first sample (a2k; krhold
@@ -24,11 +24,11 @@ set tolerances from the measured floors, full suite, commit, bump vairi.
 1. Saw, Pulse, Blip .kr (core refactor; sc-findings 25): plans/blit-kr.md.
 2. VarLag (\lin only; sc-findings 26), IEnvGen (sc-findings 27): plans/varlag.md,
    plans/ienvgen.md.
-3. Small remaining classes (census, unmapped): MoogFF.kr (plans/moogff-kr.md); Ramp (sc-findings 16, measured); Lag2UD, Lag3UD, AmpComp,
+3. Small remaining classes (census, unmapped): MoogFF.kr (plans/moogff-kr.md); Ramp (sc-findings 16, measured); AmpComp,
    AmpCompA, MantissaMask, Hasher: plans/small-classes.md.
 4. Random UGens (statistics only; plans/random.md), chaos oscillators, DynKlank, grains, Pluck,
    Hilbert/FreqShift, ambisonic panners: lower priority.
-5. Issue drafts: docs/issues/ covers 4, 5, 11, 15, 17-28; file them upstream.
+5. Issue drafts: docs/issues/ covers 4, 5, 11, 15, 17-28, 30; file them upstream.
 
 ## Working method (keeps cost down)
 - Read the scsynth source of the UGen (and nova-simd where a nova calc function runs).

@@ -129,6 +129,11 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 	// Server info constants (scaled to ~1 so the waveform score is meaningful)
 	SynthDef(\case_ServerInfo, { Out.ar(0, DC.ar(1) * [SampleRate.ir / 48000, SampleDur.ir * 48000, ControlRate.ir / 750,
 		ControlDur.ir * 750, RadiansPerSample.ir * 7639.437, SubsampleOffset.ir]) }),
+	// Lag2UD, Lag3UD (ar and kr): asymmetric times, steps and noise in the input
+	SynthDef(\case_LagUDn, { |scale = 1| var k = Latch.kr(in.value, Impulse.kr(50));
+		Out.ar(0, [Lag2UD.ar(in.value, 0.005 * scale, 0.08 * scale), Lag3UD.ar(in.value, 0.005 * scale, 0.08 * scale),
+			K2A.ar(Lag2UD.kr(k, 0.01 * scale, 0.1 * scale)), K2A.ar(Lag3UD.kr(k, 0.01 * scale, 0.1 * scale))]) },
+		metadata: (specs: (scale: spec.(0.1, 10, 1)))),
 	SynthDef(\case_Formlet, { |freq = 1000| Out.ar(0, Formlet.ar(in.value, freq, 0.005, 0.1) * 0.5) },
 		metadata: (specs: (freq: spec.(50, 12000, 1000)))),
 	// Lags and decays: knob-swept time, input signal (impulse/steps from the test signals)

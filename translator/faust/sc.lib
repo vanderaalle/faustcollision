@@ -2648,3 +2648,26 @@ allpass_kr(kind, x, maxdt, dt, dect) = (\(fw).(w, select2((kind == 3) & (int(ba.
 with { d = dsamp_kr(dt, maxdt, mind(kind)); fb = calcfb(dt, dect); };
 delay1_kr(x) = kx1(x);
 delay2_kr(x) = select2(int(ba.time / blocksize) == 1, x@(2 * blocksize), x@blocksize);
+
+//------------------------------------------------------------------------------
+// Lag2UD, Lag3UD (FilterUGens.cpp:693...): LagUD's up/down coefficient per stage, every
+// stage starting at in[0]. Lag3UD's third stage tests `y1a > y1b` (stages 1 and 2, new
+// values) instead of its own `y1b > y1c` (sc-findings 30): reproduced.
+//------------------------------------------------------------------------------
+lagudn_g(n, x, bu, bd, clk) = (\(fa, fb, fc).(step(fa, fb, fc))) ~ (_, _, _) : !, !, !, _
+with {
+    t0 = ba.time == 0;
+    step(fa, fb, fc) = nx(a1, a), nx(b1, b), nx(c1, c), select2(n == 2, c, b)
+    with {
+        a1 = select2(t0, fa, x); b1 = select2(t0, fb, x); c1 = select2(t0, fc, x);
+        a = x + select2(x > a1, bd, bu) * (a1 - x);
+        b = a + select2(a > b1, bd, bu) * (b1 - a);
+        c = b + select2(a > b, bd, bu) * (c1 - b);
+        // ar: zapped at block ends; kr: one step per block (clk), zapped every step
+        nx(o, v) = select2(clk == 1, select2(krclk, o, zap(v)), zzend(v));
+    };
+};
+lag2ud(x, tu, td) = lagudn_g(2, x, kcoef(dec60(tu), 1), kcoef(dec60(td), 1), 1);
+lag3ud(x, tu, td) = lagudn_g(3, x, kcoef(dec60(tu), 1), kcoef(dec60(td), 1), 1);
+lag2ud_kr(x, tu, td) = lagudn_g(2, x, dec60k(tu), dec60k(td), 0);
+lag3ud_kr(x, tu, td) = lagudn_g(3, x, dec60k(tu), dec60k(td), 0);
