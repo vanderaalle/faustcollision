@@ -255,6 +255,7 @@ def translate(sdef: SynthDef, meta: dict, table=None) -> Translation:
         if e.get("template_by"):  # the calc function from all input rates (translator/derive.py)
             from . import derive
             rates = {k: (ugens[v.ugen].rate if isinstance(v, Ref) else "ir") for k, v in args.items()}
+            rates["_cls"] = u.cls
             try:
                 template = {u.rate: template[getattr(derive, e["template_by"])(u.rate, rates)]}
             except ValueError as err:
@@ -297,7 +298,10 @@ def translate(sdef: SynthDef, meta: dict, table=None) -> Translation:
             consts = {k: args[k].value for k in constant + e.get("derive_when_constant", [])}
             if e.get("variadic"):
                 consts["n"] = (len(u.inputs) - len(fixed)) // len(e["variadic"]["group"])
-            fmt.update(getattr(derive, e["derive"])(consts))
+            try:
+                fmt.update(getattr(derive, e["derive"])(consts))
+            except ValueError as err:
+                raise TranslationError(f"{u.cls}: {err}")
         if e.get("variadic"):
             group = e["variadic"]["group"]
             n = (len(u.inputs) - len(fixed)) // len(group)

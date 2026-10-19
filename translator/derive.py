@@ -203,3 +203,50 @@ def sweep_calc(rate, r):
     if rate == "kr":
         return "kr"
     return ("a" if r["trig"] == "ar" else "k") + ("a" if r["rate"] == "ar" else "k")
+
+
+def runlevel_calc(rate, r):
+    """Peak, RunningMin, RunningMax: next_aa (audio trig), _ak (kr: reset at block end),
+    _ai (constant trig: never resets). Peak.kr of an audio input scans the whole current
+    block (Peak_next_*_k): not causal, not ported."""
+    if rate == "kr":
+        if r["in"] == "ar" and r.get("_cls") == "Peak":
+            raise ValueError("Peak.kr of an audio input takes the current block's maximum "
+                             "(one block ahead of a causal port): not ported")
+        return "kr_i" if r["trig"] == "ir" else "kr"
+    return {"ar": "a", "kr": "k", "ir": "i"}[r["trig"]]
+
+
+def change_calc(rate, r):
+    """MostChange/LeastChange: at ar with neither input at audio rate scsynth runs next_aa
+    and reads both past their single values (sc-findings 21): rejected."""
+    if rate == "ar" and r["a"] != "ar" and r["b"] != "ar":
+        raise ValueError("at audio rate one input must be audio rate (sc-findings 21)")
+    return rate
+
+
+def t2a(c):
+    """T2A writes out[(int)offset] unchecked: only 0 <= offset < 64 is meaningful."""
+    off = int(c["offset"])
+    if not 0 <= off < 64:
+        raise ValueError(f"offset {off} is outside the block (scsynth writes out of bounds)")
+    return {"off": off}
+
+
+def not_causal(rate, r):
+    """UGens whose kr value is a function of the current audio block (T2K)."""
+    raise ValueError("its control-rate value depends on the whole current audio block; a causal "
+                     "port is one block late (measured: up to 35 dB envelope error): not ported")
+
+
+def section_calc(rate, r):
+    """FOS_Ctor / SOS_Ctor: by the coefficient rates (all audio, all constant, else per
+    block); kr units run next_1."""
+    if rate == "kr":
+        return "kr"
+    co = [v for k, v in r.items() if k not in ("in", "_cls")]
+    if all(v == "ar" for v in co):
+        return "a"
+    if r["_cls"] == "SOS" and all(v == "ir" for v in co):
+        return "i"
+    return "k"

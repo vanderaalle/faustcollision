@@ -33,6 +33,7 @@ not yet confirmed by a render. Kind: **bug?** (looks unintended), **undocumented
 | 20 | `Formant` | phase sync product `phase1 * freq2` overflows int32: formant and bandwidth phases restart near 0 instead of at the fundamental's fraction | bug? | measured, source |
 | 21 | `Vibrato.ar`, `Wrap.ar`, `Fold.ar`, `Clip.ar`, `InRange.ar`, `ToggleFF.ar`, `PulseDivider.ar` (constant or kr input) | read the input as an audio buffer: past the single value of a constant or control wire (garbage, NaN); defaults like `Vibrato.ar(440)` are affected | bug | measured, source |
 | 22 | `LinExp.ar` (one bound of a range at audio rate) | the calc function reads both bounds per sample when either is audio rate: the other is read past its value (NaN, inf) | bug | measured, source |
+| 23 | `PeakFollower` (changing decay) | the decay ramp starts at the new value and moves past it, only on decaying samples; the overshoot is stored, so the decay keeps oscillating around the target | bug? | measured, source |
 | 16 | `Ramp` | reads the input one sample past the segment; past the buffer end at a block boundary | bug? | source |
 
 ## 1. `Amplitude.kr` with an audio-rate input releases 64× too fast
@@ -356,3 +357,21 @@ on 371175 (and inf on 15150); with both bounds of the pair at audio rate (`DC.ar
 - Source: `server/plugins/LFUGens.cpp` `LinExp_SetCalc`, `LinExp_next_aa/_ak/_ka`. Fix:
   read a bound per sample only when it is audio rate (or select on `&&` and add mixed
   calc functions).
+
+## 23. `PeakFollower`: the decay ramp starts at the target and overshoots
+
+When `decay` changes, `PeakFollower_next` computes `decay_slope = CALCSLOPE(decay,
+unit->mDecay)` but ramps a local variable initialised to the *new* value (`float decay =
+ZIN0(1)`), not the old one, adding the slope only on samples where the level decays. At the
+end of the block the overshot value is stored as `mDecay`. The next block sees `decay !=
+mDecay` again and ramps from the target by `(target - overshoot) / 64`, the other way: with
+a steadily decaying input (64 decaying samples per block) the stored value alternates
+between target + e and target - e indefinitely instead of settling. The sign-dependent
+formulas are also chosen from the new and the stored (overshot) values.
+
+Measured: a float simulation of this logic is bit-exact against scsynth over 10 s of
+`PeakFollower.ar(SoundIn, Line.kr(0.99, 0.9999, 6))` on bass_di (0 of 484800 samples
+differ); the FaustCollision port reproduces it.
+
+- Source: `server/plugins/TriggerUGens.cpp` `PeakFollower_next`. Fix: ramp from
+  `unit->mDecay` (`float decay = unit->mDecay;`) and store the target at the block end.

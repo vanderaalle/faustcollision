@@ -1135,7 +1135,9 @@ case = "case_Latch"
 tier = "direct"
 inputs = ["in", "pos", "level"]
 outputs = 2
-faust = { ar = "sc.pan2({in}, {pos}, {level})", "ar<pos:ar" = "sc.pan2_ar({in}, {pos}, {level})" }
+# kr pos: nova's vector gain ramps (sc.novaramp); audio pos: per-sample gains with the kr
+# level accumulated (sc.kacc); kr: one sample with the previous block's gains
+faust = { ar = "sc.pan2({in}, {pos}, {level})", "ar<pos:ar" = "sc.pan2_ar({in}, {pos}, {level})", kr = "sc.pan2_kr({in}, {pos}, {level})" }
 compare = "waveform"
 tol = 1e-6
 case = "case_Pan2"
@@ -1382,7 +1384,8 @@ tier = "direct"
 inputs = ["start", "end", "dur", "doneAction"]
 require = { doneAction = 0.0 }
 self_hold = true
-# Constant start/end/dur: exact (double level on float pairs, nova's SSE lanes at ar).
+# Constant start/end/dur: exact (double level on float pairs, nova's SSE lanes at ar)
+# except rare 1-ulp flips where the pair's ~48 bits round differently from the double.
 # Otherwise (controls, read once): closed form in float, measured 1.6e-7.
 derive_when_constant = ["start", "end", "dur"]
 derive = "line"
@@ -1836,3 +1839,249 @@ self_hold = true
 compare = "waveform"
 tol = 1e-6
 case = "case_PulseCount"
+
+[Gate]
+tier = "direct"
+inputs = ["in", "trig"]
+ar_inputs = ["in"]
+faust = { ar = "sc.gate_k({in}, {trig})", "ar<trig:ar" = "sc.gate_a({in}, {trig})", kr = "sc.gate_kr({in}, {trig})" }
+self_hold = true
+compare = "waveform"
+tol = 1e-6
+case = "case_Peak"
+
+[Peak]
+tier = "direct"
+inputs = ["in", "trig"]
+ar_inputs = ["in"]
+template_by = "runlevel_calc"
+faust = { a = "sc.peak_a({in}, {trig})", k = "sc.peak_k({in}, {trig})", i = "sc.peak_k({in}, 0.0)", kr = "sc.peak_kr({in}, {trig})", kr_i = "sc.peak_kr({in}, 0.0)" }
+self_hold = true
+compare = "waveform"
+tol = 1e-6
+case = "case_Peak"
+
+[RunningMin]
+tier = "direct"
+inputs = ["in", "trig"]
+ar_inputs = ["in"]
+template_by = "runlevel_calc"
+faust = { a = "sc.runningmin_a({in}, {trig})", k = "sc.runningmin_k({in}, {trig})", i = "sc.runningmin_k({in}, 0.0)", kr = "sc.runningmin_kr({in}, {trig})", kr_i = "sc.runningmin_kr({in}, 0.0)" }
+self_hold = true
+compare = "waveform"
+tol = 1e-6
+case = "case_Peak"
+
+[RunningMax]
+tier = "direct"
+inputs = ["in", "trig"]
+ar_inputs = ["in"]
+template_by = "runlevel_calc"
+faust = { a = "sc.runningmax_a({in}, {trig})", k = "sc.runningmax_k({in}, {trig})", i = "sc.runningmax_k({in}, 0.0)", kr = "sc.runningmax_kr({in}, {trig})", kr_i = "sc.runningmax_kr({in}, 0.0)" }
+self_hold = true
+compare = "waveform"
+tol = 1e-6
+case = "case_Peak"
+
+[PeakFollower]
+tier = "direct"
+# the decay ramp as scsynth computes it (sc-findings 23)
+inputs = ["in", "decay"]
+ar_inputs = ["in"]
+faust = { ar = "sc.peakfollower({in}, {decay})", kr = "sc.peakfollower_kr({in}, {decay})" }
+self_hold = true
+compare = "waveform"
+tol = 1e-6
+case = "case_Peak"
+
+[MostChange]
+tier = "direct"
+inputs = ["a", "b"]
+template_by = "change_calc"
+faust = { ar = "sc.mostchange({a}, {b})", kr = "sc.mostchange_kr({a}, {b})" }
+self_hold = true
+compare = "waveform"
+tol = 1e-6
+case = "case_Peak"
+
+[LeastChange]
+tier = "direct"
+inputs = ["a", "b"]
+template_by = "change_calc"
+faust = { ar = "sc.leastchange({a}, {b})", kr = "sc.leastchange_kr({a}, {b})" }
+self_hold = true
+compare = "waveform"
+tol = 1e-6
+case = "case_Peak"
+
+[LastValue]
+tier = "direct"
+inputs = ["in", "diff"]
+faust = { ar = "sc.lastvalue_k({in}, {diff})", "ar<in:ar" = "sc.lastvalue_a({in}, {diff})", kr = "sc.lastvalue_kr({in}, {diff})" }
+self_hold = true
+compare = "waveform"
+tol = 1e-6
+case = "case_Peak"
+
+[T2A]
+tier = "direct"
+inputs = ["in", "offset"]
+constant_inputs = ["offset"]
+derive = "t2a"
+faust = { ar = "sc.t2a({in}, {off})" }
+self_hold = true
+compare = "waveform"
+tol = 1e-6
+case = "case_Peak"
+
+[T2K]
+tier = "rejected"
+# not ported: scsynth takes the maximum of the current audio block (T2K.kr runs after its
+# input); a causal port is one block late, up to 35 dB off for trigger trains (measured).
+# derive.not_causal rejects it with that explanation.
+inputs = ["in"]
+template_by = "not_causal"
+faust = { kr = "0" }
+compare = "waveform"
+tol = 1e-6
+case = "tests/test_translator.py::test_t2k_is_rejected_as_not_causal"
+
+# Panners and crossfades (PanUGens.cpp): see sc.lib "Panners and crossfades"
+[LinPan2]
+tier = "direct"
+inputs = ["in", "pos", "level"]
+outputs = 2
+faust = { ar = "sc.linpan2({in}, {pos}, {level})", "ar<pos:ar" = "sc.linpan2_ar({in}, {pos}, {level})", kr = "sc.linpan2_kr({in}, {pos}, {level})" }
+compare = "waveform"
+tol = 1e-6
+case = "case_Pan4"
+
+[Balance2]
+tier = "direct"
+inputs = ["left", "right", "pos", "level"]
+outputs = 2
+faust = { ar = "sc.balance2({left}, {right}, {pos}, {level})", "ar<pos:ar" = "sc.balance2_ar({left}, {right}, {pos}, {level})", kr = "sc.balance2_kr({left}, {right}, {pos}, {level})" }
+compare = "waveform"
+tol = 1e-6
+case = "case_Pan4"
+
+[XFade2]
+tier = "direct"
+inputs = ["inA", "inB", "pan", "level"]
+faust = { ar = "sc.xfade2({inA}, {inB}, {pan}, {level})", "ar<pan:ar" = "sc.xfade2_ar({inA}, {inB}, {pan}, {level})", kr = "sc.xfade2_kr({inA}, {inB}, {pan}, {level})" }
+compare = "waveform"
+tol = 1e-6
+case = "case_Pan4"
+
+[LinXFade2]
+tier = "direct"
+inputs = ["inA", "inB", "pan"]
+faust = { ar = "sc.linxfade2({inA}, {inB}, {pan})", "ar<pan:ar" = "sc.linxfade2_ar({inA}, {inB}, {pan})", kr = "sc.linxfade2_kr({inA}, {inB}, {pan})" }
+compare = "waveform"
+tol = 1e-6
+case = "case_Pan4"
+
+[Rotate2]
+tier = "direct"
+inputs = ["x", "y", "pos"]
+outputs = 2
+faust = { ar = "sc.rotate2({x}, {y}, {pos})", kr = "sc.rotate2_kr({x}, {y}, {pos})" }
+compare = "waveform"
+tol = 1e-6
+case = "case_Pan4"
+
+[Pan4]
+tier = "direct"
+inputs = ["in", "xpos", "ypos", "level"]
+outputs = 4
+faust = { ar = "sc.pan4({in}, {xpos}, {ypos}, {level})", kr = "sc.pan4_kr({in}, {xpos}, {ypos}, {level})" }
+compare = "waveform"
+tol = 1e-6
+case = "case_Pan4"
+
+# Short FIRs (FilterUGens.cpp): state from the first input; double sums rounded once
+
+[LPZ1]
+tier = "direct"
+inputs = ["in"]
+faust = { ar = "sc.lpz1({in})", kr = "sc.lpz1_kr({in})" }
+self_hold = true
+compare = "waveform"
+tol = 1e-6
+case = "case_LPZ"
+
+[HPZ1]
+tier = "direct"
+inputs = ["in"]
+faust = { ar = "sc.hpz1({in})", kr = "sc.hpz1_kr({in})" }
+self_hold = true
+compare = "waveform"
+tol = 1e-6
+case = "case_LPZ"
+
+[LPZ2]
+tier = "direct"
+inputs = ["in"]
+faust = { ar = "sc.lpz2({in})", kr = "sc.lpz2_kr({in})" }
+self_hold = true
+compare = "waveform"
+tol = 1e-6
+case = "case_LPZ"
+
+[HPZ2]
+tier = "direct"
+inputs = ["in"]
+faust = { ar = "sc.hpz2({in})", kr = "sc.hpz2_kr({in})" }
+self_hold = true
+compare = "waveform"
+tol = 1e-6
+case = "case_LPZ"
+
+[BPZ2]
+tier = "direct"
+inputs = ["in"]
+faust = { ar = "sc.bpz2({in})", kr = "sc.bpz2_kr({in})" }
+self_hold = true
+compare = "waveform"
+tol = 1e-6
+case = "case_LPZ"
+
+[BRZ2]
+tier = "direct"
+inputs = ["in"]
+faust = { ar = "sc.brz2({in})", kr = "sc.brz2_kr({in})" }
+self_hold = true
+compare = "waveform"
+tol = 1e-6
+case = "case_LPZ"
+
+[Slope]
+tier = "direct"
+inputs = ["in"]
+faust = { ar = "sc.slope({in})", kr = "sc.slope_kr({in})" }
+self_hold = true
+compare = "waveform"
+tol = 1e-6
+case = "case_LPZ"
+
+# First/second-order sections (FilterUGens.cpp): double state and arithmetic on float pairs.
+# Measured: bit-exact but for rare 1-ulp flips (pairs carry ~48 bits: <= 27 of 480000 samples)
+[FOS]
+tier = "direct"
+inputs = ["in", "a0", "a1", "b1"]
+template_by = "section_calc"
+faust = { a = "sc.fos_a({in}, {a0}, {a1}, {b1})", k = "sc.fos_k({in}, {a0}, {a1}, {b1})", kr = "sc.fos_kr({in}, {a0}, {a1}, {b1})" }
+self_hold = true
+compare = "waveform"
+tol = 1e-6
+case = "case_SOS"
+
+[SOS]
+tier = "direct"
+inputs = ["in", "a0", "a1", "a2", "b1", "b2"]
+template_by = "section_calc"
+faust = { a = "sc.sos_a({in}, {a0}, {a1}, {a2}, {b1}, {b2})", i = "sc.sos_i({in}, {a0}, {a1}, {a2}, {b1}, {b2})", k = "sc.sos_k({in}, {a0}, {a1}, {a2}, {b1}, {b2})", kr = "sc.sos_kr({in}, {a0}, {a1}, {a2}, {b1}, {b2})" }
+self_hold = true
+compare = "waveform"
+tol = 1e-6
+case = "case_SOS"

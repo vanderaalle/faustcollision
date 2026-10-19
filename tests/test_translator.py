@@ -44,3 +44,29 @@ def test_control_without_spec_is_an_error():
     g.param_names = {0: "gain"}
     with pytest.raises(TranslationError, match="'gain' is used but has no spec"):
         translate(g, {"specs": {}})
+
+
+# Rejections with a reason (sc-findings 21, 22; not causal): scsynth reads garbage or
+# computes from the current audio block.
+def test_ar_input_of_constant_is_rejected():
+    g = graph(UGen(2, "Wrap", "ar", 0, [Const(0.3), Const(0.0), Const(1.0)], ["ar"]))
+    with pytest.raises(TranslationError, match="must be audio rate"):
+        translate(g, {})
+
+
+def test_linexp_half_audio_range_is_rejected():
+    g = graph(UGen(2, "LinExp", "ar", 0, [Ref(1, 0), Const(0.0), Ref(1, 0), Const(1.0), Const(10.0)], ["ar"]))
+    with pytest.raises(TranslationError, match="sc-findings 22"):
+        translate(g, {})
+
+
+def test_t2k_is_rejected_as_not_causal():
+    g = graph(UGen(2, "T2K", "kr", 0, [Ref(1, 0)], ["kr"]), UGen(3, "K2A", "ar", 0, [Ref(2, 0)], ["ar"]))
+    with pytest.raises(TranslationError, match="not ported"):
+        translate(g, {})
+
+
+def test_peak_kr_of_audio_is_rejected():
+    g = graph(UGen(2, "Peak", "kr", 0, [Ref(1, 0), Const(0.0)], ["kr"]), UGen(3, "K2A", "ar", 0, [Ref(2, 0)], ["ar"]))
+    with pytest.raises(TranslationError, match="Peak.kr of an audio input"):
+        translate(g, {})

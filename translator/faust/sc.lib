@@ -345,15 +345,17 @@ lfosc_kr(stepB, iphase) = lfosc_clk(stepB, iphase, krclk);
 lfsaw_kB(inc) = _, _ <: dval, (daddB(inc) : cwrap(\(h, l).((inc >= 0) & dge(h, l, 1.0)), 2.0)
                                          : cwrap(\(h, l).((inc < 0) & dle(h, l, -1.0)), -2.0));
 lfsaw_aB(inc) = _, _ <: dval, (daddB(inc) : cwrap2(\(h, l).(dge(h, l, 1.0)), 2.0, \(h, l).(dle(h, l, -1.0)), -2.0));
-lfsaw(freq, iphase) = lfosc(lfsaw_kB(freq * float(2.0 / ma.SR)), iphase);
-lfsaw_ar(freq, iphase) = lfosc(lfsaw_aB(freq * float(2.0 / ma.SR)), iphase);
-lfsaw_kr(freq, iphase) = lfosc_kr(lfsaw_kB(freq * float(2.0 * blocksize / ma.SR)), iphase);
+// increments: fmul (opaque), the float product scsynth computes (Faust would fold
+// freq * (c / SR) into one rounding; faust-notes)
+lfsaw(freq, iphase) = lfosc(lfsaw_kB(fmul(freq, float(2.0 / ma.SR))), iphase);
+lfsaw_ar(freq, iphase) = lfosc(lfsaw_aB(fmul(freq, float(2.0 / ma.SR))), iphase);
+lfsaw_kr(freq, iphase) = lfosc_kr(lfsaw_kB(fmul(freq, float(2.0 * blocksize / ma.SR))), iphase);
 
 // LFTri: z = phase > 1 ? 2 - phase : phase; step; wrap at 3 by -4.
 lftriB(inc) = _, _ <: \(h, l).(select2(dgt(h, l, 1.0), dval(h, l), fadd(fsub(2.0, h), 0.0 - l))),
                       (daddB(inc) : cwrap(\(h, l).(dge(h, l, 3.0)), 4.0));
-lftri(freq, iphase) = lfosc(lftriB(freq * float(4.0 / ma.SR)), iphase);
-lftri_kr(freq, iphase) = lfosc_kr(lftriB(freq * float(4.0 * blocksize / ma.SR)), iphase);
+lftri(freq, iphase) = lfosc(lftriB(fmul(freq, float(4.0 / ma.SR))), iphase);
+lftri_kr(freq, iphase) = lfosc_kr(lftriB(fmul(freq, float(4.0 * blocksize / ma.SR))), iphase);
 
 // LFPar: pre-wrap at 3 by -4; 1 - z^2 below 1, (z - 2)^2 - 1 above; then step.
 sq(z) = z * z;
@@ -362,8 +364,8 @@ sq(z) = z * z;
 lfparB(inc) = _, _ <: (\(h, l).(dge(h, l, 3.0))), (cwrap(\(h, l).(dge(h, l, 3.0)), 4.0))
     : \(w, h, l).(select2(dlt(h, l, 1.0) | w, sq(fadd(fsub(h, 2.0), l)) - 1.0, 1.0 - sq(dval(h, l))), h, l)
     : _, daddB(inc);
-lfpar(freq, iphase) = lfosc(lfparB(freq * float(4.0 / ma.SR)), iphase);
-lfpar_kr(freq, iphase) = lfosc_kr(lfparB(freq * float(4.0 * blocksize / ma.SR)), iphase);
+lfpar(freq, iphase) = lfosc(lfparB(fmul(freq, float(4.0 / ma.SR))), iphase);
+lfpar_kr(freq, iphase) = lfosc_kr(lfparB(fmul(freq, float(4.0 * blocksize / ma.SR))), iphase);
 
 // LFCub: phase starts at iphase + 0.5; pre-wrap at 2 by -2; z = phase or 2 - phase;
 // z * z * (6 - 4z) - 1; then step.
@@ -371,8 +373,8 @@ cub(z) = z * z * (6.0 - 4.0 * z) - 1.0;
 lfcubB(inc) = _, _ <: (\(h, l).(dge(h, l, 2.0))), (cwrap(\(h, l).(dge(h, l, 2.0)), 2.0))
     : \(w, h, l).(cub(select2(dlt(h, l, 1.0) | w, fadd(fsub(2.0, h), 0.0 - l), dval(h, l))), h, l)
     : _, daddB(inc);
-lfcub(freq, iphase) = lfosc(lfcubB(freq * float(2.0 / ma.SR)), iphase + 0.5);
-lfcub_kr(freq, iphase) = lfosc_kr(lfcubB(freq * float(2.0 * blocksize / ma.SR)), iphase + 0.5);
+lfcub(freq, iphase) = lfosc(lfcubB(fmul(freq, float(2.0 / ma.SR))), iphase + 0.5);
+lfcub_kr(freq, iphase) = lfosc_kr(lfcubB(fmul(freq, float(2.0 * blocksize / ma.SR))), iphase + 0.5);
 
 // LFPulse: pre-wrap at 1 taking the new duty (and outputting at least one sample of
 // the opposite polarity), else z = phase < duty; then step. State: phase pair, duty.
@@ -390,8 +392,8 @@ with {
          : (_, _, _ <: (_, _, _), stepB)
          : \(h, l, d, z, h2, l2, d2).(select2(clk, h, h2), select2(clk, l, l2), select2(clk, d, d2), z);
 };
-lfpulse(freq, iphase, width) = lfpulse_clk(freq * float(1.0 / ma.SR), iphase, width, 1);
-lfpulse_kr(freq, iphase, width) = lfpulse_clk(freq * float(blocksize / ma.SR), iphase, width, krclk);
+lfpulse(freq, iphase, width) = lfpulse_clk(fmul(freq, float(1.0 / ma.SR)), iphase, width, 1);
+lfpulse_kr(freq, iphase, width) = lfpulse_clk(fmul(freq, float(blocksize / ma.SR)), iphase, width, krclk);
 
 phi(p) = p : _, !;  // components of a (hi, lo) pair expression
 plo(p) = p : !, _;
@@ -418,17 +420,17 @@ with {
          : (_, _, _ <: !, _, _, testB)
          : \(h, l, z, h2, l2).(select2(clk, h, phi(dadd(h2, l2, inc))), select2(clk, l, plo(dadd(h2, l2, inc))), z * clk);
 };
-impulse_ar(freq, off) = impulse_core(freq * float(1.0 / ma.SR), off, 1);
+impulse_ar(freq, off) = impulse_core(fmul(freq, float(1.0 / ma.SR)), off, 1);
 // kr freq: per block, ramp from the previous block's increment to the new one (double slope)
 impulse(freq, off) = impulse_core(r, off, 1)
 with {
     j = ba.time % blocksize;
-    t = freq * float(1.0 / ma.SR);
+    t = fmul(freq, float(1.0 / ma.SR));
     p = select2(ba.time < blocksize, ba.sAndH(j == 0, t)@blocksize, t);
     c = ba.sAndH(j == 0, t);
     r = p + (c - p) * float(j + 1) / blocksize;
 };
-impulse_kr(freq, off) = impulse_core(freq * float(blocksize / ma.SR), off, krclk);
+impulse_kr(freq, off) = impulse_core(fmul(freq, float(blocksize / ma.SR)), off, krclk);
 
 //------------------------------------------------------------------------------
 // Noise (server/plugins/NoiseUGens.cpp). scsynth's generator (taus88, SC_RGen.h) is
@@ -732,27 +734,7 @@ latch_ar(x, trig) = ba.sAndH((trig' <= 0) & (trig > 0), x);
 latch(x, trig) = ba.sAndH(krclk & (p <= 0) & (n > 0), a2k(x))
 with { n = a2k(trig); p = select2(ba.time < blocksize, n@blocksize, 0.0); };
 
-// Pan2 (PanUGens.cpp): gains from the sine table at ipos = (int)(1024 pos + 1024.5),
-// clipped to [0, 2048]; left = level sin[2048 - ipos], right = level sin[ipos].
-pan2gain(pos, level) = level * sintbl(2048 - ip), level * sintbl(ip)
-with { ip = max(0, min(2048, int(1024.0 * pos + 1024.0 + 0.5))); };
-// kr pos/level: gains ramp from the previous block's to the new ones when either changes
-pan2(x, pos, level) = x * ramp(gl), x * ramp(gr)
-with {
-    np = a2k(pos); nl = a2k(level);
-    gl = pan2gain(np, nl) : _, !;
-    gr = pan2gain(np, nl) : !, _;
-    ramp(g) = select2(ch, pg, pg + (g - pg) / blocksize * float(ba.time % blocksize))
-    with { pg = select2(ba.time < blocksize, g@blocksize, g); };
-    ch = (np != select2(ba.time < blocksize, np@blocksize, np)) | (nl != select2(ba.time < blocksize, nl@blocksize, nl));
-};
-// audio-rate pos: per-sample gains; level (kr) ramps when it changes
-pan2_ar(x, pos, level) = x * (pan2gain(pos, lv) : _, !), x * (pan2gain(pos, lv) : !, _)
-with {
-    nl = a2k(level);
-    pl = select2(ba.time < blocksize, nl@blocksize, nl);
-    lv = select2(nl != pl, pl, pl + (nl - pl) / blocksize * float(ba.time % blocksize));
-};
+// Pan2: see "Panners and crossfades" below.
 
 // Generic two-state filter: step(x, y1, y2) -> (y0, out); y1 at time 0 is the state left
 // by the constructor sample (init); state zapped at block end, as in FilterUGens.cpp.
@@ -2010,3 +1992,315 @@ with {
 };
 sweep(t, rate, tra, rta) = sweep_g(t, rate, tra, rta, ma.SR, 1);
 sweep_kr(t, rate) = sweep_g(t, rate, 0, 0, ma.SR / blocksize, krclk);
+
+//------------------------------------------------------------------------------
+// Gate, Peak, RunningMin/Max, PeakFollower, MostChange/LeastChange, LastValue, T2A, T2K
+// (TriggerUGens.cpp, LFUGens.cpp).
+//------------------------------------------------------------------------------
+blk0 = ba.time % blocksize == 0;
+blk63 = ba.time % blocksize == blocksize - 1;
+// a kr trigger's rise between the previous block and this one (m_prevtrig starts at 0)
+krrise(t) = rise(select2(ba.time < blocksize, a2k(t)@blocksize, 0.0), a2k(t));
+
+// Gate: kr gate (its first sample per block; the constructor sample counts), audio gate per
+// sample. Holds the last value passed.
+gate_g(x0, g, clk) = csm(1, step, 0.0, 1, clk)
+with { x = fadd(x0, 0.0); step(l) = nl, nl with { nl = select2(g > 0, l, x); }; };
+gate_k(x, g) = gate_g(x, a2k(g), 1);
+gate_a(x, g) = gate_g(x, g, 1);
+gate_kr(x, g) = gate_g(x, g, krclk);
+
+// Peak, RunningMin, RunningMax: a running level from the first raw input value (the
+// constructor's ZIN0(0), not its absolute value); out includes the current sample. Audio
+// trig: after the output, a rise restarts at the current input level. kr trig: the restart
+// happens at the end of the block, at the block's last input level.
+// f: the input level (abs for Peak); upd(inlevel, level): the new level.
+runlev_g(x0, f, upd, t0, atrig, clk) = csm(2, step, (initv(x), 0.0), 0, clk)
+with {
+    x = fadd(x0, 0.0);
+    t = fadd(t0, 0.0);   // opaque: a constant trigger trips libfaust 2.85's normaliser
+    step(l, p) = nl, t, o
+    with {
+        il = f(x);
+        o = upd(il, l);
+        rs = select2(atrig, blk63 & krrise(t), rise(p, t));
+        nl = select2(rs, o, il);
+    };
+};
+pkupd(il, l) = select2(il < l, il, l);       // std::max(inlevel, level)
+minupd(il, l) = select2(il < l, l, il);      // if (inlevel < level) level = inlevel
+maxupd(il, l) = select2(il > l, l, il);
+peak_g(x, t, atrig, clk) = runlev_g(x, abs, pkupd, t, atrig, clk);
+peak_k(x, t) = peak_g(x, t, 0, 1);
+peak_a(x, t) = peak_g(x, t, 1, 1);
+peak_kr(x, t) = peak_g(x, t, 1, krclk);   // kr input at kr: one sample per block
+runningmin_k(x, t) = runlev_g(x, _, minupd, t, 0, 1);
+runningmin_a(x, t) = runlev_g(x, _, minupd, t, 1, 1);
+runningmin_kr(x, t) = runlev_g(x, _, minupd, t, 1, krclk);
+runningmax_k(x, t) = runlev_g(x, _, maxupd, t, 0, 1);
+runningmax_a(x, t) = runlev_g(x, _, maxupd, t, 1, 1);
+runningmax_kr(x, t) = runlev_g(x, _, maxupd, t, 1, krclk);
+
+// PeakFollower: level follows |x| up at once and decays as l' = i + d (l - i). When decay
+// changes, the per-sample decay starts at the new value and moves by (new - old) / 64 on
+// each decaying sample; the result is stored as the old value (TriggerUGens.cpp:1936).
+// The formula, chosen at the block start by the signs of the new and stored values:
+// m 0/1: i + d (l - i); 2: i + d (l + i); 3: (1 - |d|) i + d l.
+peakfollower_g(x0, dk, clk) = csm(4, step, (initv(x), initv(dk), 0.0, 0), 0, clk)
+with {
+    x = fadd(x0, 0.0);
+    d = a2k(dk);
+    st = select2(clk == 1, 1, blk0);    // block start (ar); every step at kr
+    step(l, w, s, m) = nl, nw, s0, m0, nl
+    with {
+        eq = d == w;
+        m0 = select2(st, m, select2(eq, select2((d >= 0) & (w >= 0), select2((d <= 0) & (w <= 0), 3, 2), 1), 0));
+        w0 = select2(st, w, d);
+        s0 = select2(st, s, select2(eq, fmul(fsub(d, w), 1.0 / blocksize), 0.0));
+        il = abs(x);
+        up = il >= l;
+        dl = ba.selectn(4, m0, fadd(il, fmul(w0, fsub(l, il))), fadd(il, fmul(w0, fsub(l, il))),
+                               fadd(il, fmul(w0, fadd(l, il))), fadd(fmul(fsub(1.0, abs(w0)), il), fmul(w0, l)));
+        // flushed below 1e-30: decaying in silence, the level runs through denormals
+        nl = select2(up, dl, il) <: select2(abs(_) < 1e-30, _, 0.0);
+        nw = select2(up | (m0 == 0), fadd(w0, s0), w0);
+    };
+};
+peakfollower(x, d) = peakfollower_g(x, d, 1);
+peakfollower_kr(x, d) = peakfollower_g(x, d, krclk);
+
+// MostChange / LeastChange: the input that changed more (less) since the previous sample;
+// on a tie the most recent choice (recent starts 1 / 0). One constructor sample.
+mchange_g(most, a0, b0, clk) = csm(3, step, (0.0, 0.0, select2(most, 0, 1)), 1, clk)
+with {
+    a = fadd(a0, 0.0); b = fadd(b0, 0.0);
+    step(pa, pb, r) = a, b, nr, o
+    with {
+        df = fsub(abs(fsub(a, pa)), abs(fsub(b, pb)));
+        pa_wins = select2(most, df < 0, df > 0);
+        pb_wins = select2(most, df > 0, df < 0);
+        nr = select2(pa_wins, select2(pb_wins, r, 1), 0);
+        o = select2(pa_wins, select2(pb_wins, select2(r != 0, a, b), b), a);
+    };
+};
+mostchange(a, b) = mchange_g(1, a, b, 1);
+mostchange_kr(a, b) = mchange_g(1, a, b, krclk);
+leastchange(a, b) = mchange_g(0, a, b, 1);
+leastchange_kr(a, b) = mchange_g(0, a, b, krclk);
+
+// LastValue: the previous value that differed from the current one by >= delta. Audio input:
+// per sample; kr input: once per block (check at the block start).
+lastvalue_g(x0, dl, chk, clk) = csm(2, step, (initv(x), initv(x)), 1, clk)
+with {
+    x = fadd(x0, 0.0);
+    step(p, c) = np, nc, np
+    with { go = chk & (abs(fsub(x, c)) >= a2k(dl)); np = select2(go, p, c); nc = select2(go, c, x); };
+};
+lastvalue_a(x, d) = lastvalue_g(x, d, 1, 1);
+lastvalue_k(x, d) = lastvalue_g(x, d, blk0, 1);
+lastvalue_kr(x, d) = lastvalue_g(x, d, 1, krclk);
+
+// T2A: a kr trigger rise (from the previous block's value; the constructor's value first)
+// as one sample of its level at `offset` in the block, zeros elsewhere.
+t2a(t, off) = select2((ba.time % blocksize == int(off)) & rise(p, k), 0.0, k)
+with { k = a2k(t); p = select2(ba.time < blocksize, k@blocksize, k); };
+
+
+//------------------------------------------------------------------------------
+// Panners and crossfades (PanUGens.cpp). Gains are computed per block from kr inputs.
+// ar, kr inputs: nova's vector ramps from the previous block's gain (sc.novaramp), or a
+// gain constant when nothing changed; audio-rate position: per-sample gains, the kr level
+// accumulated in float (sc.kacc). kr units run next_ak with one sample: in * the previous
+// block's gain (sc.kprev).
+//------------------------------------------------------------------------------
+kprev(g) = select2(ba.time < blocksize, g@blocksize, g);
+// sequential float ramp from the previous block's target (Rotate2: s += slope per sample)
+seqramp(x) = (\(y1).(select2(blk0, fadd(y1, s), prv))) ~ _
+with { prv = kprev(x); s = fmul(fsub(x, prv), 1.0 / blocksize); };
+// float accumulator ramped only in blocks where ch (Pan4: stored gains drift from targets)
+gacc(x, ch) = (\(v, s).(st(v, s))) ~ (_, _) : !, !, _
+with {
+    st(v, s) = fadd(v0, s1), s1, v0
+    with {
+        v0 = select2(ba.time == 0, v, x);
+        s1 = select2(blk0, s, select2(ch, 0.0, fmul(fsub(x, v0), 1.0 / blocksize)));
+    };
+};
+kchanged(x) = x != kprev(x);
+// (int)(1024 pos + 1024 + .5) clipped to [0, 2048]: three float roundings
+ipos2048(p) = max(0, min(2048, int(fadd(fadd(fmul(1024.0, p), 1024.0), 0.5))));
+sgains(p, lv) = fmul(lv, sintbl(2048 - i)), fmul(lv, sintbl(i)) with { i = ipos2048(p); };
+linpgains(p, lv) = fsub(lv, r), r with { r = fmul(lv, fadd(fmul(p, 0.5), 0.5)); };
+
+pan2(x, pos, level) = fmul(x, novaramp(gl)), fmul(x, novaramp(gr))
+with { gl = sgains(a2k(pos), a2k(level)) : _, !; gr = sgains(a2k(pos), a2k(level)) : !, _; };
+pan2_ar(x, pos, level) = fmul(x, gl), fmul(x, gr)
+with { lv = kacc(a2k(level)); gl = sgains(pos, lv) : _, !; gr = sgains(pos, lv) : !, _; };
+pan2_kr(x, pos, level) = fmul(x, kprev(gl)), fmul(x, kprev(gr))
+with { gl = sgains(pos, level) : _, !; gr = sgains(pos, level) : !, _; };
+
+linpan2(x, pos, level) = fmul(x, novaramp(gl)), fmul(x, novaramp(gr))
+with { gl = linpgains(a2k(pos), a2k(level)) : _, !; gr = linpgains(a2k(pos), a2k(level)) : !, _; };
+linpan2_ar(x, pos, level) = fmul(x, gl), fmul(x, gr)
+with { lv = kacc(a2k(level)); gl = linpgains(pos, lv) : _, !; gr = linpgains(pos, lv) : !, _; };
+linpan2_kr(x, pos, level) = fmul(x, kprev(gl)), fmul(x, kprev(gr))
+with { gl = linpgains(pos, level) : _, !; gr = linpgains(pos, level) : !, _; };
+
+balance2(l, r, pos, level) = fmul(l, novaramp(gl)), fmul(r, novaramp(gr))
+with { gl = sgains(a2k(pos), a2k(level)) : _, !; gr = sgains(a2k(pos), a2k(level)) : !, _; };
+balance2_ar(l, r, pos, level) = fmul(l, gl), fmul(r, gr)
+with { lv = kacc(a2k(level)); gl = sgains(pos, lv) : _, !; gr = sgains(pos, lv) : !, _; };
+balance2_kr(l, r, pos, level) = fmul(l, kprev(gl)), fmul(r, kprev(gr))
+with { gl = sgains(pos, level) : _, !; gr = sgains(pos, level) : !, _; };
+
+// XFade2: a * gl + b * gr (nova mix: two products, one sum)
+xfade2(a, b, pos, level) = fadd(fmul(a, novaramp(gl)), fmul(b, novaramp(gr)))
+with { gl = sgains(a2k(pos), a2k(level)) : _, !; gr = sgains(a2k(pos), a2k(level)) : !, _; };
+xfade2_ar(a, b, pos, level) = fadd(fmul(a, gl), fmul(b, gr))
+with { lv = kacc(a2k(level)); gl = sgains(pos, lv) : _, !; gr = sgains(pos, lv) : !, _; };
+xfade2_kr(a, b, pos, level) = fadd(fmul(a, kprev(gl)), fmul(b, kprev(gr)))
+with { gl = sgains(pos, level) : _, !; gr = sgains(pos, level) : !, _; };
+
+// LinXFade2 (level is applied by sclang outside the UGen). kr/constant pan: nova mix of
+// a * (1 - amp) + b * amp, amp = clip(pan) / 2 + 1/2, ramped from the previous block;
+// audio pan: a + amp (b - a) per sample (next_a); kr unit: next_k, one sample: the
+// previous amp (stored), a + amp (b - a).
+lxamp(p) = fadd(fmul(max(-1.0, min(1.0, p)), 0.5), 0.5);
+linxfade2(a, b, pan) = fadd(fmul(a, novaramp(fsub(1.0, am))), fmul(b, novaramp(am))) with { am = lxamp(a2k(pan)); };
+linxfade2_ar(a, b, pan) = fadd(a, fmul(lxamp(pan), fsub(b, a)));
+linxfade2_kr(a, b, pan) = fadd(a, fmul(kprev(lxamp(pan)), fsub(b, a)));
+
+// Rotate2: x' = cos x + sin y, y' = cos y - sin x; sin/cos from the sine table at
+// (int)(pos * 4096) & 8191 (+ 2048 for cos), ramped sequentially from the previous block.
+rot2tab(p) = sintbl(i), sintbl((2048 + i) & 8191) with { i = int(fmul(p, 4096.0)) & 8191; };
+rotate2_g(x, y, pos, ramp) = fadd(fmul(c, x), fmul(s, y)), fsub(fmul(c, y), fmul(s, x))
+with { s = rot2tab(a2k(pos)) : _, ! : ramp; c = rot2tab(a2k(pos)) : !, _ : ramp; };
+rotate2(x, y, pos) = rotate2_g(x, y, pos, seqramp);
+rotate2_kr(x, y, pos) = rotate2_g(x, y, pos, kprev);
+
+// Pan4: four gains (left/right x front/back x level) from xpos, ypos folded onto the
+// square's edge when outside it; accumulated ramps in blocks where an input changed.
+pan4gains(xp, yp, lv) = fmul(lfa, fr), fmul(rfa, fr), fmul(lfa, bk), fmul(rfa, bk)
+with {
+    out = (xp < -1.0) | (xp > 1.0) | (yp < -1.0) | (yp > 1.0);
+    xa = abs(xp); ya = abs(yp);
+    c1 = yp > xa; c2 = yp < 0.0 - xa; c3 = ya < xp;
+    fx = select2(c1, select2(c2, select2(c3, -1.0, 1.0), fsub(fsub(xp, yp) / (0.0 - yp), 1.0)), fsub(fadd(xp, yp) / yp, 1.0));
+    fy = select2(c1, select2(c2, select2(c3, fsub(fsub(yp, xp) / (0.0 - xp), 1.0), fsub(fadd(yp, xp) / xp, 1.0)), -1.0), 1.0);
+    x2 = select2(out, xp, fx); y2 = select2(out, yp, fy);
+    ix = ipos2048(x2); iy = ipos2048(y2);
+    lfa = sintbl(2048 - ix); rfa = sintbl(ix);
+    fr = fmul(sintbl(iy), lv); bk = fmul(sintbl(2048 - iy), lv);
+};
+pan4(x, xp, yp, lv) = pan4gains(a2k(xp), a2k(yp), a2k(lv)) : par(i, 4, \(g).(fmul(x, gacc(g, ch))))
+with { ch = kchanged(a2k(xp)) | kchanged(a2k(yp)) | kchanged(a2k(lv)); };
+pan4_kr(x, xp, yp, lv) = pan4gains(xp, yp, lv) : par(i, 4, \(g).(fmul(x, kst(g, ch))))
+with {
+    ch = kchanged(xp) | kchanged(yp) | kchanged(lv);
+    // one sample per block: out with the stored gain; then, if an input changed, the stored
+    // gain += (next - stored) (CALCSLOPE with slope factor 1)
+    stored(g, c) = (\(v).(select2(ba.time == 0, select2(krclk & c, v, fadd(v, fsub(g, v))), g))) ~ _;
+    kst(g, c) = select2(ba.time == 0, ba.sAndH(krclk, mem(stored(g, c))), g);
+};
+
+//------------------------------------------------------------------------------
+// LPZ1, HPZ1, LPZ2, HPZ2, BPZ2, BRZ2, Slope (FilterUGens.cpp): short FIRs on double copies
+// of the input. The state starts at the first input (constructor), so the constructor's
+// sample changes nothing. (a +- b) * 0.5 rounds once either way; the three-term sums of
+// LPZ2/HPZ2 round once in double (TwoSum here); Slope is sr * (x0 - x1) in double.
+//------------------------------------------------------------------------------
+zx1(x) = select2(ba.time == 0, x', x);
+zx2(x) = select2(ba.time < 2, x'', zx1(x)');
+zx2b(x) = select2(ba.time == 0, zx2(x), x);
+lpz1(x) = fmul(fadd(x, zx1(x)), 0.5);
+hpz1(x) = fmul(fsub(x, zx1(x)), 0.5);
+// a + b + c rounded once: TwoSum twice, the errors added before the last rounding
+sum3(a, b, c) = fadd(s2, fadd(e1, e2))
+with {
+    s1 = twosum(a, b) : _, !; e1 = twosum(a, b) : !, _;
+    s2 = twosum(s1, c) : _, !; e2 = twosum(s1, c) : !, _;
+};
+lpz2(x) = fmul(sum3(x, fmul(2.0, zx1(x)), zx2b(x)), 0.25);
+hpz2(x) = fmul(sum3(x, 0.0 - fmul(2.0, zx1(x)), zx2b(x)), 0.25);
+bpz2(x) = fmul(fsub(x, zx2b(x)), 0.5);
+brz2(x) = fmul(fadd(x, zx2b(x)), 0.5);
+slope_g(x, sr) = dmulr(dh, dl, float(sr))
+with { dh = twosum(x, 0.0 - zx1(x)) : _, !; dl = twosum(x, 0.0 - zx1(x)) : !, _; };
+slope(x) = slope_g(x, ma.SR);
+// kr: the same on the block sequence (the previous blocks' values)
+zk1(x) = select2(ba.time < blocksize, x@blocksize, x);
+zk2(x) = select2(ba.time < 2 * blocksize, x@(2 * blocksize), zk1(x));
+lpz1_kr(x) = fmul(fadd(x, zk1(x)), 0.5);
+hpz1_kr(x) = fmul(fsub(x, zk1(x)), 0.5);
+lpz2_kr(x) = fmul(sum3(x, fmul(2.0, zk1(x)), zk2(x)), 0.25);
+hpz2_kr(x) = fmul(sum3(x, 0.0 - fmul(2.0, zk1(x)), zk2(x)), 0.25);
+bpz2_kr(x) = fmul(fsub(x, zk2(x)), 0.5);
+brz2_kr(x) = fmul(fadd(x, zk2(x)), 0.5);
+slope_kr(x) = dmulr(dh, dl, float(ma.SR / blocksize))
+with { dh = twosum(x, 0.0 - zk1(x)) : _, !; dl = twosum(x, 0.0 - zk1(x)) : !, _; };
+
+//------------------------------------------------------------------------------
+// FOS, SOS (FilterUGens.cpp:3013): first/second-order sections in double (state,
+// coefficients, arithmetic) on float pairs; the output rounds once to float. State zapped
+// (double zapgremlins) at block ends. The constructor runs one sample (next_1), which
+// does change the state. Coefficient modes: all audio rate (per sample, float), all
+// constant (SOS next_i), else per block: FOS ramps from the previous target by (next -
+// prev) / 64 per sample; SOS ramps the stored (accumulated) value by (next - stored) / 21
+// after each group of 3 samples (mFilterLoops), the last sample using the final value.
+//------------------------------------------------------------------------------
+dmul2(ah, al, bh, bl) = dfast(p, fmaf(ah, bl, fmaf(al, bh, fmaf(ah, bh, 0.0 - p)))) with { p = ah * bh; };
+dzap(h, l) = select2((abs(h) > 1e-15) & (abs(h) < 1e15), 0.0, h), select2((abs(h) > 1e-15) & (abs(h) < 1e15), 0.0, l);
+// a float coefficient as a pair
+fpair(c) = c, 0.0;
+// FOS ramp: prev target + j * (next - prev) / 64 (exact slope; sum on pairs)
+fosramp(c) = twosum(c, 0.0 - prv) : \(dh, dl).(dmul2(dh, dl, j / blocksize, 0.0)) : \(sh, sl).(dadd2(prv, 0.0, sh, sl))
+with { prv = kprev(c); j = float(ba.time % blocksize); };
+// SOS ramp: stored pair s; per block slope = (next - s) / 21; value s + g * slope for group
+// g = min(j / 3, 21); at the block's last sample the stored value becomes s + 21 slope.
+sosramp(c) = (\(h, l).(step(h, l))) ~ (_, _) : !, !, _, _
+with {
+    j = ba.time % blocksize;
+    g = float(min(int(j / 3), 21));
+    step(h, l) = dadd2(c, 0.0, 0.0 - h0, 0.0 - l0) : \(dh, dl).(ddivf(dh, dl, 21.0))
+        : \(qh, ql).((dmul2(qh, ql, g, 0.0) : \(mh, ml).(dadd2(h0, l0, mh, ml))),
+                     (dmul2(qh, ql, 21.0, 0.0) : \(nh, nl).(dadd2(h0, l0, nh, nl))))
+        : \(vh, vl, eh, el).(select2(blk63, h0, eh), select2(blk63, l0, el), vh, vl)
+    with { h0 = select2(ba.time == 0, h, initv(c)); l0 = select2(ba.time == 0, l, 0.0); };
+};
+// one biquad step on pairs: (x, a0, a1, a2, b1, b2 as pairs, y1, y2) -> (y0, out)
+bq(x, a0h, a0l, a1h, a1l, a2h, a2l, b1h, b1l, b2h, b2l, y1h, y1l, y2h, y2l) =
+    (dmul2(b1h, b1l, y1h, y1l) : daddfB(x)) : \(sh, sl).(
+    dmul2(b2h, b2l, y2h, y2l) : \(th, tl).(
+    dadd2(sh, sl, th, tl) : \(y0h, y0l).(
+    dmul2(a0h, a0l, y0h, y0l) : \(ph, pl).(
+    dmul2(a1h, a1l, y1h, y1l) : \(qh, ql).(
+    dmul2(a2h, a2l, y2h, y2l) : \(rh, rl).(
+    dadd2(ph, pl, qh, ql) : \(uh, ul).(y0h, y0l, (dadd2(uh, ul, rh, rl) : fadd))))))));
+// SOS: coefficient pairs as 10 wires; clk steps (kr: once per block)
+sos_g(x, cs, clk) = (\(p, q, r, s).(run(p, q, r, s))) ~ (_, _, _, _) : !, !, !, !, _ : ba.sAndH(clk)
+with {
+    // the constructor's sample from zero state
+    c0 = (x, cs, 0.0, 0.0, 0.0, 0.0) : bq;
+    run(p, q, r, s) = (st0 : \(y1h, y1l, y2h, y2l).((x, cs, y1h, y1l, y2h, y2l) : bq
+        : \(y0h, y0l, o).(nxt(y0h, y0l, y1h, y1l), o)))
+    with {
+        st0 = select2(ba.time == 0, p, (c0 : _, !, !)), select2(ba.time == 0, q, (c0 : !, _, !)),
+              select2(ba.time == 0, r, 0.0), select2(ba.time == 0, s, 0.0);
+        held = p, q, r, s;
+        // step: y2 = y1, y1 = y0, zapped at block end (kr: every step)
+        nxt(y0h, y0l, y1h, y1l) = (select2(clk, p, z0h), select2(clk, q, z0l), select2(clk, r, z1h), select2(clk, s, z1l))
+        with {
+            ze = select2(clk == 1, 1, blk63);
+            z0h = select2(ze, y0h, (dzap(y0h, y0l) : _, !)); z0l = select2(ze, y0l, (dzap(y0h, y0l) : !, _));
+            z1h = select2(ze, y1h, (dzap(y1h, y1l) : _, !)); z1l = select2(ze, y1l, (dzap(y1h, y1l) : !, _));
+        };
+    };
+};
+sos_a(x, a0, a1, a2, b1, b2) = sos_g(x, (a0, 0.0, a1, 0.0, a2, 0.0, b1, 0.0, b2, 0.0), 1);
+sos_i(x, a0, a1, a2, b1, b2) = sos_g(x, (a0, 0.0, a1, 0.0, a2, 0.0, b1, 0.0, b2, 0.0), 1);
+sos_k(x, a0, a1, a2, b1, b2) = sos_g(x, (sosramp(a2k(a0)), sosramp(a2k(a1)), sosramp(a2k(a2)), sosramp(a2k(b1)), sosramp(a2k(b2))), 1);
+sos_kr(x, a0, a1, a2, b1, b2) = sos_g(x, (a0, 0.0, a1, 0.0, a2, 0.0, b1, 0.0, b2, 0.0), krclk);
+// FOS: a SOS with a2 = b2 = 0 (the same double arithmetic: in + b1 y1, a0 y0 + a1 y1)
+fos_a(x, a0, a1, b1) = sos_g(x, (a0, 0.0, a1, 0.0, 0.0, 0.0, b1, 0.0, 0.0, 0.0), 1);
+fos_k(x, a0, a1, b1) = sos_g(x, (fosramp(a2k(a0)), fosramp(a2k(a1)), 0.0, 0.0, fosramp(a2k(b1)), 0.0, 0.0), 1);
+fos_kr(x, a0, a1, b1) = sos_g(x, (a0, 0.0, a1, 0.0, 0.0, 0.0, b1, 0.0, 0.0, 0.0), krclk);

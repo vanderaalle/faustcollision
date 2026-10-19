@@ -18,6 +18,9 @@ def test_every_mapping_entry_has_a_case():
     missing = []
     for cls, e in load_table().items():
         for rec in (e["operators"].values() if e.get("kind") == "operator" else [e]):
+            # a rejected entry (tier "rejected") is covered by a translator test instead
+            if e.get("tier") == "rejected" and rec["case"].startswith("tests/test_translator.py::"):
+                continue
             if rec["case"] not in cases:
                 missing.append(f"{cls}: {rec['case']}")
     assert not missing, f"mapping entries without a regression case: {missing}"

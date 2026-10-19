@@ -276,6 +276,55 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 			K2A.ar(Sweep.kr(Impulse.kr(0.7), 2)), K2A.ar(Timer.kr(Impulse.kr(3)))
 		] * 0.5)
 	}),
+	// Gate, Peak, RunningMin/Max, PeakFollower, MostChange, LeastChange, LastValue, T2A:
+	// audio, kr and constant triggers, a changing decay, control rate. Inputs read in the
+	// constructor (initial levels) come from SinOsc.kr (README, constructor values)
+	SynthDef(\case_Peak, {
+		var x = in.value, s = SinOsc.ar(3.1), ia = Impulse.ar(4.3), ik = Impulse.kr(2.1);
+		Out.ar(0, [
+			Gate.ar(x, s), Gate.ar(x, LFPulse.kr(3)), Peak.ar(x, ia), Peak.ar(x, ik), Peak.ar(s * 0.5),
+			RunningMin.ar(x, ia), RunningMin.ar(s, ik), RunningMax.ar(x, ia), RunningMax.ar(s, ik), RunningMax.ar(x),
+			PeakFollower.ar(x, 0.999), PeakFollower.ar(x, Line.kr(0.99, 0.9999, 6)), PeakFollower.ar(s, Line.kr(0.5, -0.5, 4)),
+			MostChange.ar(x, s), LeastChange.ar(x, s), MostChange.ar(x, LFTri.kr(1)),
+			LastValue.ar(x, 0.05), LastValue.ar(SinOsc.kr(0.7), 0.3), T2A.ar(ik), T2A.ar(Impulse.kr(3.3), 17),
+			K2A.ar(Peak.kr(SinOsc.kr(0.6), Impulse.kr(1))), K2A.ar(RunningMin.kr(SinOsc.kr(0.6))),
+			K2A.ar(PeakFollower.kr(SinOsc.kr(0.6), 0.9)), K2A.ar(MostChange.kr(SinOsc.kr(0.6), SinOsc.kr(0.9))),
+			K2A.ar(LastValue.kr(SinOsc.kr(0.6), 0.2)), K2A.ar(Gate.kr(SinOsc.kr(0.6), LFPulse.kr(0.4)))
+		] * 0.5)
+	}),
+	// LinPan2, Balance2, XFade2, LinXFade2, Rotate2, Pan4: constant, kr and audio-rate
+	// positions, kr levels, positions outside the range, control rate
+	SynthDef(\case_Pan4, {
+		var x = in.value, s = SinOsc.ar(220) * 0.5, kp = SinOsc.kr(0.3) * 1.3, ap = SinOsc.ar(0.7);
+		Out.ar(0, LinPan2.ar(x, 0.3) ++ LinPan2.ar(x, kp, Line.kr(1, 0.2, 5)) ++ LinPan2.ar(x, ap)
+			++ Balance2.ar(x, s, -0.4) ++ Balance2.ar(x, s, kp, 0.7) ++ Balance2.ar(x, s, ap, Line.kr(0.5, 1, 4))
+			++ [XFade2.ar(x, s, 0.2), XFade2.ar(x, s, kp), XFade2.ar(x, s, ap, Line.kr(1, 0.3, 6)),
+				LinXFade2.ar(x, s, -0.6), LinXFade2.ar(x, s, kp), LinXFade2.ar(x, s, ap)]
+			++ Rotate2.ar(x, s, 0.3) ++ Rotate2.ar(x, s, SinOsc.kr(0.2))
+			++ Pan4.ar(x, 0.2, -0.5) ++ Pan4.ar(x, kp, SinOsc.kr(0.17) * 1.5, Line.kr(1, 0.5, 7))
+			++ K2A.ar(Pan2.kr(SinOsc.kr(1.1), SinOsc.kr(0.3))) ++ K2A.ar(Rotate2.kr(SinOsc.kr(1.1), SinOsc.kr(0.6), SinOsc.kr(0.2)))
+			++ K2A.ar(Pan4.kr(SinOsc.kr(1.1), SinOsc.kr(0.3) * 1.4, SinOsc.kr(0.23)))
+		)
+	}),
+	// LPZ1, HPZ1, LPZ2, HPZ2, BPZ2, BRZ2, Slope at audio and control rate
+	SynthDef(\case_LPZ, {
+		var x = in.value, k = SinOsc.kr(3.3) + SinOsc.kr(11.7, 0, 0.3);
+		Out.ar(0, [LPZ1.ar(x), HPZ1.ar(x), LPZ2.ar(x), HPZ2.ar(x), BPZ2.ar(x), BRZ2.ar(x), Slope.ar(x) * 0.0001]
+			++ K2A.ar([LPZ1.kr(k), HPZ1.kr(k), LPZ2.kr(k), HPZ2.kr(k), BPZ2.kr(k), BRZ2.kr(k), Slope.kr(k) * 0.01]))
+	}),
+	// FOS, SOS: constant (a resonant lowpass at 300 Hz, Q 8), per-block (Line) and audio-rate
+	// coefficients, control rate
+	SynthDef(\case_SOS, {
+		var x = in.value, w = 2pi * 300 / 48000, al = sin(w) / 16, n = 1 + al;
+		var a0 = (1 - cos(w)) / 2 / n, a1 = (1 - cos(w)) / n, b1 = 2 * cos(w) / n, b2 = (al - 1) / n;
+		Out.ar(0, [
+			SOS.ar(x, a0, a1, a0, b1, b2), SOS.ar(x, a0, a1, a0, Line.kr(b1, b1 * 0.999, 4), b2),
+			SOS.ar(x, DC.ar(0.3), DC.ar(0.2), DC.ar(0.1), SinOsc.ar(0.5) * 0.3 + 1.2, DC.ar(-0.6)),
+			FOS.ar(x, 0.1, 0.1, 0.8), FOS.ar(x, Line.kr(0.1, 0.5, 5), 0.2, Line.kr(0.9, 0.99, 7)),
+			FOS.ar(x, DC.ar(0.3), DC.ar(-0.3), SinOsc.ar(0.3) * 0.2 + 0.7),
+			K2A.ar(SOS.kr(SinOsc.kr(3), 0.3, 0.2, 0.1, 1.2, -0.6)), K2A.ar(FOS.kr(SinOsc.kr(3), 0.3, 0.2, 0.7))
+		] * 0.3)
+	}),
 	// Noise: statistics only (scsynth's generator is seeded per server). Each at ar and kr.
 	// Rates and densities stay >= 100/s: a statistical comparison needs ~1000 random events
 	// per render (LFNoise2 at 20 Hz over 10 s varies ±2.4 dB from seed to seed).
