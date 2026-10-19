@@ -4,6 +4,8 @@ SuperCollider SynthDef → Faust translator; every UGen port checked against scs
 See README.md for usage. Consumers (e.g. the vairi pedal project) use it as a git submodule
 and run `translator.build --project DIR` / `pytest --project=DIR` on their own `defs/`.
 
+Current status and next steps: `docs/next.md` (read it first when resuming).
+
 ## Rules
 
 - Port from scsynth's C++ (`~/src/supercollider`, tag Version-3.13.0, nova-simd submodule
