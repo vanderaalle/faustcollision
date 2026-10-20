@@ -3086,3 +3086,32 @@ faust = { ar_a = "sc.grainsin_g(max(1, int({maxGrains}) - 1), {nout}, {trigger},
 compare = "waveform"
 tol = 1e-6
 case = "case_GrainSin"
+
+[GrainFM]
+tier = "direct"
+inputs = ["trigger", "dur", "carfreq", "modfreq", "index", "pan", "envbufnum", "maxGrains"]
+outputs = "n"
+# GrainUGens.cpp: as GrainSin, an FM pair per grain (the carrier increment recomputed per
+# sample); envbufnum -1 only; maxGrains sizes the voices (constructor)
+require = { envbufnum = -1.0 }
+constant_inputs = ["maxGrains"]
+template_by = "grain_calc"
+faust = { ar_a = "sc.grainfm_g(max(1, int({maxGrains}) - 1), {nout}, {trigger}, {dur}, {carfreq}, {modfreq}, {index}, {pan}, 0)", ar_k = "sc.grainfm_g(max(1, int({maxGrains}) - 1), {nout}, {trigger}, sc.a2k({dur}), sc.a2k({carfreq}), sc.a2k({modfreq}), sc.a2k({index}), sc.a2k({pan}), 1)" }
+compare = "waveform"
+tol = 1e-6
+case = "case_GrainFM"
+
+[GrainIn]
+tier = "direct"
+inputs = ["trigger", "dur", "in", "pan", "envbufnum", "maxGrains"]
+outputs = "n"
+# GrainUGens.cpp: as GrainSin, windowing the input (read per sample: audio rate only);
+# envbufnum -1 only; maxGrains sizes the voices (constructor)
+require = { envbufnum = -1.0 }
+constant_inputs = ["maxGrains"]
+ar_inputs = ["in"]
+template_by = "grain_calc"
+faust = { ar_a = "sc.grainin_g(max(1, int({maxGrains}) - 1), {nout}, {trigger}, {dur}, {in}, {pan}, 0)", ar_k = "sc.grainin_g(max(1, int({maxGrains}) - 1), {nout}, {trigger}, sc.a2k({dur}), {in}, sc.a2k({pan}), 1)" }
+compare = "waveform"
+tol = 1e-6
+case = "case_GrainIn"

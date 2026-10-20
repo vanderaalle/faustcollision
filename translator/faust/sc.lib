@@ -654,9 +654,12 @@ with {
 };
 // the window resonator step on pairs: (b1, y1, y2) -> (y0 = b1 y1 - y2, y1)
 gres(bh, bl, yh, yl, zh, zl) = dmul2(bh, bl, yh, yl) : \(mh, ml).(dadd2(mh, ml, 0.0 - zh, 0.0 - zl)), yh, yl;
-grainsin_g(V, nout, trig, dur, freq, pan, isk) = (bank ~ si.bus(P * K)) : (si.block(P * K), gmix(P, nout))
+// The voice bank shared by GrainSin, GrainFM, GrainIn. Per voice: (counter, b1 pair, y1
+// pair, y2 pair, pan1, pan2, chan, E kind states); initE: the kind states at a grain's
+// start; advE: their step (E -> E); oscE: the value the window multiplies (E -> 1).
+grain_bank(V, nout, E, initE, advE, oscE, trig, dur, pan, isk) = (bank ~ si.bus(P * K)) : (si.block(P * K), gmix(P, nout))
 with {
-    K = 12;
+    K = 10 + E;
     P = V + min(V, 16);
     t0 = ba.time == 0;
     rising = (select2(t0, trig', trig) <= 0) & (trig > 0) & select2(isk, 1, krclk);
@@ -665,22 +668,21 @@ with {
     cnt0 = max(4, iprod(dur, ma.SR));
     w = 3.14159265358979 / float(cnt0);
     sh = sin(w * 0.5) * 2.0;
-    gp = gpan(nout, pan);
-    // (counter, b1 pair, y1 pair, y2 pair, phase, inc, pan1, pan2, chan)
-    init = (cnt0, (dmul2(sh, 0.0, sh, 0.0) : \(qh, ql).(drsub(2.0, qh, ql))), sin(w), 0.0, 0.0, 0.0, 0, dinc(freq, 29), gp);
-    adv = \(c, bh, bl, yh, yl, zh, zl, ph, inc, a1, a2, ch).(c - 1, bh, bl, gres(bh, bl, yh, yl, zh, zl), ph + inc, inc, a1, a2, ch);
+    init = cnt0, (dmul2(sh, 0.0, sh, 0.0) : \(qh, ql).(drsub(2.0, qh, ql))), sin(w), 0.0, 0.0, 0.0, gpan(nout, pan), initE;
+    adv = (\(c, bh, bl, yh, yl, zh, zl, a1, a2, ch).(c - 1, bh, bl, gres(bh, bl, yh, yl, zh, zl), a1, a2, ch)), advE;
     // a voice: (state K, first free voice) -> (next state K, out1, out2, chan)
-    voice(v) = \(c, bh, bl, yh, yl, zh, zl, ph, inc, a1, a2, ch, idx).(
-        ((c, bh, bl, yh, yl, zh, zl, ph, inc, a1, a2, ch), init, (init : adv)) : ro.interleave(K, 3) : par(k, K, choose)
-        : (si.bus(K) <: (nxt, outs))
-        with { choose = \(x, i, ia).(select2(ctor & (v == 0), select2(rising & (idx == v), x, i), ia)); });
+    voice(v) = (si.bus(K) <: (si.bus(K), init, (init : adv))), _ : (ro.interleave(K, 3), _) : chooseAll(v)
+        : (si.bus(K) <: (nxt, outs));
+    chooseAll(v) = si.bus(3 * K + 1) <: par(k, K, (route(3 * K + 1, 4, (3 * k + 1, 1), (3 * k + 2, 2), (3 * k + 3, 3), (3 * K + 1, 4))
+        : \(x, i, ia, idx).(select2(ctor & (v == 0), select2(rising & (idx == v), x, i), ia))));
     // advance while the grain lasts
-    nxt = \(c, bh, bl, yh, yl, zh, zl, ph, inc, a1, a2, ch).(((c, bh, bl, yh, yl, zh, zl, ph, inc, a1, a2, ch) <: (si.bus(K), adv))
-        : ro.interleave(K, 2) : par(k, K, select2(c > 0)));
-    outs = \(c, bh, bl, yh, yl, zh, zl, ph, inc, a1, a2, ch).(gout(c, yh, yl, ph, a1, a2), ch);
-    // (float)(amp * sine) * pan, amp = y1^2 in double; 0 when idle
-    gout(c, yh, yl, ph, a1, a2) = dmul2(yh, yl, yh, yl) : \(ah, al).(dmulr(ah, al, lookupi1(ph)))
-        <: select2(c > 0, 0.0, _ * a1), select2(c > 0, 0.0, _ * a2);
+    nxt = si.bus(K) <: (si.bus(K), adv, (_, si.block(K - 1)))
+        : route(2 * K + 1, 3 * K, par(k, K, ((k + 1, 3 * k + 1), (K + k + 1, 3 * k + 2), (2 * K + 1, 3 * k + 3))))
+        : par(k, K, \(x, y, c).(select2(c > 0, x, y)));
+    // (float)(amp * osc) * pan, amp = y1^2 in double; 0 when idle
+    outs = (\(c, bh, bl, yh, yl, zh, zl, a1, a2, ch).(c, yh, yl, a1, a2, ch)), oscE
+        : \(c, yh, yl, a1, a2, ch, o).((dmul2(yh, yl, yh, yl) : \(ah, al).(dmulr(ah, al, o))
+            <: select2(c > 0, 0.0, _ * a1), select2(c > 0, 0.0, _ * a2)), ch);
     // the first physically free voice, or P when the logical slots are full
     counters = par(v, P, (_, si.block(K - 1)));
     freeidx = counters <: (par(v, P, \(c).(select2(c <= 0, P, v))) : ba.parallelMin(P)),
@@ -691,6 +693,15 @@ with {
         : par(v, P, voice(v))
         : route(P * (K + 3), P * (K + 3), par(v, P, (par(k, K, (v * (K + 3) + k + 1, v * K + k + 1)), par(o, 3, (v * (K + 3) + K + o + 1, P * K + v * 3 + o + 1)))));
 };
+// GrainSin: (phase, inc), sine lookup
+grainsin_g(V, nout, trig, dur, freq, pan, isk) = grain_bank(V, nout, 2, (0, dinc(freq, 29)), \(ph, inc).(ph + inc, inc), \(ph, inc).(lookupi1(ph)), trig, dur, pan, isk);
+// GrainFM: (carrier phase, mod phase, mod inc, deviation, carrier base); the carrier
+// increment per sample from the modulator: (int32)(cpstoinc * (carfreq + sin(mphase) * dev))
+grainfm_g(V, nout, trig, dur, cf, mf, idx, pan, isk) = grain_bank(V, nout, 5, (0, 0, dinc(mf, 29), idx * mf, cf),
+    \(cp, mp, minc, dev, cb).(cp + dinc(cb + lookupi1(mp) * dev, 29), mp + minc, minc, dev, cb),
+    \(cp, mp, minc, dev, cb).(lookupi1(cp)), trig, dur, pan, isk);
+// GrainIn: the input (one placeholder state)
+grainin_g(V, nout, trig, dur, x, pan, isk) = grain_bank(V, nout, 1, 0, \(d).(d), \(d).(x), trig, dur, pan, isk);
 // sum the voices' (out1, out2, chan) into n outputs: out1 to chan, out2 to chan + 1 (mod n)
 gmix(V, n) = si.bus(3 * V) <: par(k, n, (par(v, V, \(o1, o2, ch).(select2(ch == k, 0.0, o1) + select2(((ch + 1) % n) == k, 0.0, o2))) :> _));
 // Dust / Dust2: frand below density * sampledur. density is read once per block.
