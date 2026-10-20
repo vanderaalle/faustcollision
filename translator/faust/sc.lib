@@ -3174,7 +3174,8 @@ with {
     t0 = ba.time == 0;
     loop(c0, f0, a3, a2, a1, a0, b1, b2) = nc, nf, n3, n2, n1, n0, m1, m2, out
     with {
-        cnt = select2(t0, c0, 0.0); fr = select2(t0, f0, 0.0);
+        // the constructor's next(1) leaves counter 1, frac slope (ChaosUGens.cpp:241)
+        cnt = select2(t0, c0, 1.0); fr = select2(t0, f0, sl);
         x3 = select2(t0, a3, xi); x2 = select2(t0, a2, xi); x1 = select2(t0, a1, xi); x0 = select2(t0, a0, xi);
         y1 = select2(t0, b1, s1i); y2 = select2(t0, b2, s2i);
         it = cnt >= spc;
