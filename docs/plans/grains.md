@@ -16,7 +16,8 @@ Deterministic given the triggers: compare by waveform.
   position 0). Inputs read at the trigger sample (ar) or the block start (kr); GrainFM
   reads its inputs with GRAIN_IN_AT (the audio sample when audio rate, also at kr).
 - counter = (int)max(4, dur * SR) samples. Hann by a resonator in double (float pairs):
-  w = pi / counter, b1 = 2 cos w, y1 = sin w, y2 = 0, amp = y1^2; per sample: output amp *
+  w = pi / max(4, dur * SR) (the double, before the (int) cast), b1 = 2 cos w, y1 = sin w,
+  y2 = 0, amp = y1^2; per sample: output amp *
   osc, then y0 = b1 y1 - y2, y2 = y1, y1 = y0, amp = y1^2.
 - GrainSin: phase int32 from 0, inc (int32)(cpstoinc * freq), lookupi1.
 - GrainFM: mod phase from 0, mfreq = (int32)(cpstoinc * modfreq), deviation = index *

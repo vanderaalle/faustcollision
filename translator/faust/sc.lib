@@ -636,10 +636,11 @@ with {
 // removes a grain at the end of the block it ends in, before that block's triggers): V =
 // maxGrains - 1 logical slots; a grain counts while its remaining length exceeds the rest
 // of the block. A grain ending in the block still sounds, so the port has P = V + min(V,
-// 16) physical voices: exact unless more than 16 grains end in one block at saturation. Per grain: counter = (int)max(4, dur * SR) samples; the Hann window by a
-// resonator in double (float pairs: b1 = 2 cos w as 2 - (2 sin(w / 2))^2, w = pi /
-// counter), amp = y1^2; output (float)(amp * sine(phase)) * pan, then the resonator and
-// phase step. The constructor (next_k(1)) starts a grain when the trigger is > 0 and sets
+// 16) physical voices: exact unless more than 16 grains end in one block at saturation.
+// Per grain: length (int)max(4, dur * SR) samples; the Hann window by a resonator in
+// double (float pairs: b1 = 2 cos w as 2 - (2 sin(w / 2))^2, w = pi / max(4, dur * SR)
+// before the cast), amp = y1^2; output (float)(amp * osc) * pan, then the resonator and
+// the oscillator step. The constructor (next_k(1)) starts a grain when the trigger is > 0 and sets
 // curtrig: one sample before the first block, so no rising edge at sample 0.
 // isk: trigger at kr (a rising edge only at block starts).
 //------------------------------------------------------------------------------
@@ -666,7 +667,9 @@ with {
     ctor = t0 & (trig > 0);
     rest = blocksize - ba.time % blocksize;  // samples left in the block, this one included
     cnt0 = max(4, iprod(dur, ma.SR));
-    w = 3.14159265358979 / float(cnt0);
+    // w from the untruncated length (GET_GRAIN_INIT_AMP reads the double counter): the window
+    // need not reach 0 when the grain is cut at (int) length
+    w = 3.14159265358979 / max(4.0, fmul(dur, ma.SR));
     sh = sin(w * 0.5) * 2.0;
     init = cnt0, (dmul2(sh, 0.0, sh, 0.0) : \(qh, ql).(drsub(2.0, qh, ql))), sin(w), 0.0, 0.0, 0.0, gpan(nout, pan), initE;
     adv = (\(c, bh, bl, yh, yl, zh, zl, a1, a2, ch).(c - 1, bh, bl, gres(bh, bl, yh, yl, zh, zl), a1, a2, ch)), advE;
