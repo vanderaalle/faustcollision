@@ -3192,7 +3192,7 @@ cusp_step(a, b) = \(x, s1, s2).(a - b * sqrt(abs(x)), s1, s2);
 quad_step(a, b, c) = \(x, s1, s2).(a * x * x + b * x + c, s1, s2);
 // LinCong: s1 holds nothing; the output is scaled by 2 / m - 1 (outside the step)
 lincong_step(a, c, m) = \(x, s1, s2).(fmod(fmod(x * a + c, m) + m, m), s1, s2);
-standard_step(k) = \(x, y, s2).(mod2pi(x + yn), yn, s2) with { yn = mod2pi(y + k * sin(x)); };
+standard_step(k) = \(x, y, s2).((mod2pi(x + yn), yn, s2) with { yn = mod2pi(y + k * sin(x)); });
 fbsine_step(a, b, c, d) = \(x, y, s2).(sin(a * y + b * x), mod2pi(c * y + d), s2);
 latoo_step(a, b, c, d) = \(x, y, s2).(sin(y * b) + c * sin(x * b), sin(x * a) + d * sin(y * a), s2);
 gbman_step = \(x, y, s2).(select2(x < 0.0, 1.0 - y + x, 1.0 - y - x), x, s2);
