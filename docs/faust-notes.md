@@ -136,3 +136,12 @@ in sign-of-zero-sensitive results: Hasher (the bit pattern of -0.0), 1 / x (the 
 the infinity). Measured: Hasher.kr on bass_di, 4 of 4574 blocks with a -0.0 input. A
 non-recursive hold (x@(time % blocksize)) would keep it, at the cost of a delay line per
 hold: not done.
+
+## Division by a constant becomes multiplication by its float reciprocal
+
+`ma.SR / max(8000, 0.001)` compiles to `SR * (1 / 8000)`, and 1/8000 is not exact in
+float: 6.0000005 where scsynth's `mSampleRate / sc_max(freq, 0.001f)` gives 6. A counter
+compared against it (the chaos UGens' samplesPerCycle) then fires one sample late.
+Translated code mostly escapes it because inputs arrive through `sc.a2k` (a recursive
+signal, not a constant), but a literal argument does not. Make the divisor opaque:
+`sr / fadd(max(freq, 0.001), 0.0)` (chaos_g, henon_g).

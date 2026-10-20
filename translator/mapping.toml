@@ -2958,3 +2958,51 @@ faust = { ar = "sc.chaos_g(1, sc.gbman_step, \\(v).(v), {xi}, {yi}, 0.0, {yi}, {
 compare = "statistics"
 tol = 1.5
 case = "case_chaos"
+
+[HenonN]
+tier = "direct"
+inputs = ["freq", "a", "b", "x0", "x1"]
+# ChaosUGens.cpp:626: the map in double, chaotic: statistics; frozen past |x| > 1.5 until
+# a or b changes; initial conditions read once
+constant_inputs = ["x0", "x1"]
+self_hold = true
+faust = { ar = "sc.henon_g(0, sc.a2k({a}), sc.a2k({b}), {x0}, {x1}, sc.a2k({freq}), ma.SR)" }
+compare = "statistics"
+tol = 1.5
+case = "case_Henon"
+
+[HenonL]
+tier = "direct"
+inputs = ["freq", "a", "b", "x0", "x1"]
+# ChaosUGens.cpp:626: the map in double, chaotic: statistics; frozen past |x| > 1.5 until
+# a or b changes; initial conditions read once
+constant_inputs = ["x0", "x1"]
+self_hold = true
+faust = { ar = "sc.henon_g(1, sc.a2k({a}), sc.a2k({b}), {x0}, {x1}, sc.a2k({freq}), ma.SR)" }
+compare = "statistics"
+tol = 1.5
+case = "case_Henon"
+
+[HenonC]
+tier = "direct"
+inputs = ["freq", "a", "b", "x0", "x1"]
+# ChaosUGens.cpp:626: the map in double, chaotic: statistics; frozen past |x| > 1.5 until
+# a or b changes; initial conditions read once
+constant_inputs = ["x0", "x1"]
+self_hold = true
+faust = { ar = "sc.henon_g(3, sc.a2k({a}), sc.a2k({b}), {x0}, {x1}, sc.a2k({freq}), ma.SR)" }
+compare = "statistics"
+tol = 1.5
+case = "case_Henon"
+
+[LorenzL]
+tier = "direct"
+inputs = ["freq", "s", "r", "b", "h", "xi", "yi", "zi"]
+# ChaosUGens.cpp:1301: RK4 in double, chaotic: statistics; output x * 0.04; initial
+# conditions read once
+constant_inputs = ["xi", "yi", "zi"]
+self_hold = true
+faust = { ar = "sc.chaos_g(1, sc.lorenz_step(sc.a2k({s}), sc.a2k({r}), sc.a2k({b}), sc.a2k({h})), \\(v).(v), {xi}, {yi}, {zi}, {xi}, {xi}, sc.a2k({freq}), ma.SR) * 0.04" }
+compare = "statistics"
+tol = 1.5
+case = "case_chaos"

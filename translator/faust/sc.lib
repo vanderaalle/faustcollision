@@ -3174,7 +3174,8 @@ ipol3c(f, x3, x2, x1, x0) = ((c3 * f + c2) * f + c1) * f + c2b
 with { c2b = x2; c1 = 0.5 * (x1 - x3); c2 = x3 - 2.5 * x2 + x1 + x1 - 0.5 * x0; c3 = 0.5 * (x0 - x3) + 1.5 * (x2 - x1); };
 chaos_g(kind, mapstep, osc, xi, s1i, s2i, hx, ci, freq, sr) = loop ~ si.bus(10) : par(i, 10, !), _
 with {
-    spc = select2(freq < sr, 1.0, sr / max(freq, 0.001));
+    // fadd: an opaque divisor, or a constant freq folds into sr * (1 / freq) (48000 / 8000 = 6.0000005)
+    spc = select2(freq < sr, 1.0, sr / fadd(max(freq, 0.001), 0.0));
     sl = select2(freq < sr, 1.0, 1.0 / spc);
     t0 = ba.time == 0;
     loop(c0, f0, a3, a2, a1, a0, xs, b1, b2, g0) = nc, nf, n3, n2, n1, n0, nx, m1, m2, g1, out
@@ -3205,3 +3206,64 @@ standard_step(k) = \(x, y, s2).((mod2pi(x + yn), yn, s2) with { yn = mod2pi(y + 
 fbsine_step(a, b, c, d) = \(x, y, s2).(sin(a * y + b * x), mod2pi(c * y + d), s2);
 latoo_step(a, b, c, d) = \(x, y, s2).(sin(y * b) + c * sin(x * b), sin(x * a) + d * sin(y * a), s2);
 gbman_step = \(x, y, s2).(select2(x < 0.0, 1.0 - y + x, 1.0 - y - x), x, s2);
+lorenz_step(sg, r, b, h) = \(x, y, z).((x + (k1x + 2.0 * (k2x + k3x) + k4x) * (1.0 / 6.0),
+        y + (k1y + 2.0 * (k2y + k3y) + k4y) * (1.0 / 6.0), z + (k1z + 2.0 * (k2z + k3z) + k4z) * (1.0 / 6.0))
+    with {
+        // 4th-order Runge-Kutta as written in LorenzL_next (ChaosUGens.cpp:1340)
+        hs = h * sg;
+        k1x = hs * (y - x); k1y = h * (x * (r - z) - y); k1z = h * (x * y - b * z);
+        k2x = hs * (y + k1y * 0.5 - x - k1x * 0.5); k2y = h * ((x + k1x * 0.5) * (r - z - k1z * 0.5) - (y + k1y * 0.5));
+        k2z = h * ((x + k1x * 0.5) * (y + k1y * 0.5) - b * (z + k1z * 0.5));
+        k3x = hs * (y + k2y * 0.5 - x - k2x * 0.5); k3y = h * ((x + k2x * 0.5) * (r - z - k2z * 0.5) - (y + k2y * 0.5));
+        k3z = h * ((x + k2x * 0.5) * (y + k2y * 0.5) - b * (z + k2z * 0.5));
+        k4x = hs * (y + k3y - x - k3x); k4y = h * ((x + k3x) * (r - z - k3z) - (y + k3y));
+        k4z = h * ((x + k3x) * (y + k3y) - b * (z + k3z));
+    });
+//------------------------------------------------------------------------------
+// Henon (ChaosUGens.cpp:626-900): x' = 1 - a xnm1^2 + b xnm2 in double, iterated as above
+// while 'stable'; |x'| > 1.5 freezes it (N: xnm2 = x0, xnm1 = x1, holding x0; L: all 0,
+// output 0; C: history 0, xn 1, the cubic heading to 1). A change of a, b, x0 or x1 at a
+// block start makes it stable again, reseeding a frozen one (xnm2 = xnm1 = x0, xn = x1; C
+// also xnm3 = xnm2), with the C coefficients kept until the next iteration. The
+// constructor seeds xnm1 = x0, xnm2 (and xnm3) = x1, C coefficients 0. N outputs xnm2, L
+// interpolates xnm2 -> xnm1 (frac reset only while stable), C over xnm3..xn.
+// kind: 0 N, 1 L, 3 C. a, b block-rate (a2k) values; x0, x1 constants.
+// State: (counter, frac, xn, xnm1, xnm2, xnm3, stable, c0, c1, c2, c3).
+//------------------------------------------------------------------------------
+ipol3k(x3, x2, x1, x0) = x2, 0.5 * (x1 - x3), x3 - 2.5 * x2 + x1 + x1 - 0.5 * x0, 0.5 * (x0 - x3) + 1.5 * (x2 - x1);
+henon_g(kind, a, b, x0, x1, freq, sr) = loop ~ si.bus(11) : par(i, 11, !), _
+with {
+    // fadd: an opaque divisor, or a constant freq folds into sr * (1 / freq) (48000 / 8000 = 6.0000005)
+    spc = select2(freq < sr, 1.0, sr / fadd(max(freq, 0.001), 0.0));
+    sl = select2(freq < sr, 1.0, 1.0 / spc);
+    t0 = ba.time == 0;
+    chg = ((a != a') | (b != b')) & (t0 == 0);
+    loop(k0, f0, e0, e1, e2, e3, s0, q0, q1, q2, q3) = nc, nf, nxn, nm1, nm2, nm3, nst, nq0, nq1, nq2, nq3, out
+    with {
+        cnt = select2(t0, k0, 1.0); fr = select2(t0, f0, sl);
+        xn0 = select2(t0, e0, x1); m10 = select2(t0, e1, x0); m20 = select2(t0, e2, x1); m30 = select2(t0, e3, x1);
+        st0 = select2(t0, s0, 1);
+        p0 = select2(t0, q0, 0.0); p1 = select2(t0, q1, 0.0); p2 = select2(t0, q2, 0.0); p3 = select2(t0, q3, 0.0);
+        rs = chg & (st0 == 0);
+        xn = select2(rs, xn0, x1); m1 = select2(rs, m10, x0); m2 = select2(rs, m20, x0); m3 = select2(rs, m30, m20);
+        stb = st0 | chg;
+        it = cnt >= spc; go = it & stb;
+        // N, L map from (xnm1, xnm2); C shifts first, so from (xn, xnm1)
+        u1 = select2(kind == 3, m1, xn); u2 = select2(kind == 3, m2, m1);
+        nw = fsub(1.0, a * u1 * u1) + b * u2;
+        bad = (nw > 1.5) | (nw < -1.5);
+        nxn = select2(go, xn, select2(bad, nw, select2(kind == 0, 1.0, 0.0)));
+        nm1 = select2(go, m1, select2(bad, select2(kind == 3, nw, xn), select2(kind == 0, 0.0, x1)));
+        nm2 = select2(go, m2, select2(bad, select2(kind == 3, m1, m1), select2(kind == 0, 0.0, x0)));
+        nm3 = select2(go, m3, select2(bad, m2, 0.0));
+        nst = select2(go, stb, 1 - bad);
+        nq0 = select2(go, p0, (ipol3k(nm3, nm2, nm1, nxn) : _, !, !, !));
+        nq1 = select2(go, p1, (ipol3k(nm3, nm2, nm1, nxn) : !, _, !, !));
+        nq2 = select2(go, p2, (ipol3k(nm3, nm2, nm1, nxn) : !, !, _, !));
+        nq3 = select2(go, p3, (ipol3k(nm3, nm2, nm1, nxn) : !, !, !, _));
+        nc = fadd(select2(it, cnt, fsub(cnt, spc)), 1.0);
+        f1 = select2(select2(kind == 3, go, it), fr, 0.0);
+        out = select2(kind == 0, select2(kind == 1, ((nq3 * f1 + nq2) * f1 + nq1) * f1 + nq0, nm2 + (nm1 - nm2) * f1), nm2);
+        nf = f1 + sl;
+    };
+};

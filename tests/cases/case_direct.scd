@@ -222,7 +222,11 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 	SynthDef(\case_chaos, { Out.ar(0, [CuspN.ar(8000, 1, 1.9), CuspL.ar(3000, 1, 1.9), QuadN.ar(8000), QuadL.ar(3000), QuadC.ar(3000),
 		LinCongN.ar(8000), LinCongL.ar(3000), LinCongC.ar(3000),
 		FBSineN.ar(8000), FBSineL.ar(3000), FBSineC.ar(3000), LatoocarfianN.ar(8000), LatoocarfianL.ar(3000), LatoocarfianC.ar(3000),
-		GbmanN.ar(8000), GbmanL.ar(3000)] * 0.3) }, metadata: (signals: [\silence])),
+		GbmanN.ar(8000), GbmanL.ar(3000), LorenzL.ar(3000)] * 0.3) }, metadata: (signals: [\silence])),
+	// Henon: defaults; a to 2 at 0.5 s (diverges, freezes), back to 1.4 at 1 s (reseeds)
+	SynthDef(\case_Henon, { var t = Line.kr(0, 2, 2), a = 1.4 + (0.6 * ((t > 0.5) * (t < 1)));
+		Out.ar(0, [HenonN.ar(8000), HenonL.ar(3000), HenonC.ar(3000), HenonN.ar(8000, a), HenonL.ar(3000, a), HenonC.ar(3000, a)] * 0.3) },
+		metadata: (signals: [\silence])),
 	SynthDef(\case_Standard, { Out.ar(0, [StandardN.ar(8000), StandardL.ar(3000)] * 0.3) }, metadata: (signals: [\silence])),
 	SynthDef(\case_Formlet, { |freq = 1000| Out.ar(0, Formlet.ar(in.value, freq, 0.005, 0.1) * 0.5) },
 		metadata: (specs: (freq: spec.(50, 12000, 1000)))),
