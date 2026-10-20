@@ -469,6 +469,19 @@ graynoise_clk(seed, clk) = machine(1, \(c).(float(c2) * 4.65661287308e-10, c2 wi
 // BrownNoise: z += frand8, folded into ±1; starts at frand2, no constructor step
 brownnoise_clk(seed, clk) = machine(1, \(z).(z3, z3 with { z2 = z + frand8(seed); z3 = select2(z2 > 1, select2(z2 < -1, z2, -2 - z2), 2 - z2); }),
                                     frand2(seed + 1), 0, clk);
+// Crackle: y0 = |y1 p - y2 - 0.05| in float, one constructor step; y1 starts at the synth's
+// drand() (not reproducible: frand here), y2 at 0. At p = 1.5 (the default) the orbit
+// settles on one of two attractors depending on that start (NoiseUGens.cpp:372).
+crackle_clk(seed, p, clk) = machine(2, \(y1, y2).((y0, y0, y1) with { y0 = abs(fsub(fsub(fmul(y1, p), y2), 0.05)); }),
+                                    (frand(seed), 0.0), 1, clk);
+// Logistic: y = p y (1 - y) in double; the constructor iterates once (next_1, whatever
+// freq), then each (int)(rate / max(freq, 0.001)) samples (at least 1; blocks at kr),
+// starting at the first sample (NoiseUGens.cpp:406). p and freq are read once per block.
+logistic_clk(p, freq, y0, sr, clk) = machine(2, \(y, c).((y2, y2, c2) with {
+        it = c <= 0;
+        y2 = select2(it, y, p * y * (1.0 - y));
+        c2 = select2(it, c, max(1, int(sr / fadd(max(freq, 0.001), 0.0)))) - 1;
+    }), (p * y0 * (1.0 - y0), 0), 0, clk);
 // Dust / Dust2: frand below density * sampledur. density is read once per block.
 dust(seed, density, sdur) = select2(z < th, 0.0, z * select2(th > 0, 0.0, 1.0 / th))
 with { z = frand(seed); th = a2k(density) * sdur; };

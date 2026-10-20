@@ -227,6 +227,13 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 	SynthDef(\case_Henon, { var t = Line.kr(0, 2, 2), a = 1.4 + (0.6 * ((t > 0.5) * (t < 1)));
 		Out.ar(0, [HenonN.ar(8000), HenonL.ar(3000), HenonC.ar(3000), HenonN.ar(8000, a), HenonL.ar(3000, a), HenonC.ar(3000, a)] * 0.3) },
 		metadata: (signals: [\silence])),
+	// Crackle away from the bistable default; a swept parameter; .kr
+	SynthDef(\case_Crackle, { Out.ar(0, [Crackle.ar(1.9), Crackle.ar(Line.kr(1.8, 2.0, 4)), K2A.ar(Crackle.kr(1.95))] * 0.3) },
+		metadata: (signals: [\silence])),
+	// Logistic: every sample (scalar freq >= SR), held periods (also a kr parameter), .kr
+	SynthDef(\case_Logistic, { Out.ar(0, [Logistic.ar(3.9, 48000), Logistic.ar(3.7, 3000, 0.3), Logistic.ar(Line.kr(3.6, 3.99, 4), 1000),
+		K2A.ar(Logistic.kr(3.95, 100, 0.2))] * 0.5) },
+		metadata: (signals: [\silence])),
 	SynthDef(\case_Standard, { Out.ar(0, [StandardN.ar(8000), StandardL.ar(3000)] * 0.3) }, metadata: (signals: [\silence])),
 	SynthDef(\case_Formlet, { |freq = 1000| Out.ar(0, Formlet.ar(in.value, freq, 0.005, 0.1) * 0.5) },
 		metadata: (specs: (freq: spec.(50, 12000, 1000)))),

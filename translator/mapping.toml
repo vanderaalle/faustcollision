@@ -3006,3 +3006,27 @@ faust = { ar = "sc.chaos_g(1, sc.lorenz_step(sc.a2k({s}), sc.a2k({r}), sc.a2k({b
 compare = "statistics"
 tol = 1.5
 case = "case_chaos"
+
+[Crackle]
+tier = "direct"
+inputs = ["chaosParam"]
+# NoiseUGens.cpp:372: exact in float, but y1 starts at the synth's drand(), which the port
+# cannot reproduce: statistics. Bistable around chaosParam 1.5 (the default): which
+# attractor depends on that start.
+self_hold = true
+faust = { ar = "sc.crackle_clk({seed}, sc.a2k({chaosParam}), 1)", kr = "sc.crackle_clk({seed}, {chaosParam}, sc.krclk)" }
+compare = "statistics"
+tol = 1.5
+case = "case_Crackle"
+
+[Logistic]
+tier = "direct"
+inputs = ["chaosParam", "freq", "init"]
+# NoiseUGens.cpp:395: the map in double, chaotic for chaosParam near 4: statistics; init
+# read once
+constant_inputs = ["init"]
+self_hold = true
+faust = { ar = "sc.logistic_clk(sc.a2k({chaosParam}), sc.a2k({freq}), {init}, ma.SR, 1)", kr = "sc.logistic_clk({chaosParam}, {freq}, {init}, ma.SR / sc.blocksize, sc.krclk)" }
+compare = "statistics"
+tol = 1.5
+case = "case_Logistic"
