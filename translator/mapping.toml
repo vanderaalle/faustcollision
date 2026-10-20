@@ -2736,3 +2736,219 @@ faust = { ar = "sc.ball_g(1, {seed}, {in}, {g}, {damp}, {friction}, ma.SR, 1)", 
 compare = "statistics"
 tol = 1.5
 case = "case_physical"
+
+[CuspN]
+tier = "direct"
+inputs = ["freq", "a", "b", "xi"]
+# ChaosUGens.cpp: the map in double, chaotic: statistics (the sequence diverges from
+# scsynth"s after a few dozen iterations); initial conditions read once
+constant_inputs = ["xi"]
+self_hold = true
+faust = { ar = "sc.chaos_g(0, sc.cusp_step(sc.a2k({a}), sc.a2k({b})), {xi}, 0.0, 0.0, sc.a2k({freq}), ma.SR)" }
+compare = "statistics"
+tol = 1.5
+case = "case_chaos"
+
+[CuspL]
+tier = "direct"
+inputs = ["freq", "a", "b", "xi"]
+# ChaosUGens.cpp: the map in double, chaotic: statistics (the sequence diverges from
+# scsynth"s after a few dozen iterations); initial conditions read once
+constant_inputs = ["xi"]
+self_hold = true
+faust = { ar = "sc.chaos_g(1, sc.cusp_step(sc.a2k({a}), sc.a2k({b})), {xi}, 0.0, 0.0, sc.a2k({freq}), ma.SR)" }
+compare = "statistics"
+tol = 1.5
+case = "case_chaos"
+
+[QuadN]
+tier = "direct"
+inputs = ["freq", "a", "b", "c", "xi"]
+# ChaosUGens.cpp: the map in double, chaotic: statistics (the sequence diverges from
+# scsynth"s after a few dozen iterations); initial conditions read once
+constant_inputs = ["xi"]
+self_hold = true
+faust = { ar = "sc.chaos_g(0, sc.quad_step(sc.a2k({a}), sc.a2k({b}), sc.a2k({c})), {xi}, 0.0, 0.0, sc.a2k({freq}), ma.SR)" }
+compare = "statistics"
+tol = 1.5
+case = "case_chaos"
+
+[QuadL]
+tier = "direct"
+inputs = ["freq", "a", "b", "c", "xi"]
+# ChaosUGens.cpp: the map in double, chaotic: statistics (the sequence diverges from
+# scsynth"s after a few dozen iterations); initial conditions read once
+constant_inputs = ["xi"]
+self_hold = true
+faust = { ar = "sc.chaos_g(1, sc.quad_step(sc.a2k({a}), sc.a2k({b}), sc.a2k({c})), {xi}, 0.0, 0.0, sc.a2k({freq}), ma.SR)" }
+compare = "statistics"
+tol = 1.5
+case = "case_chaos"
+
+[QuadC]
+tier = "direct"
+inputs = ["freq", "a", "b", "c", "xi"]
+# ChaosUGens.cpp: the map in double, chaotic: statistics (the sequence diverges from
+# scsynth"s after a few dozen iterations); initial conditions read once
+constant_inputs = ["xi"]
+self_hold = true
+faust = { ar = "sc.chaos_g(3, sc.quad_step(sc.a2k({a}), sc.a2k({b}), sc.a2k({c})), {xi}, 0.0, 0.0, sc.a2k({freq}), ma.SR)" }
+compare = "statistics"
+tol = 1.5
+case = "case_chaos"
+
+[LinCongN]
+tier = "direct"
+inputs = ["freq", "a", "c", "m", "xi"]
+# ChaosUGens.cpp: the map in double, chaotic: statistics (the sequence diverges from
+# scsynth"s after a few dozen iterations); initial conditions read once
+constant_inputs = ["xi"]
+self_hold = true
+faust = { ar = "(sc.chaos_g(0, sc.lincong_step(sc.a2k({a}), sc.a2k({c}), max(sc.a2k({m}), 0.001)), {xi}, 0.0, 0.0, sc.a2k({freq}), ma.SR)) * (2.0 / max(sc.a2k({m}), 0.001)) - 1.0" }
+compare = "statistics"
+tol = 1.5
+case = "case_chaos"
+
+[LinCongL]
+tier = "direct"
+inputs = ["freq", "a", "c", "m", "xi"]
+# ChaosUGens.cpp: the map in double, chaotic: statistics (the sequence diverges from
+# scsynth"s after a few dozen iterations); initial conditions read once
+constant_inputs = ["xi"]
+self_hold = true
+faust = { ar = "(sc.chaos_g(1, sc.lincong_step(sc.a2k({a}), sc.a2k({c}), max(sc.a2k({m}), 0.001)), {xi}, 0.0, 0.0, sc.a2k({freq}), ma.SR)) * (2.0 / max(sc.a2k({m}), 0.001)) - 1.0" }
+compare = "statistics"
+tol = 1.5
+case = "case_chaos"
+
+[LinCongC]
+tier = "direct"
+inputs = ["freq", "a", "c", "m", "xi"]
+# ChaosUGens.cpp: the map in double, chaotic: statistics (the sequence diverges from
+# scsynth"s after a few dozen iterations); initial conditions read once
+constant_inputs = ["xi"]
+self_hold = true
+faust = { ar = "(sc.chaos_g(3, sc.lincong_step(sc.a2k({a}), sc.a2k({c}), max(sc.a2k({m}), 0.001)), {xi}, 0.0, 0.0, sc.a2k({freq}), ma.SR)) * (2.0 / max(sc.a2k({m}), 0.001)) - 1.0" }
+compare = "statistics"
+tol = 1.5
+case = "case_chaos"
+
+[StandardN]
+tier = "direct"
+inputs = ["freq", "k", "xi", "yi"]
+# ChaosUGens.cpp: the map in double, chaotic: statistics (the sequence diverges from
+# scsynth"s after a few dozen iterations); initial conditions read once
+constant_inputs = ["xi", "yi"]
+self_hold = true
+faust = { ar = "((sc.chaos_g(0, sc.standard_step(sc.a2k({k})), {xi}, {yi}, 0.0, sc.a2k({freq}), ma.SR)) - ma.PI) * (1.0 / ma.PI)" }
+compare = "statistics"
+tol = 1.5
+case = "case_chaos"
+
+[StandardL]
+tier = "direct"
+inputs = ["freq", "k", "xi", "yi"]
+# ChaosUGens.cpp: the map in double, chaotic: statistics (the sequence diverges from
+# scsynth"s after a few dozen iterations); initial conditions read once
+constant_inputs = ["xi", "yi"]
+self_hold = true
+faust = { ar = "((sc.chaos_g(1, sc.standard_step(sc.a2k({k})), {xi}, {yi}, 0.0, sc.a2k({freq}), ma.SR)) - ma.PI) * (1.0 / ma.PI)" }
+compare = "statistics"
+tol = 1.5
+case = "case_chaos"
+
+[FBSineN]
+tier = "direct"
+inputs = ["freq", "im", "fb", "a", "c", "xi", "yi"]
+# ChaosUGens.cpp: the map in double, chaotic: statistics (the sequence diverges from
+# scsynth"s after a few dozen iterations); initial conditions read once
+constant_inputs = ["xi", "yi"]
+self_hold = true
+faust = { ar = "sc.chaos_g(0, sc.fbsine_step(sc.a2k({im}), sc.a2k({fb}), sc.a2k({a}), sc.a2k({c})), {xi}, {yi}, 0.0, sc.a2k({freq}), ma.SR)" }
+compare = "statistics"
+tol = 1.5
+case = "case_chaos"
+
+[FBSineL]
+tier = "direct"
+inputs = ["freq", "im", "fb", "a", "c", "xi", "yi"]
+# ChaosUGens.cpp: the map in double, chaotic: statistics (the sequence diverges from
+# scsynth"s after a few dozen iterations); initial conditions read once
+constant_inputs = ["xi", "yi"]
+self_hold = true
+faust = { ar = "sc.chaos_g(1, sc.fbsine_step(sc.a2k({im}), sc.a2k({fb}), sc.a2k({a}), sc.a2k({c})), {xi}, {yi}, 0.0, sc.a2k({freq}), ma.SR)" }
+compare = "statistics"
+tol = 1.5
+case = "case_chaos"
+
+[FBSineC]
+tier = "direct"
+inputs = ["freq", "im", "fb", "a", "c", "xi", "yi"]
+# ChaosUGens.cpp: the map in double, chaotic: statistics (the sequence diverges from
+# scsynth"s after a few dozen iterations); initial conditions read once
+constant_inputs = ["xi", "yi"]
+self_hold = true
+faust = { ar = "sc.chaos_g(3, sc.fbsine_step(sc.a2k({im}), sc.a2k({fb}), sc.a2k({a}), sc.a2k({c})), {xi}, {yi}, 0.0, sc.a2k({freq}), ma.SR)" }
+compare = "statistics"
+tol = 1.5
+case = "case_chaos"
+
+[LatoocarfianN]
+tier = "direct"
+inputs = ["freq", "a", "b", "c", "d", "xi", "yi"]
+# ChaosUGens.cpp: the map in double, chaotic: statistics (the sequence diverges from
+# scsynth"s after a few dozen iterations); initial conditions read once
+constant_inputs = ["xi", "yi"]
+self_hold = true
+faust = { ar = "sc.chaos_g(0, sc.latoo_step(sc.a2k({a}), sc.a2k({b}), sc.a2k({c}), sc.a2k({d})), {xi}, {yi}, 0.0, sc.a2k({freq}), ma.SR)" }
+compare = "statistics"
+tol = 1.5
+case = "case_chaos"
+
+[LatoocarfianL]
+tier = "direct"
+inputs = ["freq", "a", "b", "c", "d", "xi", "yi"]
+# ChaosUGens.cpp: the map in double, chaotic: statistics (the sequence diverges from
+# scsynth"s after a few dozen iterations); initial conditions read once
+constant_inputs = ["xi", "yi"]
+self_hold = true
+faust = { ar = "sc.chaos_g(1, sc.latoo_step(sc.a2k({a}), sc.a2k({b}), sc.a2k({c}), sc.a2k({d})), {xi}, {yi}, 0.0, sc.a2k({freq}), ma.SR)" }
+compare = "statistics"
+tol = 1.5
+case = "case_chaos"
+
+[LatoocarfianC]
+tier = "direct"
+inputs = ["freq", "a", "b", "c", "d", "xi", "yi"]
+# ChaosUGens.cpp: the map in double, chaotic: statistics (the sequence diverges from
+# scsynth"s after a few dozen iterations); initial conditions read once
+constant_inputs = ["xi", "yi"]
+self_hold = true
+faust = { ar = "sc.chaos_g(3, sc.latoo_step(sc.a2k({a}), sc.a2k({b}), sc.a2k({c}), sc.a2k({d})), {xi}, {yi}, 0.0, sc.a2k({freq}), ma.SR)" }
+compare = "statistics"
+tol = 1.5
+case = "case_chaos"
+
+[GbmanN]
+tier = "direct"
+inputs = ["freq", "xi", "yi"]
+# ChaosUGens.cpp: the map in double, chaotic: statistics (the sequence diverges from
+# scsynth"s after a few dozen iterations); initial conditions read once
+constant_inputs = ["xi", "yi"]
+self_hold = true
+faust = { ar = "sc.chaos_g(0, sc.gbman_step, {xi}, {yi}, 0.0, sc.a2k({freq}), ma.SR)" }
+compare = "statistics"
+tol = 1.5
+case = "case_chaos"
+
+[GbmanL]
+tier = "direct"
+inputs = ["freq", "xi", "yi"]
+# ChaosUGens.cpp: the map in double, chaotic: statistics (the sequence diverges from
+# scsynth"s after a few dozen iterations); initial conditions read once
+constant_inputs = ["xi", "yi"]
+self_hold = true
+faust = { ar = "sc.chaos_g(1, sc.gbman_step, {xi}, {yi}, 0.0, sc.a2k({freq}), ma.SR)" }
+compare = "statistics"
+tol = 1.5
+case = "case_chaos"
