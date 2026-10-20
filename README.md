@@ -51,7 +51,7 @@ Requirements: SuperCollider 3.13 (`sclang`, `scsynth`), Faust 2.70 (`faust`), Py
 
 Porting at this level of detail surfaces behaviour of scsynth that its documentation
 does not state, some of it likely bugs: `docs/sc-findings.md` (with source references and
-reproducers; drafts of upstream issues in `docs/issues/`). 31 findings so far, most of them
+reproducers; drafts of upstream issues in `docs/issues/`). 34 findings so far, most of them
 measured on renders, among them buffer over-reads in fifteen `.ar` UGens fed a constant or
 control-rate input, an allpass that is not one (APF), and filters whose audio-rate inputs
 are read from the wrong samples (BEQSuite). Faust pitfalls met along the way
@@ -68,7 +68,13 @@ lags, decays, Median), delays, combs, allpasses and Pluck at ar and kr, EnvGen, 
 Line/XLine, Linen, VarLag, Ramp, dynamics, FreeVerb/FreeVerb2/GVerb, Wrap, Fold, Clip,
 LinExp, InRange, InRect, Schmidt, ModDif, Select, Sanitize, DetectSilence, triggers,
 panners and crossfades, Amplitude, AmpComp, MoogFF (ar), Klank, PitchShift,
-LocalIn/LocalOut (feedback), server info constants; Pitch as a substitute tracker.
+LocalIn/LocalOut (feedback), server info constants; Pitch as a substitute tracker;
+DynKlank, Sum3/Sum4, Hilbert, FreqShift; ambisonic and multichannel panners (PanB, PanB2,
+BiPanB2, DecodeB2, PanAz); Spring, Ball, TBall; the chaos oscillators (Cusp, Quad,
+LinCong, Standard, FBSine, Latoocarfian, Gbman, Henon, LorenzL, Crackle, Logistic;
+statistics, their maps in double as float pairs where float32 changes the dynamics);
+Gendy1/2/3 (statistics); GrainSin, GrainFM, GrainIn (the built-in Hann window; one Faust
+voice per possible grain, so maxGrains <= 65).
 
 Census (`translator.census`, `report/census.md`): of the 215 core UGen classes in scope,
 470 probes (one per class and rate, plus every operator); 396 pass, 59 unmapped (chaos
