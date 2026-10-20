@@ -3053,3 +3053,16 @@ faust = { ar = "sc.gendy2_g(max(1, int({initCPs})), {seed}, sc.a2k({ampdist}), s
 compare = "statistics"
 tol = 1.5
 case = "case_Gendy2"
+
+[Gendy3]
+tier = "direct"
+inputs = ["ampdist", "durdist", "adparam", "ddparam", "freq", "ampscale", "durscale", "initCPs", "knum"]
+# GendynUGens.cpp:519: random walks from the synth's RNG: statistics. initCPs sizes the
+# breakpoint memories (constructor); regions narrower than a step overshoot (#33), the
+# mirroring exceeds +-1 (#34)
+constant_inputs = ["initCPs"]
+self_hold = true
+faust = { ar = "sc.gendy3_g(max(1, int({initCPs})), {seed}, sc.a2k({ampdist}), sc.a2k({durdist}), sc.a2k({adparam}), sc.a2k({ddparam}), sc.a2k({freq}), sc.a2k({ampscale}), sc.a2k({durscale}), sc.a2k({knum}), 1.0 / ma.SR, 1)", kr = "sc.gendy3_g(max(1, int({initCPs})), {seed}, {ampdist}, {durdist}, {adparam}, {ddparam}, {freq}, {ampscale}, {durscale}, {knum}, sc.blocksize / ma.SR, sc.krclk)" }
+compare = "statistics"
+tol = 1.5
+case = "case_Gendy3"

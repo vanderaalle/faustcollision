@@ -571,6 +571,65 @@ with {
             : par(m, 4, gset(N, go, i2));
     });
 };
+// Gendy3 (cpp:519). At phase >= 1 every slot j < num walks at once (slot 0's amp stays 0),
+// durations mirrored into [0.01, 1] and normalised by their sum; the slots whose share
+// reaches one sample form the region lists (amps, widths; a guard amp 0 / width 2 after
+// the last); speed = freq * sampledur. Then, each sample, at most one region step: the
+// index lags when regions are narrower than the step, and interp = (phase - lastphase) *
+// (int)(1 / width) (sc-findings 33). State: phase, nextphase, lastphase, amp, nextamp,
+// speed, index, interpmult, N amps, N durs, N + 1 list amps, N + 1 list widths.
+gendy3_g(N, seed, wa, wd, aa, ad, freq, sa, sd, knum, sdur, clk) =
+    machine(8 + 2 * N + 2 * L, step, init, 0, clk) : ba.sAndH(clk)
+with {
+    L = N + 1;
+    X = 2 * N + 2 * L;
+    init = (1.0, 0.0, 0.0, 0.0, 0.0, 100.0, 0, 1), (0.0, par(j, N - 1, 2.0 * hrand(seed, 4 * j + 4) - 1.0)),
+           par(j, N, hrand(seed, 4 * j + 1)), par(j, L, select2(j < N, 0.0, 2.0 * hrand(seed, 4 * j + 2) - 1.0)), par(j, L, 1.0);
+    step = \(ph, nph, lph, a, na, sp, ix, im).((stage1 : (si.bus(2 * N), (si.bus(2 * L) <: (si.bus(2 * L), (reads : fin))))
+            : route(X + 9, X + 9, (X + 1, 1), par(k, 8, (X + 2 + k, 2 + k)), par(k, X, (k + 1, 10 + k)))) with {
+        go = ph >= 1.0;
+        num = gnum(N, knum);
+        draw(k) = hrand(seed + 7, ba.time * (2 * N) + k);
+        // the walks: (amps, durs, lists) -> (new amps, new durs, lists)
+        walks = par(j, N, \(o).(select2(go & (j < num) & (j > 0), o, gmirror(-1.0, 1.0, o + sa * gendist(wa, aa, draw(2 * j)))))),
+                par(j, N, \(o).(select2(go & (j < num), o, gmirror(0.01, 1.0, o + sd * gendist(wd, ad, draw(2 * j + 1)))))),
+                si.bus(2 * L);
+        // over (new amps N, new durs N, old lists 2L):
+        dsum = route(X, N, par(j, N, (N + j + 1, j + 1))) : par(j, N, *(j < num)) :> _;
+        nd = si.bus(X) <: (route(X, N, par(j, N, (N + j + 1, j + 1))), (dsum <: si.bus(N)))
+           : ro.interleave(N, 2) : par(j, N, \(d, sm).(d * (1.0 / sm)));
+        act = nd : par(j, N, \(d).((j < num) & (d >= sdur)));
+        pos = act <: par(j, N, (par(k, N, *(k < j)) :> _));
+        newA = route(X, N, par(j, N, (j + 1, j + 1)));
+        // one list: values N (box over X), old list offset, guard value
+        build(vals, off, guard) = si.bus(X) <: (((si.bus(X) <: (act, pos, vals, (act :> _))) <: par(p, L, si.bus(3 * N + 1))), route(X, L, par(p, L, (off + p + 1, p + 1))))
+            : route((3 * N + 1) * L + L, (3 * N + 2) * L, par(p, L, (par(k, 3 * N + 1, (p * (3 * N + 1) + k + 1, p * (3 * N + 2) + k + 1)), ((3 * N + 1) * L + p + 1, p * (3 * N + 2) + 3 * N + 2))))
+            : par(p, L, slot(p, guard));
+        slot(p, guard) = (ro.interleave(N, 3) : par(j, N, \(ac, ps, v).(select2(ac & (ps == p), 0.0, v))) :> _), _, _
+            : \(sm, na_, o).(select2(go, o, select2(p < na_, select2(p == na_, o, guard), sm)));
+        stage1 = walks : (si.bus(X) <: ((si.bus(2 * N), si.block(2 * L)), build(newA, 2 * N, 0.0), build(nd, 2 * N + L, 2.0)));
+        // the region step over the new lists
+        ph1 = select2(go, ph, ph - 1.0);
+        nph1 = select2(go, nph, 0.0);
+        ix1 = select2(go, ix, -1);
+        st = ph1 >= nph1;
+        ix2 = ix1 + st;
+        rdA(i) = (si.bus(L), si.block(L)) : ba.selectn(L, i);
+        rdP(i) = (si.block(L), si.bus(L)) : ba.selectn(L, i);
+        reads = si.bus(2 * L) <: (rdA(0), rdP(ix2), rdA(ix2 + 1));
+        fin = \(r0, rp, ra).((z, ph1 + sp1, nph2, lph2, a2, na2, sp1, ix2, im2) with {
+            na1 = select2(go, na, r0);
+            sp1 = select2(go, sp, fmul(freq, sdur));
+            a2 = select2(st, a, na1);
+            lph2 = select2(st, lph, nph1);
+            nph2 = select2(st, nph1, nph1 + rp);
+            na2 = select2(st, na1, ra);
+            im2 = select2(st, im, int(1.0 / (nph2 - lph2)));
+            interp = (ph1 - lph2) * im2;
+            z = (1.0 - interp) * a2 + interp * na2;
+        });
+    });
+};
 // Dust / Dust2: frand below density * sampledur. density is read once per block.
 dust(seed, density, sdur) = select2(z < th, 0.0, z * select2(th > 0, 0.0, 1.0 / th))
 with { z = frand(seed); th = a2k(density) * sdur; };
