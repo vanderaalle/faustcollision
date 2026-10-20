@@ -94,5 +94,5 @@ offset persists.
 
 ## License
 
-To be decided. `sc.lib` ports SuperCollider's GPL-3 code line by line, so it (and with it
-the generated Faust) will have to be GPL-3.
+GPL-3.0-or-later (`LICENSE`), as SuperCollider: `sc.lib` ports scsynth's C++ line by line,
+and the Faust the translator generates links it.
