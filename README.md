@@ -95,4 +95,4 @@ offset persists.
 ## License
 
 GPL-3.0-or-later (`LICENSE`), as SuperCollider: `sc.lib` ports scsynth's C++ line by line,
-and the Faust the translator generates links it.
+and the Faust the translator generates imports it.
