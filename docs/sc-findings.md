@@ -4,7 +4,7 @@ Behaviour of scsynth (SuperCollider 3.13.0) that the documentation does not stat
 found by comparing renders sample by sample or by porting the C++. Source references
 are to the `Version-3.13.0` tag (`~/src/supercollider`).
 
-Issue drafts for #4, #5, #11, #15, #17-#28, #30-#33: `docs/issues/`.
+Issue drafts for #4, #5, #11, #15, #17-#28, #30-#34: `docs/issues/`.
 
 Status: **measured** = confirmed on scsynth NRT renders; **source** = read in the C++,
 not yet confirmed by a render. Kind: **bug?** (looks unintended), **undocumented**,
@@ -45,6 +45,7 @@ not yet confirmed by a render. Kind: **bug?** (looks unintended), **undocumented
 | 31 | `TWindex` (normalize 0, weights summing below 1) | returns n + 2 (outside the array) for the missing probability | undocumented | measured, source |
 | 32 | `FreqShift` (constant or kr phase) | the phase argument is ignored: the constructor multiplies it by `m_radtoinc` before setting it | bug? | measured, source |
 | 33 | `Gendy1/2/3.kr` (default arguments) | output far outside ±1 (up to ~1e5): the phase drops by 1 at most per step while a kr step covers several breakpoints | bug? | measured, source |
+| 34 | `Gendy2`, `Gendy3` (amplitude walks) | `Gendyn_mirroring` folds a value d below `lower` to d above 0, not above `lower`: for [-1, 1], -1 - d becomes 1 + d (outside the range) | bug? | measured, source |
 
 ## 1. `Amplitude.kr` with an audio-rate input releases 64× too fast
 
@@ -577,15 +578,36 @@ speeds from 0.32 to 16 per step: phase climbs without bound and `(1 - phase) * a
 phase * nextamp` extrapolates. Gendy3 steps at most one breakpoint region per sample; at
 kr its default freq 440 moves the phase 0.59 per step across regions of ~1/12, so
 `interp = (phase - lastphase) * interpmult` far exceeds 1. The same happens at audio rate
-when maxfreq * num exceeds the sample rate (Gendy1/2), or for regions narrower than one
-step (Gendy3, to a much smaller degree).
+when maxfreq * num exceeds the sample rate (Gendy1/2), and in Gendy3 whenever a region is
+narrower than one step: there `interpmult = (int)(1 / width)` is large, so a lagging
+index multiplies the overshoot.
 
 Measured (NRT, 10 s, `K2A.ar(Gendy1.kr)` etc.): max |x| 1.0e5 (Gendy1), 1.6e5 (Gendy2),
-475 (Gendy3); `Gendy1.kr(minfreq: 1, maxfreq: 10)` stays within ±1.
+475 (Gendy3); `Gendy1.kr(minfreq: 1, maxfreq: 10)` stays within ±1. At audio rate with
+default arguments, `Gendy3.ar` reaches 185 (0.2 % of the samples beyond ±1).
 
 - Source: `server/plugins/GendynUGens.cpp` `Gendy1_next_k`, `Gendy2_next_k` (`if (phase >=
   1.0) { phase -= 1.0; ...`), `Gendy3_next_k` (`if (phase >= nextphase) { ++index; ...`).
   Fix: loop the breakpoint step while phase >= 1 (Gendy3: while phase >= nextphase), or
   clamp speed below 1.
 - Translation: reproduced.
+
+## 34. `Gendyn_mirroring` folds values below the lower bound out of the range
+
+`Gendy2` and `Gendy3` keep their random walks in range with `Gendyn_mirroring(lower,
+upper, in)`. For `in < lower` it computes `in = (2 * upper - lower) - in`, then `fmod(in -
+upper, 2 * range)` and a fold; for a value d below `lower` (d < range) this yields `d`
+measured from 0, which is the right reflection only when `lower` is 0. For the amplitude
+walks in [-1, 1], -1 - d becomes 1 + d: outside the range, so the output exceeds ±1
+(values above `upper` fold correctly; the duration walk in [0, 1] is correct, Gendy3's
+[0.01, 1] off by 0.01).
+
+Measured (NRT, 10 s): `Gendy2.ar` with default arguments peaks at 1.475 with 2.9 % of
+the samples beyond ±1; with ampscale and durscale 1, 1.96 and 5.7 %. `Gendy1.ar`, which
+folds with its own code, stays within ±1.
+
+- Source: `server/plugins/GendynUGens.cpp` `Gendyn_mirroring`. Fix: reflect the offset
+  from `lower` on both sides: `t = fmod(fabs(in - lower), 2 * range); in = lower + (t <
+  range ? t : 2 * range - t)`.
+- Translation: reproduced (`sc.gmirror`).
 

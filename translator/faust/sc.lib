@@ -488,6 +488,89 @@ with {
     // (p y) (1 - y), C's order
     lstep(h, l) = dmulf(h, l, p) : \(vh, vl).(drsub(1.0, h, l) : \(th, tl).(dmul2(vh, vl, th, tl)));
 };
+//------------------------------------------------------------------------------
+// Gendy1/2/3 (GendynUGens.cpp; docs/plans/gendy.md): random walks over N = initCPs
+// breakpoints (a constant), kept as N parallel states; the synth's RNG is not
+// reproducible (statistics). hrand: a pure hash of (seed, j) for the constructor's draws.
+//------------------------------------------------------------------------------
+hrand(seed, j) = float(lsr(xorshift(xorshift(int(seed) * 747796405 + int(j) * 1013904223 + 2891336453)), 9)) / 8388608.0;
+// Gendyn_distribution (cpp:114): which = (int) input; a clamped to [0.0001, 1]
+gendist(which, a0, f) = ba.selectn(8, w, 2.0 * f - 1.0, cauchy, logist, hyper, arcs, expon, 2.0 * a - 1.0, 2.0 * f - 1.0)
+with {
+    w0 = int(which); w = select2((w0 >= 0) & (w0 <= 6), 7, w0);
+    a = max(min(a0, 1.0), 0.0001);
+    cauchy = (1.0 / a) * tan(atan(10.0 * a) * (2.0 * f - 1.0)) * 0.1;
+    lc = 0.5 + 0.499 * a; lf = (f - 0.5) * 0.998 * a + 0.5;
+    logist = log((1.0 - lf) / lf) / log((1.0 - lc) / lc);
+    hyper = 2.0 * (log(tan(1.5692255 * a * f) / tan(1.5692255 * a) * 0.999 + 0.001) * (-0.1447648)) - 1.0;
+    arcs = sin(3.14159265358979 * (f - 0.5) * a) / sin(1.5707963 * a);
+    expon = 2.0 * (log(1.0 - f * 0.999 * a) / log(1.0 - 0.999 * a)) - 1.0;
+};
+// Gendyn_mirroring (cpp:351)
+gmirror(lo, hi, x) = select2((x > hi) | (x < lo), x, m)
+with { rg = hi - lo; y = fmod(select2(x < lo, x, (2.0 * hi - lo) - x) - hi, 2.0 * rg); m = select2(y < rg, y - rg, hi - y); };
+// Gendy1's own folds (cpp:249, 264)
+g1amp(x) = select2((x > 1.0) | (x < -1.0), x, m)
+with { y = fmod(select2(x < 0.0, x, x + 4.0), 4.0); m = select2((y > 1.0) & (y < 3.0), select2(y > 1.0, y, y - 4.0), 2.0 - y); };
+g1dur(r) = select2((r > 1.0) | (r < 0.0), r, 2.0 - fmod(select2(r < 0.0, r, r + 2.0), 2.0));
+// num: (int) knum, outside 1..N means N
+gnum(N, knum) = select2((n0 > N) | (n0 < 1), n0, N) with { n0 = int(knum); };
+// set slot i of an N-bus to v where go: (N olds, v) -> N
+gset(N, go, i) = (si.bus(N), (_ <: si.bus(N))) : ro.interleave(N, 2) : par(j, N, \(o, v).(select2(go & (i == j), o, v)));
+
+// Gendy1 (cpp:203). State: phase, amp, nextamp, speed, index, N amps, N durs. No constructor
+// step; phase starts at 1 (a boundary at the first sample). sdur: the rate's sample duration.
+gendy1_g(N, seed, wa, wd, aa, ad, fmin, fmax, sa, sd, knum, sdur, clk) =
+    machine(5 + 2 * N, step, init, 0, clk) : ba.sAndH(clk)
+with {
+    init = (1.0, 0.0, 0.0, 100.0, 0), par(j, N, 2.0 * hrand(seed, 2 * j) - 1.0), par(j, N, hrand(seed, 2 * j + 1));
+    step = \(ph, a, na, sp, ix).((si.bus(2 * N) <: (outv, scal, upd)) with {
+        go = ph >= 1.0;
+        num = gnum(N, knum);
+        i2 = select2(go, ix, (ix + 1) % num);
+        newA = (si.bus(N), si.block(N)) : ba.selectn(N, i2) : \(m).(g1amp(m + sa * gendist(wa, aa, frand(seed))));
+        newR = (si.block(N), si.bus(N)) : ba.selectn(N, i2) : \(m).(g1dur(m + sd * gendist(wd, ad, frand(seed + 100003))));
+        vals = si.bus(2 * N) <: (newA, newR);
+        phw = select2(go, ph, ph - 1.0);
+        amp2 = select2(go, a, na);
+        sp2(rate) = select2(go, sp, fmul(fmin + (fmax - fmin) * rate, sdur) * num);
+        outv = vals : \(nn, rate).((1.0 - phw) * amp2 + phw * select2(go, na, nn));
+        scal = vals : \(nn, rate).(phw + sp2(rate), amp2, select2(go, na, nn), sp2(rate), i2);
+        upd = si.bus(2 * N) <: (si.bus(2 * N), vals) : (si.bus(N), ro.crossNM(N, 1), _) : (gset(N, go, i2), gset(N, go, i2));
+    });
+};
+// Gendy2 (cpp:370): Gendy1 with step memories; the amp step's distribution is fed
+// |fmod(amp * a + c, 1)| of the outgoing amp (a, c read per period), everything mirrored
+// by Gendyn_mirroring. State: phase, amp, nextamp, speed, index, N amps, N durs, N amp
+// steps, N dur steps.
+gendy2_g(N, seed, wa, wd, aa, ad, fmin, fmax, sa, sd, knum, la, lc, sdur, clk) =
+    machine(5 + 4 * N, step, init, 0, clk) : ba.sAndH(clk)
+with {
+    init = (1.0, 0.0, 0.0, 100.0, 0), par(j, N, 2.0 * hrand(seed, 4 * j) - 1.0), par(j, N, hrand(seed, 4 * j + 1)),
+           par(j, N, 2.0 * hrand(seed, 4 * j + 2) - 1.0), par(j, N, 2.0 * hrand(seed, 4 * j + 3) - 1.0);
+    step = \(ph, a, na, sp, ix).((si.bus(4 * N) <: (outv, scal, upd)) with {
+        go = ph >= 1.0;
+        num = gnum(N, knum);
+        i2 = select2(go, ix, (ix + 1) % num);
+        sel(m) = route(4 * N, N, par(j, N, (m * N + j + 1, j + 1))) : ba.selectn(N, i2);
+        lx = abs(fmod(a * la + lc, 1.0));
+        // (amp, dur, amp step, dur step) memories -> new (amp, dur, amp step, dur step)
+        vals = si.bus(4 * N) <: (sel(0), sel(1), sel(2), sel(3)) : \(ma, md, mas, mds).((nA, nR, nAS, nDS) with {
+            nAS = gmirror(-1.0, 1.0, mas + gendist(wa, aa, lx));
+            nA = gmirror(-1.0, 1.0, ma + sa * nAS);
+            nDS = gmirror(-1.0, 1.0, mds + gendist(wd, ad, frand(seed)));
+            nR = gmirror(0.0, 1.0, md + sd * nDS);
+        });
+        phw = select2(go, ph, ph - 1.0);
+        amp2 = select2(go, a, na);
+        sp2(rate) = select2(go, sp, fmul(fmin + (fmax - fmin) * rate, sdur) * num);
+        outv = vals : \(nn, rate, x, y).((1.0 - phw) * amp2 + phw * select2(go, na, nn));
+        scal = vals : \(nn, rate, x, y).(phw + sp2(rate), amp2, select2(go, na, nn), sp2(rate), i2);
+        upd = si.bus(4 * N) <: (si.bus(4 * N), vals)
+            : route(4 * N + 4, 4 * N + 4, par(m, 4, (par(j, N, (m * N + j + 1, m * (N + 1) + j + 1)), (4 * N + m + 1, m * (N + 1) + N + 1))))
+            : par(m, 4, gset(N, go, i2));
+    });
+};
 // Dust / Dust2: frand below density * sampledur. density is read once per block.
 dust(seed, density, sdur) = select2(z < th, 0.0, z * select2(th > 0, 0.0, 1.0 / th))
 with { z = frand(seed); th = a2k(density) * sdur; };

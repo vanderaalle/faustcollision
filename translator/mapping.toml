@@ -3028,3 +3028,28 @@ faust = { ar = "sc.logistic_clk(sc.a2k({chaosParam}), sc.a2k({freq}), {init}, ma
 compare = "statistics"
 tol = 1.5
 case = "case_Logistic"
+
+[Gendy1]
+tier = "direct"
+inputs = ["ampdist", "durdist", "adparam", "ddparam", "minfreq", "maxfreq", "ampscale", "durscale", "initCPs", "knum"]
+# GendynUGens.cpp:203: random walks from the synth's RNG: statistics. initCPs sizes the
+# breakpoint memories (constructor); kr defaults leave +-1 (docs/sc-findings.md #33)
+constant_inputs = ["initCPs"]
+self_hold = true
+faust = { ar = "sc.gendy1_g(max(1, int({initCPs})), {seed}, sc.a2k({ampdist}), sc.a2k({durdist}), sc.a2k({adparam}), sc.a2k({ddparam}), sc.a2k({minfreq}), sc.a2k({maxfreq}), sc.a2k({ampscale}), sc.a2k({durscale}), sc.a2k({knum}), 1.0 / ma.SR, 1)", kr = "sc.gendy1_g(max(1, int({initCPs})), {seed}, {ampdist}, {durdist}, {adparam}, {ddparam}, {minfreq}, {maxfreq}, {ampscale}, {durscale}, {knum}, sc.blocksize / ma.SR, sc.krclk)" }
+compare = "statistics"
+tol = 1.5
+case = "case_Gendy1"
+
+[Gendy2]
+tier = "direct"
+inputs = ["ampdist", "durdist", "adparam", "ddparam", "minfreq", "maxfreq", "ampscale", "durscale", "initCPs", "knum", "a", "c"]
+# GendynUGens.cpp:370: random walks from the synth's RNG: statistics. initCPs sizes the
+# breakpoint memories (constructor); kr defaults leave +-1 (docs/sc-findings.md #33), the
+# mirroring exceeds +-1 (#34)
+constant_inputs = ["initCPs"]
+self_hold = true
+faust = { ar = "sc.gendy2_g(max(1, int({initCPs})), {seed}, sc.a2k({ampdist}), sc.a2k({durdist}), sc.a2k({adparam}), sc.a2k({ddparam}), sc.a2k({minfreq}), sc.a2k({maxfreq}), sc.a2k({ampscale}), sc.a2k({durscale}), sc.a2k({knum}), sc.a2k({a}), sc.a2k({c}), 1.0 / ma.SR, 1)", kr = "sc.gendy2_g(max(1, int({initCPs})), {seed}, {ampdist}, {durdist}, {adparam}, {ddparam}, {minfreq}, {maxfreq}, {ampscale}, {durscale}, {knum}, {a}, {c}, sc.blocksize / ma.SR, sc.krclk)" }
+compare = "statistics"
+tol = 1.5
+case = "case_Gendy2"
