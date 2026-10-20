@@ -24,7 +24,8 @@ Rejected with an explanation (tier "rejected"): T2K, Peak.kr of audio.
 Batch 7 (branch ports-batch7, before its full suite): DynKlank; Hilbert, FreqShift; PanB,
 PanB2, BiPanB2, DecodeB2, PanAz (ar and kr); Spring, Ball, TBall; the chaos family: Cusp,
 Quad, LinCong, Standard, FBSine, Latoocarfian, Gbman (N/L/C), Henon (N/L/C, the freeze and
-reseed), LorenzL, Crackle, Logistic. Chaotic maps run in double in scsynth: statistics,
+reseed), LorenzL, Crackle, Logistic (float pairs: in float32 it cycles); Gendy1/2/3
+(sc-findings 33, 34). Chaotic maps run in double in scsynth: statistics,
 exact up to the first few hundred iterations; Standard at tol 4 (its mixed phase space:
 scsynth against itself from a perturbed start scores up to 3.4).
 
@@ -36,12 +37,11 @@ in scope; only buffers, buses, demand rate and FFT stay excluded by design.
 ## Next, in order
 Each step has a prepared plan (and, where noted, code) in docs/plans/: apply, build, test,
 set tolerances from the measured floors, full suite, commit, bump vairi.
-1. Finish batch 7: FreqShift's results (one instance compiles in ~48 s and every render
-   recompiles: shorten it), full suite, merge, bump vairi, census.
-2. Gendy1/2/3 (statistics).
-3. Grains: GrainSin, GrainFM, GrainIn.
-4. MoogFF.kr: set aside (plans/moogff-kr.md: a Faust miscompilation to understand first).
-5. Issue drafts: docs/issues/ covers 4, 5, 11, 15, 17-28, 30-32; file them upstream.
+1. Finish batch 7: full suite, merge, bump vairi, census. (FreqShift passed, 58 tests; its
+   compile time is down from 48 s to 0.9 s.)
+2. Grains: GrainSin, GrainFM, GrainIn.
+3. MoogFF.kr: set aside (plans/moogff-kr.md: a Faust miscompilation to understand first).
+4. Issue drafts: docs/issues/ covers 4, 5, 11, 15, 17-28, 30-34; file them upstream.
 
 ## Working method (keeps cost down)
 - Read the scsynth source of the UGen (and nova-simd where a nova calc function runs).

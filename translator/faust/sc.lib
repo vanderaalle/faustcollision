@@ -3192,13 +3192,10 @@ with {
 // m_radtoinc before it is set (sc-findings 32: a kr/constant phase is ignored).
 //------------------------------------------------------------------------------
 // stage in double: input pair, coefficient c (float), state pair -> (output pair, state pair)
-fstage(c, uh, ul, yh, yl) = ah, al, y0h, y0l
-with {
-    ph = dmulf(yh, yl, c) : _, !; pl = dmulf(yh, yl, c) : !, _;
-    y0h = dadd2(uh, ul, 0.0 - ph, 0.0 - pl) : _, !; y0l = dadd2(uh, ul, 0.0 - ph, 0.0 - pl) : !, _;
-    mh = dmulf(y0h, y0l, c) : _, !; ml = dmulf(y0h, y0l, c) : !, _;
-    ah = dadd2(mh, ml, yh, yl) : _, !; al = dadd2(mh, ml, yh, yl) : !, _;
-};
+// each pair bound once through a lambda: selecting a pair's halves separately re-expands
+// the cascade exponentially at compile time (faust-notes)
+fstage(c, uh, ul, yh, yl) = dmulf(yh, yl, c) : \(ph, pl).(dadd2(uh, ul, 0.0 - ph, 0.0 - pl)
+    : \(y0h, y0l).(dmulf(y0h, y0l, c) : \(mh, ml).(dadd2(mh, ml, yh, yl), y0h, y0l)));
 // (uh, ul, 2m carried) -> (ah, al, 2m carried, y0h, y0l)
 fbox(c, yh, yl, m) = ((\(uh, ul).(fstage(c, uh, ul, yh, yl))), si.bus(2 * m))
     : route(4 + 2 * m, 4 + 2 * m, (1, 1), (2, 2), (3, 3 + 2 * m), (4, 4 + 2 * m), par(i, 2 * m, (5 + i, 3 + i)));

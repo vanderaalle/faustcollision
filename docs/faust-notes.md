@@ -16,7 +16,10 @@ signal argument of a library call that way.
 
 **Selecting outputs of a tuple re-expands the tuple.** `f(x) : _, !` and `f(x) : !, _`
 evaluate `f(x)` twice; with nesting, this grew exponentially (6 LF oscillators: 14 s).
-Route with `<:` and lambdas instead.
+Route with `<:` and lambdas instead. Float-pair chains are the worst case, every pair
+being a tuple: FreqShift's six-stage double cascades took 48 s to compile with
+`dmulf(...) : _, !` / `: !, _` in each stage, 0.9 s with each pair bound once
+(`dmulf(...) : \(h, l).(...)`), bit-identical output.
 
 ## Arithmetic the compiler rewrites
 
