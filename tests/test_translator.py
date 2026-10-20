@@ -14,8 +14,8 @@ def graph(*ugens):
 
 
 def test_unmapped_ugen_names_the_class():
-    g = graph(UGen(2, "Gendy1", "ar", 0, [Ref(1, 0)], ["ar"]))
-    with pytest.raises(TranslationError, match="unmapped UGen class Gendy1"):
+    g = graph(UGen(2, "NoSuchUGen", "ar", 0, [Ref(1, 0)], ["ar"]))  # never mapped
+    with pytest.raises(TranslationError, match="unmapped UGen class NoSuchUGen"):
         translate(g, {})
 
 
@@ -44,6 +44,13 @@ def test_control_without_spec_is_an_error():
     g.param_names = {0: "gain"}
     with pytest.raises(TranslationError, match="'gain' is used but has no spec"):
         translate(g, {"specs": {}})
+
+
+# One Faust voice per possible grain: the default maxGrains (512) does not compile.
+def test_grain_voices_beyond_the_limit_are_an_error():
+    g = graph(UGen(2, "GrainSin", "ar", 0, [Const(0.0), Const(1.0), Const(440.0), Const(0.0), Const(-1.0), Const(512.0)], ["ar"]))
+    with pytest.raises(TranslationError, match="maxGrains <= 65"):
+        translate(g, {})
 
 
 # Rejections with a reason (sc-findings 21, 22; not causal): scsynth reads garbage or

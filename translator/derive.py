@@ -484,6 +484,23 @@ def grain_calc(rate, r):
     return "ar_a" if r["trigger"] == "ar" else "ar_k"
 
 
+GRAIN_VOICES_MAX = 64
+
+
+def grain_voices(c):
+    """GrainUGens.cpp: a trigger is refused when mNumActive + 1 >= mMaxGrains, so maxGrains - 1
+    grains can sound: one Faust voice each (docs/plans/grains.md). Beyond 64 voices the
+    compile cost is prohibitive (511, the default maxGrains 512: > 200 s, > 11 GB), so the
+    SynthDef must set maxGrains <= 65; it stays exact up to that many overlapping grains."""
+    m = int(c["maxGrains"])
+    if m - 1 > GRAIN_VOICES_MAX:
+        raise ValueError(f"maxGrains {m} needs {m - 1} voices; set maxGrains <= {GRAIN_VOICES_MAX + 1} "
+                         "in the SynthDef (one voice per possible grain; 512, the default, does not compile)")
+    if m < 2:
+        raise ValueError(f"maxGrains {m} refuses every grain (mNumActive + 1 >= mMaxGrains)")
+    return {"voices": m - 1}
+
+
 def freqshift_calc(rate, r):
     """FilterUGens.cpp FreqShift_Ctor: by the freq and phase rates."""
     return f'ar_{"a" if r["freq"] == "ar" else "k"}{"a" if r["phase"] == "ar" else "k"}'
