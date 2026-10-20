@@ -213,6 +213,10 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 		Out.ar(0, K2A.ar(PanB.kr(k, az + st, 0.2, 0.8) ++ PanB2.kr(k, az, 0.7 + (0.2 * st)) ++ BiPanB2.kr(k, k * 0.5, az + st, 0.9)
 			++ DecodeB2.kr(4, k, k * 0.5, k * -0.3, 0.5) ++ PanAz.kr(5, k, az + st, 0.8, 2, 0.5) ++ SplayAz.kr(4, [k, k * 0.5]))) },
 		metadata: (specs: (az: spec.(-1, 1, 0.3, \lin)))),
+	// Spring (force in), Ball and TBall (a floor moving with the signal; dither on bounces), ar, kr
+	SynthDef(\case_physical, { var x = in.value, k = Latch.kr(x, Impulse.kr(100));
+		Out.ar(0, [Spring.ar(x, 30, 0.001) * 0.01, Ball.ar(x * 0.2, 2, 0.1, 0.01), TBall.ar(x * 0.2, 5, 0.1, 0.01) * 0.1,
+			K2A.ar(Spring.kr(k, 5, 0.01)) * 0.01, K2A.ar(Ball.kr(k * 0.2, 1, 0.1, 0.01))]) }),
 	SynthDef(\case_Formlet, { |freq = 1000| Out.ar(0, Formlet.ar(in.value, freq, 0.005, 0.1) * 0.5) },
 		metadata: (specs: (freq: spec.(50, 12000, 1000)))),
 	// Lags and decays: knob-swept time, input signal (impulse/steps from the test signals)

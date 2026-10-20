@@ -3124,3 +3124,35 @@ with { ch = kchanged(az) | kchanged(lv); };
 // PanAz.kr: the stored target is exact (m_chanamp = next): the previous block's target
 panaz_kr(n, x, pos, lv, w, o) = par(i, n, fmul(x, kprev(pazamp(n, i, lv, w, pk))))
 with { pk = fadd(fadd(fmul(fmul(pos, 0.5), float(n)), fmul(w, 0.5)), o); };
+
+//------------------------------------------------------------------------------
+// Spring, Ball, TBall (PhysicalModelingUGens.cpp). Spring: float pos, vel; force = in c - pos
+// spring c; vel = (force + vel) (1 - damp); pos += vel; out = force SR (c = sampleDur).
+// Ball/TBall: vel -= g; pos += vel; near the floor (|dist| < k) stick or pull by inter; at or
+// below it bounce: pos = floor - dist, vel = (floorvel - vel) (1 - damp) + dither, the dither
+// frand * 0.00005 * gravity (TBall 0.001): a random draw, so the trajectories drift from
+// scsynth's after the first bounce (measured floor). TBall outputs the bounce velocity on
+// bounce samples (else 0); its pos and prev floor are doubles in scsynth (float here, part
+// of the floor). Inputs other than `in` read per block. Constructors run one sample from
+// pos = prev = in (Ball/TBall), 0 (Spring).
+//------------------------------------------------------------------------------
+spring_g(x, sp, dm, sr, clk) = machine(2, step, (0.0, 0.0), 1, clk)
+with {
+    c = 1.0 / sr; rc = float(sr); k = fmul(a2k(sp), c); d = fsub(1.0, a2k(dm));
+    step = \(pos, vel).((fmul(f, rc), fadd(pos, v1), v1) with { f = fsub(fmul(x, c), fmul(pos, k)); v1 = fmul(fadd(f, vel), d); });
+};
+ball_g(isT, seed, x, gin, dm, fr, sr, clk) = machine(3, step, (x, 0.0, x), 1, clk)
+with {
+    c = 1.0 / sr; g = fmul(c, a2k(gin)); d = fsub(1.0, a2k(dm)); k = fmul(a2k(fr), a2k(gin));
+    mx = fmul(c, 1000.0); inter = fmul(c, select2(isT == 1, 1000.0, 10000.0));
+    dith = fmul(fmul(frand(seed), select2(isT == 1, 0.00005, 0.001)), a2k(gin));
+    step = \(pos, vel, prev).((out, p2, v2, x) with {
+        v0 = fsub(vel, g); p0 = fadd(pos, v0); dist = fsub(p0, x);
+        fv = max(0.0 - mx, min(mx, fsub(x, prev))); vd = fsub(fv, v0);
+        stick = abs(dist) < k; tight = abs(dist) < k * 0.005; bounce = (dist <= 0.0) & (stick == 0);
+        vb = fadd(fmul(vd, d), dith);
+        v2 = select2(stick, select2(bounce, v0, vb), select2(tight, fadd(fmul(vd, inter), v0), 0.0));
+        p2 = select2(stick, select2(bounce, p0, fsub(x, dist)), select2(tight, fadd(fmul(fsub(x, p0), inter), p0), fadd(x, g)));
+        out = select2(isT == 1, p2, select2(bounce, 0.0, fmul(vd, d)));
+    });
+};
