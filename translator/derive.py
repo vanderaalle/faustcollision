@@ -134,6 +134,30 @@ def fsinosc(c):
     return out
 
 
+def psingrain(c):
+    """OscUGens.cpp PSinGrain_Ctor, all read once: float w = freq * radiansPerSample, float
+    sdur = SR * dur, rdur = 1.f / sdur, rdur2 = rdur * rdur; slope = 4 (rdur - rdur2),
+    curve = -8 rdur2 (stored as doubles, used as floats); counter = (int32)(sdur + .5);
+    b1 = 2 cos(w), y1 = -sin(w) * amp, y2 = -sin(w + w) * amp (float cos/sin of a float).
+    The node ends (NodeEnd) in the block where the counter reaches 0: the synth's outputs
+    are written through that block, then nothing (nend; 0: never, a counter <= 0 only
+    outputs zeros)."""
+    freq, dur, amp = f32(c["freq"]), f32(c["dur"]), f32(c["amp"])
+    w = f32(float(freq) * (2.0 * math.pi / SR))
+    sdur = f32(SR * float(dur))
+    rdur = f32(f32(1.0) / sdur)
+    rdur2 = f32(rdur * rdur)
+    n = int(float(sdur) + 0.5)
+    sinw = f32(math.sin(float(w)))
+    return {"b1": float(f32(2.0 * float(f32(math.cos(float(w)))))),
+            "y1": float(f32(-sinw * amp)),
+            "y2": float(f32(-f32(math.sin(float(f32(w + w)))) * amp)),
+            "slope": float(f32(4.0 * float(f32(rdur - rdur2)))),
+            "curve": float(f32(-8.0 * float(rdur2))),
+            "n": max(n, 0),
+            "nend": 64 * -(-n // 64) if n > 0 else 0}
+
+
 def line(c):
     """LFUGens.cpp Line_Ctor: counter = (int)(dur * rate + .5f), at least 1; slope =
     (end - start) / counter and level = start + slope, in double (counter 0: level = end,

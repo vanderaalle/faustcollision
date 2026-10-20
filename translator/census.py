@@ -74,7 +74,20 @@ OVERRIDES = {
     "LocalIn": "{{ var fb = LocalIn.{rate}(1); LocalOut.{rate}(SoundIn.ar(0) + (fb * 0.5)); fb }}.value",
     "LocalOut": "{{ var fb = LocalIn.{rate}(1); LocalOut.{rate}(SoundIn.ar(0) + (fb * 0.5)); fb }}.value",
     "Select": "Select.{rate}(SoundIn.ar(0) > 0, [SoundIn.ar(0), SoundIn.ar(0) * 0.5])",
-    "TWindex": "TWindex.{rate}(SoundIn.ar(0), [0.3, 0.7])",
+    # random on triggers: a repeating trigger, so the statistics cover many draws
+    "TWindex": "TWindex.{rate}(Impulse.{rate}(50), [0.3, 0.7])",
+    "TRand": "TRand.{rate}(0, 1, Impulse.{rate}(50))",
+    "TIRand": "TIRand.{rate}(0, 10, Impulse.{rate}(50))",
+    "TExpRand": "TExpRand.{rate}(0.1, 10, Impulse.{rate}(50))",
+    "CoinGate": "CoinGate.{rate}(0.5, Impulse.{rate}(50))",
+    # grains: maxGrains must be set (one Faust voice per possible grain), a real trigger
+    "GrainSin": "GrainSin.ar(1, Impulse.ar(30), 0.05, 440, maxGrains: 16)",
+    "GrainFM": "GrainFM.ar(1, Impulse.ar(30), 0.05, 440, 200, 1, maxGrains: 16)",
+    "GrainIn": "GrainIn.ar(1, Impulse.ar(30), 0.05, SoundIn.ar(0), maxGrains: 16)",
+    # Gendy .kr: the defaults leave +-1 in scsynth itself (sc-findings 33)
+    "Gendy1": {"ar": "Gendy1.ar", "kr": "Gendy1.kr(1, 1, 1, 1, 20, 40)"},
+    "Gendy2": {"ar": "Gendy2.ar", "kr": "Gendy2.kr(minfreq: 1, maxfreq: 10)"},
+    "Gendy3": {"ar": "Gendy3.ar", "kr": "Gendy3.kr(1, 1, 1, 1, 20, 0.5, 0.5, 4)"},
     "Splay": "Splay.{rate}([SoundIn.ar(0), SoundIn.ar(0) * 0.5])",
     "SplayAz": "SplayAz.{rate}(2, [SoundIn.ar(0), SoundIn.ar(0) * 0.5])",
 }
@@ -121,7 +134,8 @@ def classify(u):
 def probe_body(u, rate):
     sig = "A2K.kr(SoundIn.ar(0))" if rate == "kr" else "SoundIn.ar(0)"
     if u["name"] in OVERRIDES:
-        return OVERRIDES[u["name"]].format(rate=rate, sig=sig)
+        o = OVERRIDES[u["name"]]
+        return (o[rate] if isinstance(o, dict) else o).format(rate=rate, sig=sig)
     kwargs = [f"{a}: {sig}" for a, default in u["args"]
               if a in SIGNAL_ARGS or (default == "nil" and a not in ("mul", "add"))]
     return f"{u['name']}.{rate}({', '.join(kwargs)})"

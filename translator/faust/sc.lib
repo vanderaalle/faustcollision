@@ -707,6 +707,20 @@ grainfm_g(V, nout, trig, dur, cf, mf, idx, pan, isk) = grain_bank(V, nout, 5, (0
 grainin_g(V, nout, trig, dur, x, pan, isk) = grain_bank(V, nout, 1, 0, \(d).(d), \(d).(x), trig, dur, pan, isk);
 // sum the voices' (out1, out2, chan) into n outputs: out1 to chan, out2 to chan + 1 (mod n)
 gmix(V, n) = si.bus(3 * V) <: par(k, n, (par(v, V, \(o1, o2, ch).(select2(ch == k, 0.0, o1) + select2(((ch + 1) % n) == k, 0.0, o2))) :> _));
+// PSinGrain (OscUGens.cpp:PSinGrain_next): a sine resonator under a parabolic envelope,
+// in float: y0 = b1 y1 - y2; out = y0 * level; level += slope; slope += curve; n samples,
+// then 0 (and the node ends: the mapping's node_alive). Constants from derive.psingrain.
+psingrain(b1, y1i, y2i, sl0, cv, n) = (loop ~ (_, _, _, _)) : (!, !, !, !, _)
+with {
+    t0 = ba.time == 0;
+    loop(a1, a2, lv, sl) = y0, y1, lv1, sl1, select2(ba.time < n, 0.0, y0 * l)
+    with {
+        y1 = select2(t0, a1, y1i); y2 = select2(t0, a2, y2i);
+        l = select2(t0, lv, 0.0); s = select2(t0, sl, sl0);
+        y0 = fsub(fmul(b1, y1), y2);
+        lv1 = fadd(l, s); sl1 = fadd(s, cv);
+    };
+};
 // Dust / Dust2: frand below density * sampledur. density is read once per block.
 dust(seed, density, sdur) = select2(z < th, 0.0, z * select2(th > 0, 0.0, 1.0 / th))
 with { z = frand(seed); th = a2k(density) * sdur; };

@@ -3118,3 +3118,16 @@ faust = { ar_a = "sc.grainin_g({voices}, {nout}, {trigger}, {dur}, {in}, {pan}, 
 compare = "waveform"
 tol = 1e-6
 case = "case_GrainIn"
+
+[PSinGrain]
+tier = "direct"
+inputs = ["freq", "dur", "amp"]
+# OscUGens.cpp: one grain, all inputs read in the constructor; the node ends with it
+# (NodeEnd): every output of the synth stops after that block (node_alive)
+constant_inputs = ["freq", "dur", "amp"]
+derive = "psingrain"
+faust = { ar = "sc.psingrain({b1}, {y1}, {y2}, {slope}, {curve}, {n})" }
+node_alive = "select2({nend} > 0, 1, ba.time < {nend})"
+compare = "waveform"
+tol = 1e-6
+case = "case_PSinGrain"

@@ -258,6 +258,9 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 	SynthDef(\case_GrainIn, { Out.ar(0, [GrainIn.ar(1, Impulse.ar(20, 0.5), 0.03, in.value, maxGrains: 16),
 		GrainIn.ar(2, Impulse.ar(13, 0.1), Line.kr(0.02, 0.15, 6), in.value, SinOsc.kr(0.25), maxGrains: 16),
 		GrainIn.ar(1, Impulse.kr(7), 0.05, in.value, maxGrains: 4)].flat * 0.5) }),
+	// PSinGrain: one grain; the node ends with it, silencing the other output too
+	SynthDef(\case_PSinGrain, { Out.ar(0, [PSinGrain.ar(660, 0.3, 0.5), SinOsc.ar(220) * 0.2]) }, metadata: (signals: [\silence])),
+	SynthDef(\case_PSinGrain_long, { Out.ar(0, PSinGrain.ar(1234.5, 2.3456, 0.8)) }, metadata: (signals: [\silence])),
 	SynthDef(\case_Standard, { Out.ar(0, [StandardN.ar(8000), StandardL.ar(3000)] * 0.3) }, metadata: (signals: [\silence])),
 	SynthDef(\case_Formlet, { |freq = 1000| Out.ar(0, Formlet.ar(in.value, freq, 0.005, 0.1) * 0.5) },
 		metadata: (specs: (freq: spec.(50, 12000, 1000)))),
