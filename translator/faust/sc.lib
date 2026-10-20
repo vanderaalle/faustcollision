@@ -3111,3 +3111,16 @@ panaz_k(n, x, pos, lv, w, o) = par(i, n, fmul(x, seqramp(pazamp(n, i, a2k(lv), a
 with { pk = fadd(fadd(fmul(fmul(a2k(pos), 0.5), float(n)), fmul(a2k(w), 0.5)), a2k(o)); };
 panaz_a(n, x, pos, lv, w, o) = par(i, n, fmul(x, pazamp(n, i, a2k(lv), a2k(w), pa)))
 with { pa = fadd(fmul(pos, fmul(0.5, float(n))), fadd(fmul(a2k(w), 0.5), a2k(o))); };
+// kr (one sample per block): out = in * the gain stored before the block; then the stored
+// gain += (next - stored) (slope factor 1), as Pan4.kr
+kgain(g, c) = select2(ba.time == 0, ba.sAndH(krclk, mem(st)), g)
+with { st = (\(v).(select2(ba.time == 0, select2(krclk & c, v, fadd(v, fsub(g, v))), g))) ~ _; };
+panb_kr(x, az, el, lv) = panb_g(az, el, lv) : par(i, 4, \(g).(fmul(x, kgain(g, ch))))
+with { ch = kchanged(az) | kchanged(el) | kchanged(lv); };
+panb2_kr(x, az, lv) = panb2_g(az, lv) : par(i, 3, \(g).(fmul(x, kgain(g, ch))))
+with { ch = kchanged(az) | kchanged(lv); };
+bipanb2_kr(a, b, az, lv) = panb2_g(az, lv) : \(w, xg, yg).(fmul(fadd(a, b), kgain(w, ch)), fmul(fsub(a, b), kgain(xg, ch)), fmul(fsub(a, b), kgain(yg, ch)))
+with { ch = kchanged(az) | kchanged(lv); };
+// PanAz.kr: the stored target is exact (m_chanamp = next): the previous block's target
+panaz_kr(n, x, pos, lv, w, o) = par(i, n, fmul(x, kprev(pazamp(n, i, lv, w, pk))))
+with { pk = fadd(fadd(fmul(fmul(pos, 0.5), float(n)), fmul(w, 0.5)), o); };

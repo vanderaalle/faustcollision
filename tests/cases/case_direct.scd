@@ -208,6 +208,11 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 			++ DecodeB2.ar(4, x, x * 0.5, x * -0.3, 0.5) ++ DecodeB2.ar(6, x, x * 0.3, x * 0.2, 0)
 			++ PanAz.ar(5, x, az, 0.8, 2, 0.5) ++ PanAz.ar(4, x, a, 1, 3, 0) ++ SplayAz.ar(4, [x, x * 0.5, x * -0.5])) },
 		metadata: (specs: (az: spec.(-1, 1, 0.3, \lin)))),
+	// the same panners at kr (one sample per block; gains one block late), on a kr input
+	SynthDef(\case_panners_b_kr, { |az = 0.3| var k = Latch.kr(in.value, Impulse.kr(100)), st = Line.kr(0, 1, 2) > 0.5;
+		Out.ar(0, K2A.ar(PanB.kr(k, az + st, 0.2, 0.8) ++ PanB2.kr(k, az, 0.7 + (0.2 * st)) ++ BiPanB2.kr(k, k * 0.5, az + st, 0.9)
+			++ DecodeB2.kr(4, k, k * 0.5, k * -0.3, 0.5) ++ PanAz.kr(5, k, az + st, 0.8, 2, 0.5) ++ SplayAz.kr(4, [k, k * 0.5]))) },
+		metadata: (specs: (az: spec.(-1, 1, 0.3, \lin)))),
 	SynthDef(\case_Formlet, { |freq = 1000| Out.ar(0, Formlet.ar(in.value, freq, 0.005, 0.1) * 0.5) },
 		metadata: (specs: (freq: spec.(50, 12000, 1000)))),
 	// Lags and decays: knob-swept time, input signal (impulse/steps from the test signals)
