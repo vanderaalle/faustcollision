@@ -478,6 +478,12 @@ def freqshift(c):
     return {"cs": ", ".join(cs)}
 
 
+def grain_calc(rate, r):
+    """GrainUGens.cpp Grain*_Ctor: next_a for an audio-rate trigger, else next_k (one
+    trigger test per block, inputs read at the block start)."""
+    return "ar_a" if r["trigger"] == "ar" else "ar_k"
+
+
 def freqshift_calc(rate, r):
     """FilterUGens.cpp FreqShift_Ctor: by the freq and phase rates."""
     return f'ar_{"a" if r["freq"] == "ar" else "k"}{"a" if r["phase"] == "ar" else "k"}'

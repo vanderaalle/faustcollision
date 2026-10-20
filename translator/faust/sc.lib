@@ -630,6 +630,69 @@ with {
         });
     });
 };
+//------------------------------------------------------------------------------
+// GrainSin (GrainUGens.cpp; docs/plans/grains.md). A trigger is refused when mNumActive + 1
+// >= mMaxGrains, mNumActive counting the grains that outlive the current block (scsynth
+// removes a grain at the end of the block it ends in, before that block's triggers): V =
+// maxGrains - 1 logical slots; a grain counts while its remaining length exceeds the rest
+// of the block. A grain ending in the block still sounds, so the port has P = V + min(V,
+// 16) physical voices: exact unless more than 16 grains end in one block at saturation. Per grain: counter = (int)max(4, dur * SR) samples; the Hann window by a
+// resonator in double (float pairs: b1 = 2 cos w as 2 - (2 sin(w / 2))^2, w = pi /
+// counter), amp = y1^2; output (float)(amp * sine(phase)) * pan, then the resonator and
+// phase step. The constructor (next_k(1)) starts a grain when the trigger is > 0 and sets
+// curtrig: one sample before the first block, so no rising edge at sample 0.
+// isk: trigger at kr (a rising edge only at block starts).
+//------------------------------------------------------------------------------
+// pan (CALC_GRAIN_PAN): (pan1, pan2, chan) for n outputs
+gpan(n, pan) = select2(n > 1, 1.0, p1), select2(n > 1, 0.0, p2), select2(n > 2, 0, ch)
+with {
+    pw = ma.frac(pan * 0.5);
+    cpan = n * pw + 0.5; ip = floor(cpan);
+    a2 = select2(n > 2, min(max(pan * 0.5 + 0.5, 0.0), 1.0), cpan - ip) * 1.5707963267948966;
+    p1 = cos(a2); p2 = sin(a2);
+    c0 = int(ip); ch = select2(c0 >= n, c0, c0 - n);
+};
+// the window resonator step on pairs: (b1, y1, y2) -> (y0 = b1 y1 - y2, y1)
+gres(bh, bl, yh, yl, zh, zl) = dmul2(bh, bl, yh, yl) : \(mh, ml).(dadd2(mh, ml, 0.0 - zh, 0.0 - zl)), yh, yl;
+grainsin_g(V, nout, trig, dur, freq, pan, isk) = (bank ~ si.bus(P * K)) : (si.block(P * K), gmix(P, nout))
+with {
+    K = 12;
+    P = V + min(V, 16);
+    t0 = ba.time == 0;
+    rising = (select2(t0, trig', trig) <= 0) & (trig > 0) & select2(isk, 1, krclk);
+    ctor = t0 & (trig > 0);
+    rest = blocksize - ba.time % blocksize;  // samples left in the block, this one included
+    cnt0 = max(4, iprod(dur, ma.SR));
+    w = 3.14159265358979 / float(cnt0);
+    sh = sin(w * 0.5) * 2.0;
+    gp = gpan(nout, pan);
+    // (counter, b1 pair, y1 pair, y2 pair, phase, inc, pan1, pan2, chan)
+    init = (cnt0, (dmul2(sh, 0.0, sh, 0.0) : \(qh, ql).(drsub(2.0, qh, ql))), sin(w), 0.0, 0.0, 0.0, 0, dinc(freq, 29), gp);
+    adv = \(c, bh, bl, yh, yl, zh, zl, ph, inc, a1, a2, ch).(c - 1, bh, bl, gres(bh, bl, yh, yl, zh, zl), ph + inc, inc, a1, a2, ch);
+    // a voice: (state K, first free voice) -> (next state K, out1, out2, chan)
+    voice(v) = \(c, bh, bl, yh, yl, zh, zl, ph, inc, a1, a2, ch, idx).(
+        ((c, bh, bl, yh, yl, zh, zl, ph, inc, a1, a2, ch), init, (init : adv)) : ro.interleave(K, 3) : par(k, K, choose)
+        : (si.bus(K) <: (nxt, outs))
+        with { choose = \(x, i, ia).(select2(ctor & (v == 0), select2(rising & (idx == v), x, i), ia)); });
+    // advance while the grain lasts
+    nxt = \(c, bh, bl, yh, yl, zh, zl, ph, inc, a1, a2, ch).(((c, bh, bl, yh, yl, zh, zl, ph, inc, a1, a2, ch) <: (si.bus(K), adv))
+        : ro.interleave(K, 2) : par(k, K, select2(c > 0)));
+    outs = \(c, bh, bl, yh, yl, zh, zl, ph, inc, a1, a2, ch).(gout(c, yh, yl, ph, a1, a2), ch);
+    // (float)(amp * sine) * pan, amp = y1^2 in double; 0 when idle
+    gout(c, yh, yl, ph, a1, a2) = dmul2(yh, yl, yh, yl) : \(ah, al).(dmulr(ah, al, lookupi1(ph)))
+        <: select2(c > 0, 0.0, _ * a1), select2(c > 0, 0.0, _ * a2);
+    // the first physically free voice, or P when the logical slots are full
+    counters = par(v, P, (_, si.block(K - 1)));
+    freeidx = counters <: (par(v, P, \(c).(select2(c <= 0, P, v))) : ba.parallelMin(P)),
+                          (par(v, P, \(c).(c > rest)) :> _)
+            : \(i, n).(select2(n >= V, i, P));
+    bank = si.bus(P * K) <: (si.bus(P * K), (freeidx <: si.bus(P)))
+        : route(P * K + P, P * (K + 1), par(v, P, (par(k, K, (v * K + k + 1, v * (K + 1) + k + 1)), (P * K + v + 1, v * (K + 1) + K + 1))))
+        : par(v, P, voice(v))
+        : route(P * (K + 3), P * (K + 3), par(v, P, (par(k, K, (v * (K + 3) + k + 1, v * K + k + 1)), par(o, 3, (v * (K + 3) + K + o + 1, P * K + v * 3 + o + 1)))));
+};
+// sum the voices' (out1, out2, chan) into n outputs: out1 to chan, out2 to chan + 1 (mod n)
+gmix(V, n) = si.bus(3 * V) <: par(k, n, (par(v, V, \(o1, o2, ch).(select2(ch == k, 0.0, o1) + select2(((ch + 1) % n) == k, 0.0, o2))) :> _));
 // Dust / Dust2: frand below density * sampledur. density is read once per block.
 dust(seed, density, sdur) = select2(z < th, 0.0, z * select2(th > 0, 0.0, 1.0 / th))
 with { z = frand(seed); th = a2k(density) * sdur; };

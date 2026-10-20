@@ -3072,3 +3072,17 @@ compare = "statistics"
 # overshoot spikes, #33)
 tol = 6.0
 case = "case_Gendy3"
+
+[GrainSin]
+tier = "direct"
+inputs = ["trigger", "dur", "freq", "pan", "envbufnum", "maxGrains"]
+outputs = "n"
+# GrainUGens.cpp: grains on rising triggers, Hann by a double resonator (float pairs);
+# envbufnum -1 only (others read a buffer); maxGrains sizes the voices (constructor)
+require = { envbufnum = -1.0 }
+constant_inputs = ["maxGrains"]
+template_by = "grain_calc"
+faust = { ar_a = "sc.grainsin_g(max(1, int({maxGrains}) - 1), {nout}, {trigger}, {dur}, {freq}, {pan}, 0)", ar_k = "sc.grainsin_g(max(1, int({maxGrains}) - 1), {nout}, {trigger}, sc.a2k({dur}), sc.a2k({freq}), sc.a2k({pan}), 1)" }
+compare = "waveform"
+tol = 1e-6
+case = "case_GrainSin"

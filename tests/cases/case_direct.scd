@@ -245,6 +245,12 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 		K2A.ar(Gendy2.kr(minfreq: 1, maxfreq: 10))] * 0.3) }, metadata: (signals: [\silence])),
 	SynthDef(\case_Gendy3, { Out.ar(0, [Gendy3.ar, Gendy3.ar(0, 0, 1, 1, 220, 0.3, 0.3, 4), Gendy3.ar(3, 5, 0.6, 0.6, 330, 0.5, 0.5, 12, 7),
 		K2A.ar(Gendy3.kr(1, 1, 1, 1, 20, 0.5, 0.5, 4))] * 0.3) }, metadata: (signals: [\silence])),
+	// Grains: overlapping mono grains; stereo with swept dur/freq/pan; 4 channels; a kr
+	// trigger with maxGrains 2 (one slot: refusals, and reuse in the block a grain ends in)
+	SynthDef(\case_GrainSin, { var t = Impulse.ar(30, 0.5);
+		Out.ar(0, [GrainSin.ar(1, t, 0.05, 440, maxGrains: 16), GrainSin.ar(2, Impulse.ar(17, 0.3), Line.kr(0.01, 0.2, 5), Line.kr(200, 2000, 6), SinOsc.kr(0.3), maxGrains: 16),
+			GrainSin.ar(4, t, 0.1, 330, Line.kr(-1, 1, 8), maxGrains: 16), GrainSin.ar(1, Impulse.kr(13), 0.1, 660, maxGrains: 2)].flat * 0.3) },
+		metadata: (signals: [\silence])),
 	SynthDef(\case_Standard, { Out.ar(0, [StandardN.ar(8000), StandardL.ar(3000)] * 0.3) }, metadata: (signals: [\silence])),
 	SynthDef(\case_Formlet, { |freq = 1000| Out.ar(0, Formlet.ar(in.value, freq, 0.005, 0.1) * 0.5) },
 		metadata: (specs: (freq: spec.(50, 12000, 1000)))),
