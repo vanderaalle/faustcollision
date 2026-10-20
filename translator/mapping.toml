@@ -3038,7 +3038,10 @@ constant_inputs = ["initCPs"]
 self_hold = true
 faust = { ar = "sc.gendy1_g(max(1, int({initCPs})), {seed}, sc.a2k({ampdist}), sc.a2k({durdist}), sc.a2k({adparam}), sc.a2k({ddparam}), sc.a2k({minfreq}), sc.a2k({maxfreq}), sc.a2k({ampscale}), sc.a2k({durscale}), sc.a2k({knum}), 1.0 / ma.SR, 1)", kr = "sc.gendy1_g(max(1, int({initCPs})), {seed}, {ampdist}, {durdist}, {adparam}, {ddparam}, {minfreq}, {maxfreq}, {ampscale}, {durscale}, {knum}, sc.blocksize / ma.SR, sc.krclk)" }
 compare = "statistics"
-tol = 1.5
+# tol: a walk over 12 breakpoints does not average out in 10 s: scsynth against itself
+# (RandSeed, 15 seed pairs) scores up to 2.12 (case_Gendy1, the kr walk) and 2.82
+# (case_Gendy_dist, distribution 6)
+tol = 3.5
 case = "case_Gendy1"
 
 [Gendy2]
@@ -3051,7 +3054,8 @@ constant_inputs = ["initCPs"]
 self_hold = true
 faust = { ar = "sc.gendy2_g(max(1, int({initCPs})), {seed}, sc.a2k({ampdist}), sc.a2k({durdist}), sc.a2k({adparam}), sc.a2k({ddparam}), sc.a2k({minfreq}), sc.a2k({maxfreq}), sc.a2k({ampscale}), sc.a2k({durscale}), sc.a2k({knum}), sc.a2k({a}), sc.a2k({c}), 1.0 / ma.SR, 1)", kr = "sc.gendy2_g(max(1, int({initCPs})), {seed}, {ampdist}, {durdist}, {adparam}, {ddparam}, {minfreq}, {maxfreq}, {ampscale}, {durscale}, {knum}, {a}, {c}, sc.blocksize / ma.SR, sc.krclk)" }
 compare = "statistics"
-tol = 1.5
+# tol: scsynth against itself (RandSeed, 15 seed pairs) scores up to 4.39
+tol = 5.5
 case = "case_Gendy2"
 
 [Gendy3]
@@ -3064,5 +3068,7 @@ constant_inputs = ["initCPs"]
 self_hold = true
 faust = { ar = "sc.gendy3_g(max(1, int({initCPs})), {seed}, sc.a2k({ampdist}), sc.a2k({durdist}), sc.a2k({adparam}), sc.a2k({ddparam}), sc.a2k({freq}), sc.a2k({ampscale}), sc.a2k({durscale}), sc.a2k({knum}), 1.0 / ma.SR, 1)", kr = "sc.gendy3_g(max(1, int({initCPs})), {seed}, {ampdist}, {durdist}, {adparam}, {ddparam}, {freq}, {ampscale}, {durscale}, {knum}, sc.blocksize / ma.SR, sc.krclk)" }
 compare = "statistics"
-tol = 1.5
+# tol: scsynth against itself (RandSeed, 15 seed pairs) scores up to 4.9 (the default's
+# overshoot spikes, #33)
+tol = 6.0
 case = "case_Gendy3"

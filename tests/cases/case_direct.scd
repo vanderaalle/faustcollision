@@ -235,14 +235,16 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 		K2A.ar(Logistic.kr(3.95, 100, 0.2))] * 0.5) },
 		metadata: (signals: [\silence])),
 	// Gendy: defaults; other distributions, fewer breakpoints, knum < initCPs; .kr in range
+	// (speed below one breakpoint per block); distribution 6 is meant for a moving adparam
 	SynthDef(\case_Gendy1, { Out.ar(0, [Gendy1.ar, Gendy1.ar(0, 0, 1, 1, 100, 200, 0.3, 0.3, 8, 5), Gendy1.ar(2, 3, 0.5, 0.5, 200, 400),
-		K2A.ar(Gendy1.kr(4, 5, 0.7, 0.7, 1, 10))] * 0.3) }, metadata: (signals: [\silence])),
-	SynthDef(\case_Gendy_dist, { Out.ar(0, (0..6).collect { |d| Gendy1.ar(d, 6 - d, 0.6, 0.6, 300, 500) } * 0.3) },
+		K2A.ar(Gendy1.kr(1, 1, 1, 1, 20, 40, 0.5, 0.5, 12))] * 0.3) }, metadata: (signals: [\silence])),
+	SynthDef(\case_Gendy_dist, { Out.ar(0, ((0..5).collect { |d| Gendy1.ar(d, 6 - d, 0.6, 0.6, 300, 500) }
+		++ [Gendy1.ar(6, 0, SinOsc.kr(0.3).range(0, 1), 0.6, 300, 500)]) * 0.3) },
 		metadata: (signals: [\silence])),
 	SynthDef(\case_Gendy2, { Out.ar(0, [Gendy2.ar, Gendy2.ar(0, 0, 1, 1, 100, 200, 0.3, 0.3, 8, 5, 1.5, 0.2),
 		K2A.ar(Gendy2.kr(minfreq: 1, maxfreq: 10))] * 0.3) }, metadata: (signals: [\silence])),
 	SynthDef(\case_Gendy3, { Out.ar(0, [Gendy3.ar, Gendy3.ar(0, 0, 1, 1, 220, 0.3, 0.3, 4), Gendy3.ar(3, 5, 0.6, 0.6, 330, 0.5, 0.5, 12, 7),
-		K2A.ar(Gendy3.kr(freq: 20))] * 0.3) }, metadata: (signals: [\silence])),
+		K2A.ar(Gendy3.kr(1, 1, 1, 1, 20, 0.5, 0.5, 4))] * 0.3) }, metadata: (signals: [\silence])),
 	SynthDef(\case_Standard, { Out.ar(0, [StandardN.ar(8000), StandardL.ar(3000)] * 0.3) }, metadata: (signals: [\silence])),
 	SynthDef(\case_Formlet, { |freq = 1000| Out.ar(0, Formlet.ar(in.value, freq, 0.005, 0.1) * 0.5) },
 		metadata: (specs: (freq: spec.(50, 12000, 1000)))),
