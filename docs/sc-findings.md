@@ -4,7 +4,7 @@ Behaviour of scsynth (SuperCollider 3.13.0) that the documentation does not stat
 found by comparing renders sample by sample or by porting the C++. Source references
 are to the `Version-3.13.0` tag (`~/src/supercollider`).
 
-Issue drafts for #4, #5, #11, #15, #17-#28, #30-#32: `docs/issues/`.
+Issue drafts for #4, #5, #11, #15, #17-#28, #30-#33: `docs/issues/`.
 
 Status: **measured** = confirmed on scsynth NRT renders; **source** = read in the C++,
 not yet confirmed by a render. Kind: **bug?** (looks unintended), **undocumented**,
@@ -44,6 +44,7 @@ not yet confirmed by a render. Kind: **bug?** (looks unintended), **undocumented
 | 30 | `Lag3UD` | the third stage picks its up/down time by comparing stages 1 and 2, not its own input and state | bug? | measured, source |
 | 31 | `TWindex` (normalize 0, weights summing below 1) | returns n + 2 (outside the array) for the missing probability | undocumented | measured, source |
 | 32 | `FreqShift` (constant or kr phase) | the phase argument is ignored: the constructor multiplies it by `m_radtoinc` before setting it | bug? | measured, source |
+| 33 | `Gendy1/2/3.kr` (default arguments) | output far outside ±1 (up to ~1e5): the phase drops by 1 at most per step while a kr step covers several breakpoints | bug? | measured, source |
 
 ## 1. `Amplitude.kr` with an audio-rate input releases 64× too fast
 
@@ -566,3 +567,25 @@ DC.ar(0.5))` by up to 0.25; with phase 0 the constant and DC versions are identi
   `m_phase` before `m_radtoinc = tableSizeSin * (rtwopi * 65536.)`). Fix: compute
   `m_radtoinc` first.
 - Translation: reproduced as phase 0 (the NRT value).
+
+## 33. `Gendy1/2/3.kr` with their default arguments leave ±1 by orders of magnitude
+
+Gendy1/Gendy2 advance `phase += speed` with speed = (minfreq + (maxfreq - minfreq) * rate)
+* sampleDur * num, and at a breakpoint only `phase -= 1.0` once. At kr (sampleDur =
+1/750 at 48 kHz, 64-sample blocks) the defaults minfreq 20, maxfreq 1000 with num 12 give
+speeds from 0.32 to 16 per step: phase climbs without bound and `(1 - phase) * amp +
+phase * nextamp` extrapolates. Gendy3 steps at most one breakpoint region per sample; at
+kr its default freq 440 moves the phase 0.59 per step across regions of ~1/12, so
+`interp = (phase - lastphase) * interpmult` far exceeds 1. The same happens at audio rate
+when maxfreq * num exceeds the sample rate (Gendy1/2), or for regions narrower than one
+step (Gendy3, to a much smaller degree).
+
+Measured (NRT, 10 s, `K2A.ar(Gendy1.kr)` etc.): max |x| 1.0e5 (Gendy1), 1.6e5 (Gendy2),
+475 (Gendy3); `Gendy1.kr(minfreq: 1, maxfreq: 10)` stays within ±1.
+
+- Source: `server/plugins/GendynUGens.cpp` `Gendy1_next_k`, `Gendy2_next_k` (`if (phase >=
+  1.0) { phase -= 1.0; ...`), `Gendy3_next_k` (`if (phase >= nextphase) { ++index; ...`).
+  Fix: loop the breakpoint step while phase >= 1 (Gendy3: while phase >= nextphase), or
+  clamp speed below 1.
+- Translation: reproduced.
+
