@@ -220,9 +220,10 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 		Out.ar(0, [Spring.ar(x, 30, 0.001), K2A.ar(Spring.kr(k, 5, 0.01))] * 0.01) }),
 	// Chaos oscillators (statistics): iteration rates >= 2 kHz so a render has many iterations
 	SynthDef(\case_chaos, { Out.ar(0, [CuspN.ar(8000, 1, 1.9), CuspL.ar(3000, 1, 1.9), QuadN.ar(8000), QuadL.ar(3000), QuadC.ar(3000),
-		LinCongN.ar(8000), LinCongL.ar(3000), LinCongC.ar(3000), StandardN.ar(8000), StandardL.ar(3000),
+		LinCongN.ar(8000), LinCongL.ar(3000), LinCongC.ar(3000),
 		FBSineN.ar(8000), FBSineL.ar(3000), FBSineC.ar(3000), LatoocarfianN.ar(8000), LatoocarfianL.ar(3000), LatoocarfianC.ar(3000),
 		GbmanN.ar(8000), GbmanL.ar(3000)] * 0.3) }, metadata: (signals: [\silence])),
+	SynthDef(\case_Standard, { Out.ar(0, [StandardN.ar(8000), StandardL.ar(3000)] * 0.3) }, metadata: (signals: [\silence])),
 	SynthDef(\case_Formlet, { |freq = 1000| Out.ar(0, Formlet.ar(in.value, freq, 0.005, 0.1) * 0.5) },
 		metadata: (specs: (freq: spec.(50, 12000, 1000)))),
 	// Lags and decays: knob-swept time, input signal (impulse/steps from the test signals)
