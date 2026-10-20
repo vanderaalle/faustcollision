@@ -33,7 +33,7 @@ set tolerances from the measured floors, full suite, commit, bump vairi.
 1. Small remaining classes (census, unmapped): MoogFF.kr (plans/moogff-kr.md: a Faust miscompilation to understand first).
 2. Chaos oscillators, DynKlank, grains,
    Hilbert/FreqShift, ambisonic panners: lower priority.
-3. Issue drafts: docs/issues/ covers 4, 5, 11, 15, 17-28, 30, 31; file them upstream.
+3. Issue drafts: docs/issues/ covers 4, 5, 11, 15, 17-28, 30-32; file them upstream.
 
 ## Working method (keeps cost down)
 - Read the scsynth source of the UGen (and nova-simd where a nova calc function runs).

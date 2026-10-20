@@ -476,3 +476,38 @@ def freqshift(c):
         g = g0 * float(f32(k))
         cs.append(repr(float(f32((g - 1.0) / (g + 1.0)))))
     return {"cs": ", ".join(cs)}
+
+
+def freqshift_calc(rate, r):
+    """FilterUGens.cpp FreqShift_Ctor: by the freq and phase rates."""
+    return f'ar_{"a" if r["freq"] == "ar" else "k"}{"a" if r["phase"] == "ar" else "k"}'
+
+
+def freqshift_all(c):
+    """FreqShift: the coefficients (freqshift) and the oscillator constants: radtoinc =
+    sineSize * (rtwopi * 65536.) as a float pair, halfPi = (int32)(radtoinc * (0.5 * pi))."""
+    out = freqshift(c)
+    radtoinc = 8192 * ((1.0 / (2.0 * math.pi)) * 65536.0)
+    out["hp"] = str(int(radtoinc * (0.5 * math.pi)))
+    out["rh"], out["rl"] = _pair(radtoinc)
+    return out
+
+
+def decodeb2(c):
+    """PanUGens.cpp DecodeB2_Ctor/next: angle = twopi_f / n (float), W = 0.7071067811865476f,
+    X = 0.5f * (float)cos(orientation * angle), Y = 0.5f * (float)sin(...); per output the
+    gains rotate in float: X' = X cosa + Y sina, Y' = Y cosa - X sina, cosa/sina =
+    (float)cos/sin(angle) (double functions of a float, cast)."""
+    n = int(c["_nout"])
+    orient = f32(c["orientation"])
+    angle = f32(f32(2.0 * math.pi) / f32(n))
+    cosa, sina = f32(math.cos(float(angle))), f32(math.sin(float(angle)))
+    X = f32(f32(0.5) * f32(math.cos(float(f32(orient * angle)))))
+    Y = f32(f32(0.5) * f32(math.sin(float(f32(orient * angle)))))
+    xs, ys = [], []
+    for _ in range(n):
+        xs.append(repr(float(X))); ys.append(repr(float(Y)))
+        xt = f32(f32(X * cosa) + f32(Y * sina))
+        Y = f32(f32(Y * cosa) - f32(X * sina))
+        X = xt
+    return {"xs": ", ".join(xs), "ys": ", ".join(ys)}

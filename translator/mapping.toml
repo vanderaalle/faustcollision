@@ -2640,3 +2640,64 @@ faust = { ar = "sc.hilbert(({cs}), {in})" }
 compare = "waveform"
 tol = 1e-6
 case = "case_Hilbert"
+
+[FreqShift]
+tier = "direct"
+inputs = ["in", "freq", "phase"]
+# the Hilbert cascades in double within a block; a kr/constant phase is ignored by scsynth
+# (sc-findings 32), reproduced (phase 0)
+ar_inputs = ["in"]
+template_by = "freqshift_calc"
+derive = "freqshift_all"
+faust = { ar_kk = "sc.freqshift_kk(({cs}), {hp}, {rh}, {rl}, {in}, {freq}, {phase})", ar_ka = "sc.freqshift_ka(({cs}), {hp}, {rh}, {rl}, {in}, {freq}, {phase})", ar_ak = "sc.freqshift_ak(({cs}), {hp}, {rh}, {rl}, {in}, {freq}, {phase})", ar_aa = "sc.freqshift_aa(({cs}), {hp}, {rh}, {rl}, {in}, {freq}, {phase})" }
+compare = "waveform"
+tol = 1e-5
+case = "case_FreqShift"
+
+[PanB]
+tier = "direct"
+inputs = ["in", "azimuth", "elevation", "gain"]
+outputs = 4
+faust = { ar = "sc.panb({in}, {azimuth}, {elevation}, {gain})" }
+compare = "waveform"
+tol = 1e-6
+case = "case_panners_b"
+
+[PanB2]
+tier = "direct"
+inputs = ["in", "azimuth", "gain"]
+outputs = 3
+faust = { ar = "sc.panb2({in}, {azimuth}, {gain})" }
+compare = "waveform"
+tol = 1e-6
+case = "case_panners_b"
+
+[BiPanB2]
+tier = "direct"
+inputs = ["inA", "inB", "azimuth", "gain"]
+outputs = 3
+faust = { ar = "sc.bipanb2({inA}, {inB}, {azimuth}, {gain})" }
+compare = "waveform"
+tol = 1e-6
+case = "case_panners_b"
+
+[DecodeB2]
+tier = "direct"
+inputs = ["w", "x", "y", "orientation"]
+outputs = "n"
+# orientation read once (constructor): per-output gains from derive.decodeb2
+constant_inputs = ["orientation"]
+derive = "decodeb2"
+faust = { ar = "sc.decodeb2({nout}, ({xs}), ({ys}), {w}, {x}, {y})" }
+compare = "waveform"
+tol = 1e-6
+case = "case_panners_b"
+
+[PanAz]
+tier = "direct"
+inputs = ["in", "pos", "level", "width", "orientation"]
+outputs = "n"
+faust = { ar = "sc.panaz_k({nout}, {in}, {pos}, {level}, {width}, {orientation})", "ar<pos:ar" = "sc.panaz_a({nout}, {in}, {pos}, {level}, {width}, {orientation})" }
+compare = "waveform"
+tol = 1e-6
+case = "case_panners_b"

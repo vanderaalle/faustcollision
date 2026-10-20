@@ -194,6 +194,20 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 		metadata: (specs: (g: spec.(0, 1, 0.5, \lin)))),
 	// Hilbert: the two quadrature outputs of the test signal
 	SynthDef(\case_Hilbert, { Out.ar(0, Hilbert.ar(in.value)) }),
+	// FreqShift, one SynthDef per calc function (each compiles slowly): kk (knob freq, constant
+	// phase: ignored, sc-findings 32), ka (audio phase), aa, ak (audio freq, kr phase ramp)
+	SynthDef(\case_FreqShift, { |freq = 100| Out.ar(0, FreqShift.ar(in.value, freq, 0.5) * 0.5) },
+		metadata: (specs: (freq: spec.(-500, 2000, 100, \lin)))),
+	SynthDef(\case_FreqShift_ka, { Out.ar(0, FreqShift.ar(in.value, 150, SinOsc.ar(3)) * 0.5) }),
+	SynthDef(\case_FreqShift_aa, { Out.ar(0, FreqShift.ar(in.value, SinOsc.ar(0.5) * 200 + 100, SinOsc.ar(2)) * 0.5) }),
+	SynthDef(\case_FreqShift_ak, { Out.ar(0, FreqShift.ar(in.value, SinOsc.ar(0.5) * 200 + 100, Line.kr(0, 2, 2)) * 0.5) }),
+	// Ambisonic and azimuth panners: knob azimuth (kr ramp), audio-rate PanAz position, 4/5/6
+	// outputs, width 2 and 3, orientation 0.5; SplayAz (sclang sugar over PanAz)
+	SynthDef(\case_panners_b, { |az = 0.3| var x = in.value, a = SinOsc.ar(0.25);
+		Out.ar(0, PanB.ar(x, az, az * 0.5, 0.8) ++ PanB2.ar(x, az * -1, 0.7) ++ BiPanB2.ar(x, x * 0.5, az, 0.9)
+			++ DecodeB2.ar(4, x, x * 0.5, x * -0.3, 0.5) ++ DecodeB2.ar(6, x, x * 0.3, x * 0.2, 0)
+			++ PanAz.ar(5, x, az, 0.8, 2, 0.5) ++ PanAz.ar(4, x, a, 1, 3, 0) ++ SplayAz.ar(4, [x, x * 0.5, x * -0.5])) },
+		metadata: (specs: (az: spec.(-1, 1, 0.3, \lin)))),
 	SynthDef(\case_Formlet, { |freq = 1000| Out.ar(0, Formlet.ar(in.value, freq, 0.005, 0.1) * 0.5) },
 		metadata: (specs: (freq: spec.(50, 12000, 1000)))),
 	// Lags and decays: knob-swept time, input signal (impulse/steps from the test signals)

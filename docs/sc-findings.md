@@ -4,7 +4,7 @@ Behaviour of scsynth (SuperCollider 3.13.0) that the documentation does not stat
 found by comparing renders sample by sample or by porting the C++. Source references
 are to the `Version-3.13.0` tag (`~/src/supercollider`).
 
-Issue drafts for #4, #5, #11, #15, #17-#28, #30, #31: `docs/issues/`.
+Issue drafts for #4, #5, #11, #15, #17-#28, #30-#32: `docs/issues/`.
 
 Status: **measured** = confirmed on scsynth NRT renders; **source** = read in the C++,
 not yet confirmed by a render. Kind: **bug?** (looks unintended), **undocumented**,
@@ -43,6 +43,7 @@ not yet confirmed by a render. Kind: **bug?** (looks unintended), **undocumented
 | 29 | `SubsampleOffset` | 0.5, not 0, for a synth scheduled exactly on a sample; 0 for an untimestamped command | convention | measured, source |
 | 30 | `Lag3UD` | the third stage picks its up/down time by comparing stages 1 and 2, not its own input and state | bug? | measured, source |
 | 31 | `TWindex` (normalize 0, weights summing below 1) | returns n + 2 (outside the array) for the missing probability | undocumented | measured, source |
+| 32 | `FreqShift` (constant or kr phase) | the phase argument is ignored: the constructor multiplies it by `m_radtoinc` before setting it | bug? | measured, source |
 
 ## 1. `Amplitude.kr` with an audio-rate input releases 64× too fast
 
@@ -546,3 +547,22 @@ with 0.18 / 0.30 / 0.30 of the triggers, and index 5 with 0.22.
 
 - Source: `server/plugins/OscUGens.cpp` `TWindex_chooseNewIndex` (`int32 index = maxindex;`).
 - Translation: reproduced (`sc.twindex_clk`).
+
+## 32. `FreqShift` ignores a constant or control-rate phase
+
+With freq and phase both constant or control rate (`FreqShift_next_kk`), the constructor
+sets the initial phase as `unit->m_phase = (int32)(unit->m_radtoinc * IN0(2))`, but
+`m_radtoinc` is only assigned a few lines later: it is read uninitialised. Later blocks only
+add the phase input's changes (a slope in the increment), never its value, so the absolute
+phase offset comes from that one product. In NRT the fresh unit memory is 0 and the phase
+argument has no effect; in a running server it is whatever the memory held. With an
+audio-rate phase (`next_aa`, `next_ka`) the phase is added per sample, as documented.
+
+Measured (NRT, `x = SinOsc.ar(440) * 0.5`): `FreqShift.ar(x, 100, 0.5)` is identical to
+`FreqShift.ar(x, 100, 0)` (difference 0) and differs from `FreqShift.ar(x, 100,
+DC.ar(0.5))` by up to 0.25; with phase 0 the constant and DC versions are identical.
+
+- Source: `server/plugins/FilterUGens.cpp` `FreqShift_Ctor` (the kk branch assigns
+  `m_phase` before `m_radtoinc = tableSizeSin * (rtwopi * 65536.)`). Fix: compute
+  `m_radtoinc` first.
+- Translation: reproduced as phase 0 (the NRT value).

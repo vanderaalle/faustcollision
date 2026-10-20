@@ -3018,3 +3018,96 @@ with {
         : hilbert_step(cs, x) : (_, _, par(i, 12, zzend)) : route(14, 14, (1, 13), (2, 14), par(i, 12, (i + 3, i + 1)));
 };
 
+
+//------------------------------------------------------------------------------
+// FreqShift (FilterUGens.cpp FreqShift_next_*): HILBERT_FILTER with local double arrays (the
+// float-stored state and coefficients loaded as doubles): the cascades run in double within
+// a block (float pairs), the state is stored back as float (zapped) at the block end; then
+// out = cos * osc(phase + pi/2) + osc(phase) * sin with the sine table (lookupi1). Phase
+// int32: increment (int32)(cpstoinc * freq) per block (freq kr) or per sample (ar); the
+// phase input adds (int32)(radtoinc * phase) per sample when audio rate (aa, ka), a ramp of
+// its changes when kr (ak: phasemod per sample; kk: in the increment). The constructor runs
+// next_kk once; its initial phase is 0: m_phase = (int32)(m_radtoinc * phase) reads
+// m_radtoinc before it is set (sc-findings 32: a kr/constant phase is ignored).
+//------------------------------------------------------------------------------
+// stage in double: input pair, coefficient c (float), state pair -> (output pair, state pair)
+fstage(c, uh, ul, yh, yl) = ah, al, y0h, y0l
+with {
+    ph = dmulf(yh, yl, c) : _, !; pl = dmulf(yh, yl, c) : !, _;
+    y0h = dadd2(uh, ul, 0.0 - ph, 0.0 - pl) : _, !; y0l = dadd2(uh, ul, 0.0 - ph, 0.0 - pl) : !, _;
+    mh = dmulf(y0h, y0l, c) : _, !; ml = dmulf(y0h, y0l, c) : !, _;
+    ah = dadd2(mh, ml, yh, yl) : _, !; al = dadd2(mh, ml, yh, yl) : !, _;
+};
+// (uh, ul, 2m carried) -> (ah, al, 2m carried, y0h, y0l)
+fbox(c, yh, yl, m) = ((\(uh, ul).(fstage(c, uh, ul, yh, yl))), si.bus(2 * m))
+    : route(4 + 2 * m, 4 + 2 * m, (1, 1), (2, 2), (3, 3 + 2 * m), (4, 4 + 2 * m), par(i, 2 * m, (5 + i, 3 + i)));
+fcas(cs, k, s, x) = (x, 0.0) : fbox(c(0), h(0), l(0), 0) : fbox(c(1), h(1), l(1), 1) : fbox(c(2), h(2), l(2), 2)
+    : fbox(c(3), h(3), l(3), 3) : fbox(c(4), h(4), l(4), 4) : fbox(c(5), h(5), l(5), 5)
+with { c(i) = cs : ba.selector(k + i, 12); h(i) = s : ba.selector(2 * i, 12); l(i) = s : ba.selector(2 * i + 1, 12); };
+// the cascade step: (24 state wires) -> (cos, sin, 24 new state wires); states as (h, l) pairs
+fs_step(cs, x) = \(s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, t0, t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11).(
+    (fcas(cs, 0, (s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11), x), fcas(cs, 6, (t0, t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11), x))
+    : route(28, 26, (1, 1), (15, 2), par(i, 12, (3 + i, 3 + i)), par(i, 12, (17 + i, 15 + i))));
+// block end: state to float (the pair's high part), zapped; low parts 0
+fsround = par(i, 12, (\(h, l).(select2(blockend, h, zap(h)), select2(blockend, l, 0.0))));
+fs_hilbert(cs, x) = loop ~ si.bus(24) : par(i, 24, !), _, _
+with {
+    z = par(i, 24, 0.0);
+    ctor = z : fs_step(cs, x) : !, !, fsround0;
+    fsround0 = par(i, 12, (\(h, l).(zap(h), 0.0)));
+    loop = si.bus(24) <: (si.bus(24), ctor) : ro.interleave(24, 2) : par(i, 24, select2(ba.time == 0))
+        : fs_step(cs, x) : (_, _, fsround) : route(26, 26, (1, 25), (2, 26), par(i, 24, (i + 3, i + 1)));
+};
+// (int32)(a * b) for a float a and a double b given as a pair (bh, bl), truncated
+itrunc2(a, bh, bl) = int(h) - ((h == floor(h)) & (h > 0.0) & (l < 0.0)) + ((h == floor(h)) & (h < 0.0) & (l > 0.0))
+with { h = dmulf(bh, bl, a) : _, !; l = dmulf(bh, bl, a) : !, _; };
+// the oscillator and mix: cos, sin, phase -> out
+fs_mix(halfpi, c, s, ph) = fadd(fmul(c, lookupi1(ph + halfpi)), fmul(lookupi1(ph), s));
+// the four calc functions (freq rate, phase rate); phase sums wrap like int32
+fs_phase_k(freq) = iphase(int(dinc(a2k(freq), 29))) + initv(int(dinc(a2k(freq), 29)));
+fs_phase_a(freq) = iphase(int(dinc(freq, 29))) + initv(int(dinc(freq, 29)));
+freqshift_kk(cs, hp, rh, rl, x, freq, ph) = fs_hilbert(cs, x) : \(c, s).(fs_mix(hp, c, s, p))
+with { pk = a2k(ph); sl = fmul(fsub(pk, kprev(pk)), 1.0 / blocksize); p = iphase(int(dinc(a2k(freq), 29)) + itrunc2(sl, rh, rl)) + initv(int(dinc(a2k(freq), 29))); };
+freqshift_ka(cs, hp, rh, rl, x, freq, ph) = fs_hilbert(cs, x) : \(c, s).(fs_mix(hp, c, s, fs_phase_k(freq) + itrunc2(ph, rh, rl)));
+freqshift_aa(cs, hp, rh, rl, x, freq, ph) = fs_hilbert(cs, x) : \(c, s).(fs_mix(hp, c, s, fs_phase_a(freq) + itrunc2(ph, rh, rl)));
+freqshift_ak(cs, hp, rh, rl, x, freq, ph) = fs_hilbert(cs, x) : \(c, s).(fs_mix(hp, c, s, fs_phase_a(freq) + itrunc2(pm, rh, rl)))
+with {
+    pk = a2k(ph); pp = kprev(pk); sl = fmul(fsub(pk, pp), 1.0 / blocksize);
+    pm = (\(f).(select2(ba.time % blocksize == 0, fadd(f, sl), pp))) ~ _;
+};
+
+//------------------------------------------------------------------------------
+// Ambisonic and azimuth panners (PanUGens.cpp). PanB/PanB2/BiPanB2: gains from the sine table
+// by truncated index (mask & (long)(azimuth * 4096.f); elevation * 2048.f), sin = -table,
+// cos = table at +2048; recomputed when an input changes and ramped, the accumulated gains
+// stored (gacc, as Pan4). DecodeB2: per-output gains from a float rotation (derive.decodeb2),
+// out = W Wa + X Xa + Y Ya. PanAz: per-channel target amp level * table[(long)(4096 chanpos)]
+// (0 when chanpos >= 1), chanpos wrapped by range * floor(rrange * chanpos); kr pos: ramp
+// from the previous target in float (seqramp); ar pos: per sample, the position grouped as
+// pos * (0.5 n) + (width * 0.5 + orientation) (ak groups it ((pos * 0.5) * n + width * 0.5) +
+// orientation).
+//------------------------------------------------------------------------------
+tix(a, s) = int(fmul(a, s)) & (sinesize - 1);
+rsqrt2f = 0.70710678118654752;
+panb_g(az, el, lv) = fmul(rsqrt2f, lv), fmul(fmul(ca, cb), lv), fmul(fmul(sa, cb), lv), fmul(sb, lv)
+with { ia = tix(az, 4096.0); ie = tix(el, 2048.0); sa = 0.0 - sintbl(ia); sb = sintbl(ie); ca = sintbl((ia + 2048) & (sinesize - 1)); cb = sintbl((ie + 2048) & (sinesize - 1)); };
+panb2_g(az, lv) = fmul(rsqrt2f, lv), fmul(ca, lv), fmul(sa, lv)
+with { ia = tix(az, 4096.0); sa = 0.0 - sintbl(ia); ca = sintbl((ia + 2048) & (sinesize - 1)); };
+panb(x, az, el, lv) = panb_g(a2k(az), a2k(el), a2k(lv)) : par(i, 4, \(g).(fmul(x, gacc(g, ch))))
+with { ch = kchanged(a2k(az)) | kchanged(a2k(el)) | kchanged(a2k(lv)); };
+panb2(x, az, lv) = panb2_g(a2k(az), a2k(lv)) : par(i, 3, \(g).(fmul(x, gacc(g, ch))))
+with { ch = kchanged(a2k(az)) | kchanged(a2k(lv)); };
+bipanb2(a, b, az, lv) = panb2_g(a2k(az), a2k(lv)) : \(w, xg, yg).(fmul(fadd(a, b), gacc(w, ch)), fmul(fsub(a, b), gacc(xg, ch)), fmul(fsub(a, b), gacc(yg, ch)))
+with { ch = kchanged(a2k(az)) | kchanged(a2k(lv)); };
+decodeb2(n, xs, ys, w, x, y) = par(k, n, fadd(fadd(fmul(w, 0.7071067811865476), fmul(x, xs : ba.selector(k, n))), fmul(y, ys : ba.selector(k, n))));
+// PanAz channel amp from an aligned position p (already * n / 2 + offsets)
+pazamp(n, i, lv, w, p) = select2(cp >= 1.0, fmul(lv, sintbl(int(fmul(4096.0, cp)))), 0.0)
+with {
+    rw = 1.0 / w; rg = fmul(float(n), rw); rr = 1.0 / rg;
+    c0 = fmul(fsub(p, float(i)), rw);
+    cp = fsub(c0, fmul(rg, floor(fmul(rr, c0))));
+};
+panaz_k(n, x, pos, lv, w, o) = par(i, n, fmul(x, seqramp(pazamp(n, i, a2k(lv), a2k(w), pk))))
+with { pk = fadd(fadd(fmul(fmul(a2k(pos), 0.5), float(n)), fmul(a2k(w), 0.5)), a2k(o)); };
+panaz_a(n, x, pos, lv, w, o) = par(i, n, fmul(x, pazamp(n, i, a2k(lv), a2k(w), pa)))
+with { pa = fadd(fmul(pos, fmul(0.5, float(n))), fadd(fmul(a2k(w), 0.5), a2k(o))); };

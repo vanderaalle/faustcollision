@@ -83,8 +83,10 @@ def translate(sdef: SynthDef, meta: dict, table=None) -> Translation:
     ugens = sdef.ugens
     specs = meta.get("specs", {})
 
-    def n_out_of(e):
-        return e.get("outputs", 1)
+    def n_out_of(e, u=None):
+        # "n": as many as the SynthDef's UGen has (PanAz, DecodeB2: numChans)
+        n = e.get("outputs", 1)
+        return len(u.output_rates) if n == "n" else n
 
     def entry_of(u):
         e = table.get(u.cls)
@@ -300,6 +302,7 @@ def translate(sdef: SynthDef, meta: dict, table=None) -> Translation:
         if e.get("derive") and exact:  # constructor-time structure (translator/derive.py)
             from . import derive
             consts = {k: args[k].value for k in constant + e.get("derive_when_constant", [])}
+            consts["_nout"] = len(u.output_rates)
             if e.get("variadic"):
                 consts["n"] = (len(u.inputs) - len(fixed)) // len(e["variadic"]["group"])
             try:
@@ -312,6 +315,7 @@ def translate(sdef: SynthDef, meta: dict, table=None) -> Translation:
             fmt["n"] = n
             for g in group:  # {levels}, {times}, ...: a Faust parallel list of the group's inputs
                 fmt[g + "s"] = ", ".join(arg(f"{g}{k}", args[f"{g}{k}"]) for k in range(n))
+        fmt.setdefault("nout", len(u.output_rates))
         body = template.format(seed=u.index, **fmt)
         if wires:
             body = f"({', '.join(wires.values())}) : \\({', '.join('w_' + k for k in wires)}).({body})"
@@ -325,9 +329,9 @@ def translate(sdef: SynthDef, meta: dict, table=None) -> Translation:
             # for random and stateful ones it gives one value per block, as in scsynth.
             fed_by_audio = any(isinstance(v, Ref) and ugens[v.ugen].rate == "ar" for v in u.inputs)
             hold = "sc.krhold" if fed_by_audio and e.get("kr_block") else "sc.a2k"
-            body = f"{hold}({body})" if n_out_of(e) == 1 else f"({body}) : par(i, {n_out_of(e)}, {hold})"
+            body = f"{hold}({body})" if n_out_of(e, u) == 1 else f"({body}) : par(i, {n_out_of(e, u)}, {hold})"
         node = f"u{u.index}"
-        n_out = n_out_of(e)
+        n_out = n_out_of(e, u)
         if n_out != len(u.output_rates):
             raise TranslationError(f"{u.cls}: binary has {len(u.output_rates)} outputs, table lists {n_out}")
         lines.append(f"    {node} = {body};")
