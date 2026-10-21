@@ -452,7 +452,9 @@ fcoin(seed) = select2(trand(seed) < 0, 1.0, -1.0);
 // the scsynth loop; initB: the constructor's initial state (N signals, read at time 0).
 // ctor = 1 when the constructor runs one iteration before the first block.
 // clk: 1 where it steps (every sample at ar, block starts at kr).
-machine(N, stepB, initB, ctor, clk) = (core ~ si.bus(N)) : (si.block(N), _)
+machine(N, stepB, initB, ctor, clk) = machine_all(N, stepB, initB, ctor, clk) : (si.block(N), _);
+// the same, with the N new states before the output
+machine_all(N, stepB, initB, ctor, clk) = (core ~ si.bus(N))
 with {
     first = ba.time == 0;
     init = initB <: si.bus(N), (stepB : !, si.bus(N)) : ro.interleave(N, 2) : par(i, N, select2(ctor));
@@ -1167,7 +1169,7 @@ allpass_ar(kind, x, maxdt, dt, dect) = allpassx(kind, x, dsampm(dt, maxdt, mind(
 
 // Line / XLine (LFUGens.cpp). start, end and dur are read once (constructor); the
 // constructor applies the first step, so the output is start + slope (k + 1) for
-// k < counter, then end. doneAction must be 0 (mapping): freeing the synth has no meaning here.
+// k < counter, then end. doneAction 0 or 2 (free the synth: line_end, sc.alive).
 initv(x) = ba.sAndH(ba.time == 0, x);
 lnc(dur, sr) = max(1, int(tmul05(initv(dur), sr)));   // (int)(dur * SR + .5f), double
 line_sr(start, end, dur, sr, k) = select2(k < c, float(initv(end)), initv(start) + (initv(end) - initv(start)) / float(c) * float(k + 1))
@@ -1180,6 +1182,18 @@ xline_sr(start, end, dur, sr, k) = select2((k < c) & (c > 0), e, s * exp(log(e /
 with { s = initv(start); e = initv(end); c = int(tmul05(initv(dur), sr)); };
 xline(start, end, dur) = xline_sr(start, end, dur, ma.SR, ba.time);
 xline_kr(start, end, dur) = xline_sr(start, end, dur, ma.SR / blocksize, int(ba.time / blocksize));
+// doneAction 2: Line_next calls DoneAction when the counter reaches 0, at the last ramp
+// sample, index counter - 1 (measured: ceil(counter / 64) blocks are written; at kr,
+// counter blocks)
+line_end(start, end, dur) = ba.time >= lnc(dur, ma.SR) - 1;
+line_kr_end(start, end, dur) = int(ba.time / blocksize) >= lnc(dur, ma.SR / blocksize) - 1;
+xline_end(start, end, dur) = ba.time >= max(1, int(tmul05(initv(dur), ma.SR))) - 1;
+xline_kr_end(start, end, dur) = int(ba.time / blocksize) >= max(1, int(tmul05(initv(dur), ma.SR / blocksize))) - 1;
+line_x_end(n, lh, ll, sh, sl, bh, bl, endf) = ba.time >= n - 1;
+line_x_kr_end(n, lh, ll, sh, sl, endf) = int(ba.time / blocksize) >= n - 1;
+// a node freed by a done action: its block is written, then nothing (every output is
+// multiplied by this; e: 1 from the sample the UGen is done)
+alive(e) = 1 - ba.sAndH(krclk, ((\(p).(max(p, e))) ~ _)');
 
 // (int)(f * s) and (int)(f * s + 0.5) computed in double by scsynth, for float f >= 0 and
 // integer-valued s: the float product p plus its exact error e (fmaf) decide the truncation.
@@ -1207,7 +1221,14 @@ with { p = f * s; e = fmaf(f, s, 0.0 - p); q = p + 0.5; t = floor(q); };
 // segment (curve shape: b1) and drops the in-loop offset from the counter
 // (docs/sc-findings.md #18). Reproduced for curve -> curve; other shape pairs are not.
 envgen(n, gate, ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves, sr, gchk, clk, aa) =
-    machine(12, step, init, 1, clk)
+    envgen_all(n, gate, ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves, sr, gchk, clk, aa) : (si.block(12), _);
+// finished (EnvGen_next calls DoneAction): the state after the last stage, shape 0 with
+// the 'infinite' counter, which nothing else produces
+envgen_fin(n, gate, ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves, sr, gchk, clk, aa) =
+    envgen_all(n, gate, ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves, sr, gchk, clk, aa)
+    : \(st, cn, lv, sh, p, a2, b1, k, ph, el, rl, pg, o).((sh == 0) & (cn > 1e8));
+envgen_all(n, gate, ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves, sr, gchk, clk, aa) =
+    machine_all(12, step, init, 1, clk)
 with {
     INF = 1e9;
     NOTSTARTED = 1e9;
@@ -1307,6 +1328,14 @@ envgen_aa(n, gate, ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves)
 // (the machine's output between steps already shows the next state: hold it per block)
 envgen_kr(n, gate, ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves) =
     envgen(n, a2k(gate), ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves, ma.SR / blocksize, 1, krclk, 0) : a2k;
+// doneAction 2 (mapping done_input): the same calls, ending where scsynth calls DoneAction
+envgen_ak_end(n, gate, ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves) =
+    envgen_fin(n, a2k(gate), ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves, ma.SR, krclk, 1, 0);
+envgen_aa_end(n, gate, ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves) =
+    envgen_fin(n, gate, a2k(ls), a2k(lb), a2k(ts), a2k(ilev), reln, loopn, (levels : par(i, n, a2k)),
+           (times : par(i, n, a2k)), (shapes : par(i, n, a2k)), (curves : par(i, n, a2k)), ma.SR, 1, 1, 1);
+envgen_kr_end(n, gate, ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves) =
+    envgen_fin(n, a2k(gate), ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves, ma.SR / blocksize, 1, krclk, 0);
 
 //------------------------------------------------------------------------------
 // Dynamics (FilterUGens.cpp).

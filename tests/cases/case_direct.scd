@@ -268,6 +268,17 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 	SynthDef(("case_" ++ k[0]).asSymbol, { var n = 128, ix = Phasor.ar(0, 1, 0, n);
 		Out.ar(0, Select.ar(ix, { k[1].value * DC.ar(1) } ! n)) }, metadata: (signals: [\impulse]))
 } ++ [
+	// doneAction 2: the synth ends where the UGen is done; the sine must stop with it
+	SynthDef(\case_done_line, { Out.ar(0, [Line.ar(0, 1, 0.0123, doneAction: 2), SinOsc.ar(300) * 0.1]) }, metadata: (signals: [\impulse])),
+	SynthDef(\case_done_line_kr, { Out.ar(0, [K2A.ar(Line.kr(0, 1, 0.05, doneAction: 2)), SinOsc.ar(300) * 0.1]) }, metadata: (signals: [\impulse])),
+	SynthDef(\case_done_line_var, { |dur = 0.02| Out.ar(0, [Line.ar(0, 1, dur, doneAction: 2), SinOsc.ar(300) * 0.1]) },
+		metadata: (signals: [\impulse], specs: (dur: ControlSpec(0.001, 0.3, \exp, 0, 0.02)))),
+	SynthDef(\case_done_xline, { Out.ar(0, [XLine.ar(1, 0.01, 0.0234, doneAction: 2), SinOsc.ar(300) * 0.1]) }, metadata: (signals: [\impulse])),
+	SynthDef(\case_done_xline_kr, { Out.ar(0, [K2A.ar(XLine.kr(1, 0.01, 0.07, doneAction: 2)), SinOsc.ar(300) * 0.1]) }, metadata: (signals: [\impulse])),
+	SynthDef(\case_done_env, { Out.ar(0, [EnvGen.ar(Env.perc(0.01, 0.1), doneAction: 2), SinOsc.ar(300) * 0.1]) }, metadata: (signals: [\impulse])),
+	SynthDef(\case_done_env_kr, { Out.ar(0, [K2A.ar(EnvGen.kr(Env.perc(0.01, 0.1), doneAction: 2)), SinOsc.ar(300) * 0.1]) }, metadata: (signals: [\impulse])),
+	SynthDef(\case_done_env_gate, { var g = SoundIn.ar(0).abs > 0.5; Out.ar(0, [EnvGen.ar(Env.asr(0.01, 1, 0.05), Trig.ar(g, 0.2), doneAction: 2), SinOsc.ar(300) * 0.1]) }),
+	SynthDef(\case_done_env_rel, { Out.ar(0, [EnvGen.ar(Env.asr(0.01, 1, 0.03), Line.kr(1, -1, 0.3) > 0, doneAction: 2), SinOsc.ar(300) * 0.1]) }, metadata: (signals: [\impulse])),
 	SynthDef(\case_Standard, { Out.ar(0, [StandardN.ar(8000), StandardL.ar(3000)] * 0.3) }, metadata: (signals: [\silence])),
 	SynthDef(\case_Formlet, { |freq = 1000| Out.ar(0, Formlet.ar(in.value, freq, 0.005, 0.1) * 0.5) },
 		metadata: (specs: (freq: spec.(50, 12000, 1000)))),

@@ -53,6 +53,13 @@ def test_grain_voices_beyond_the_limit_are_an_error():
         translate(g, {})
 
 
+# doneAction 2 frees the synth (every output stops); other done actions act on other nodes.
+def test_done_action_other_than_0_or_2_is_an_error():
+    g = graph(UGen(2, "Line", "ar", 0, [Const(0.0), Const(1.0), Const(0.1), Const(1.0)], ["ar"]))
+    with pytest.raises(TranslationError, match="doneAction must be the constant 0 or 2"):
+        translate(g, {})
+
+
 # Rejections with a reason (sc-findings 21, 22; not causal): scsynth reads garbage or
 # computes from the current audio block.
 def test_ar_input_of_constant_is_rejected():

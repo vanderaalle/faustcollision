@@ -7,7 +7,7 @@ Anything the table does not cover is a TranslationError naming the class.
 import math
 import re
 import tomllib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from .scsyndef import Const, Ref, SynthDef
@@ -40,6 +40,7 @@ class Translation:
     outputs: int
     controls: dict  # name -> spec dict
     entries: list  # of Entry, deduplicated, in first-use order
+    notes: list = field(default_factory=list)  # behaviour worth telling the user
 
     @property
     def compare(self):
@@ -161,7 +162,8 @@ def translate(sdef: SynthDef, meta: dict, table=None) -> Translation:
     feedback = [u for u in local_in.values() if u.index in live and local_outs[u.rate]]
 
     names, lines, controls, entries, channels = {}, [], {}, {}, {}
-    gates = []  # node_alive: UGens that end the node (every output stops)
+    gates = []  # node_alive, doneAction 2: UGens that end the node (every output stops)
+    notes = []
     control_outputs = set()
 
     def use(key, rec, tier):
@@ -320,8 +322,19 @@ def translate(sdef: SynthDef, meta: dict, table=None) -> Translation:
         body = template.format(seed=u.index, **fmt)
         if e.get("node_alive"):
             gates.append(e["node_alive"].format(seed=u.index, **fmt))
-        if wires:
-            body = f"({', '.join(wires.values())}) : \\({', '.join('w_' + k for k in wires)}).({body})"
+        wrap = (lambda b: f"({', '.join(wires.values())}) : \\({', '.join('w_' + k for k in wires)}).({b})") if wires else (lambda b: b)
+        if e.get("done_input"):
+            # doneAction: 0 nothing; 2 frees the synth when the UGen is done (the port's
+            # <function>_end companion, same arguments): every output stops after that block
+            da = args[e["done_input"]]
+            if not isinstance(da, Const) or da.value not in (0.0, 2.0):
+                raise TranslationError(f"{u.cls}: doneAction must be the constant 0 or 2 (other done actions act "
+                                       f"on other nodes), got {da}")
+            if da.value == 2.0:
+                end = re.sub(r"sc\.(\w+)\(", r"sc.\1_end(", body, count=1)
+                gates.append(f"sc.alive({wrap(end)})")
+                notes.append(f"{u.cls} doneAction 2: the whole program falls silent for good once it is done")
+        body = wrap(body)
         if u.rate == "kr" and not e.get("self_hold"):
             # A kr output changes once per block. A kr unit runs one sample per block and
             # reads in[0] of an audio input: the current block's first sample, known at the
@@ -383,4 +396,4 @@ def translate(sdef: SynthDef, meta: dict, table=None) -> Translation:
         body = [f"process = (\\({', '.join(fbs + ins)}).(({', '.join(sums + results)})",
                 "with {", *lines, f"}})) ~ si.bus({len(fbs)}) : si.block({len(fbs)}), si.bus({len(results)});"]
     code = "\n".join(head + [""] + body + [""])
-    return Translation(sdef.name, code, len(ins), len(results), controls, list(entries.values()))
+    return Translation(sdef.name, code, len(ins), len(results), controls, list(entries.values()), notes)
