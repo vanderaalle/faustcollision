@@ -1,5 +1,7 @@
 """Compile and render generated Faust: DawDreamer for audio, `faust -json` for layer 1."""
+import hashlib
 import json
+import os
 import shutil
 import subprocess
 import tempfile
@@ -63,7 +65,60 @@ def describe_libfaust(dsp: Path):
 
 def render(dsp: Path, x: np.ndarray, settings: dict | None = None, automation: dict | None = None):
     """Render mono input `x` through `dsp`. `settings`: constant control values;
-    `automation`: control -> per-sample array (same length as x)."""
+    `automation`: control -> per-sample array (same length as x).
+    Constant settings render through the C++ a target compiles (render_cpp); automation
+    through DawDreamer's JIT (FC_RENDER=dawdreamer forces it). The JIT is not the target
+    compiler: its sqrt is not correctly rounded (docs/faust-notes.md)."""
+    if automation is None and os.environ.get("FC_RENDER", "cpp") == "cpp":
+        return render_cpp(dsp, x, settings)
+    return render_dawdreamer(dsp, x, settings, automation)
+
+
+ARCH = Path(__file__).with_name("arch_render.cpp")
+CXX_CACHE = ROOT / "build" / "cxx"
+
+
+def compile_cpp(dsp: Path) -> Path:
+    """faust -> C++ (tests/arch_render.cpp) -> g++ -O2, cached by the content of the program,
+    sc.lib, sctables.lib, the architecture and the flags."""
+    libdir = Path(dsp).parent if (Path(dsp).parent / "sc.lib").exists() else FAUST_DIR
+    h = hashlib.sha256()
+    for f in (dsp, libdir / "sc.lib", libdir / "sctables.lib", ARCH):
+        h.update(Path(f).read_bytes())
+    h.update(" ".join(FAUST_FLAGS).encode())
+    exe = CXX_CACHE / f"{Path(dsp).stem}-{h.hexdigest()[:16]}"
+    if exe.exists():
+        return exe
+    CXX_CACHE.mkdir(parents=True, exist_ok=True)
+    src = exe.with_suffix(".cpp")
+    proc = subprocess.run([faust_cli(), *FAUST_FLAGS, "-I", str(libdir), "-a", str(ARCH), str(dsp), "-o", str(src)],
+                          capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise RuntimeError(f"faust failed:\n{proc.stderr}")
+    proc = subprocess.run(["g++", "-O2", "-std=c++17", f"-I{subprocess.run([faust_cli(), '--includedir'], capture_output=True, text=True).stdout.strip()}",
+                           str(src), "-o", str(exe)], capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise RuntimeError(f"g++ failed:\n{proc.stderr[-3000:]}")
+    src.unlink()
+    return exe
+
+
+def render_cpp(dsp: Path, x: np.ndarray, settings: dict | None = None):
+    """As render(), through the C++ build: input 0 gets x, other inputs zeros."""
+    exe = compile_cpp(dsp)
+    n = len(x)
+    with tempfile.TemporaryDirectory() as tmp:
+        fin, fout = Path(tmp) / "in.f32", Path(tmp) / "out.f32"
+        np.asarray(x, dtype=np.float32).tofile(fin)
+        args = [str(exe), str(fin), str(fout), str(n)] + [f"{k}={float(v)!r}" for k, v in (settings or {}).items()]
+        proc = subprocess.run(args, capture_output=True, text=True)
+        if proc.returncode != 0:
+            raise RuntimeError(f"{exe.name} failed ({proc.returncode}): {proc.stderr}")
+        y = np.fromfile(fout, dtype=np.float32)
+    return y.reshape(-1, n).T  # (samples, channels)
+
+
+def render_dawdreamer(dsp: Path, x: np.ndarray, settings: dict | None = None, automation: dict | None = None):
     engine = dd.RenderEngine(SR, BLOCK)
     p = processor(engine, dsp)
     params = {d["label"]: d["name"] for d in p.get_parameters_description()}
