@@ -85,6 +85,8 @@ OVERRIDES = {
     "GrainFM": "GrainFM.ar(1, Impulse.ar(30), 0.05, 440, 200, 1, maxGrains: 16)",
     "GrainIn": "GrainIn.ar(1, Impulse.ar(30), 0.05, SoundIn.ar(0), maxGrains: 16)",
     # Gendy .kr: the defaults leave +-1 in scsynth itself (sc-findings 33)
+    # Crackle's default 1.5 is bistable: the attractor depends on the random start
+    "Crackle": "Crackle.{rate}(1.9)",
     "Gendy1": {"ar": "Gendy1.ar", "kr": "Gendy1.kr(1, 1, 1, 1, 20, 40)"},
     "Gendy2": {"ar": "Gendy2.ar", "kr": "Gendy2.kr(minfreq: 1, maxfreq: 10)"},
     "Gendy3": {"ar": "Gendy3.ar", "kr": "Gendy3.kr(1, 1, 1, 1, 20, 0.5, 0.5, 4)"},
@@ -136,6 +138,10 @@ def probe_body(u, rate):
     if u["name"] in OVERRIDES:
         o = OVERRIDES[u["name"]]
         return (o[rate] if isinstance(o, dict) else o).format(rate=rate, sig=sig)
+    if u["file"].endswith("Audio/Chaos.sc"):
+        # chaotic maps at their default parameters: an audio signal as a, b or x drives them
+        # into degenerate regimes where double vs float decides the outcome
+        return f"{u['name']}.{rate}()"
     kwargs = [f"{a}: {sig}" for a, default in u["args"]
               if a in SIGNAL_ARGS or (default == "nil" and a not in ("mul", "add"))]
     method = "new" if rate == "ir" and "new" in u["rates"] else rate  # scalar rate by *new
