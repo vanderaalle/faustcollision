@@ -15,6 +15,7 @@ from .scsyndef import Const, Ref, SynthDef
 HERE = Path(__file__).parent
 MAPPING = HERE / "mapping.toml"
 FAUST_LIB_DIR = HERE / "faust"
+IR_FROM_KR = {"UnaryOpUGen", "BinaryOpUGen", "MulAdd", "Sum3", "Sum4"}
 COMPARE_ORDER = ["waveform", "envelope", "spectrum", "statistics", "distribution"]
 
 
@@ -310,6 +311,10 @@ def translate(sdef: SynthDef, meta: dict, table=None) -> Translation:
                 template = {u.rate: template[named[0]]}
             elif first is not None and f"{u.rate}<{rate_of(first)}" in template:
                 template = {u.rate: template[f"{u.rate}<{rate_of(first)}"]}
+            if u.rate == "ir" and "ir" not in template and "kr" in template and u.cls in IR_FROM_KR:
+                # a scalar-rate operator: its constructor computes one value with the scalar
+                # (kr) function; held from the first sample (initv), so random operators draw once
+                template = {"ir": "sc.initv(" + template["kr"] + ")"}
             if u.rate not in template:
                 raise TranslationError(f"{u.cls}.{u.rate} is not mapped (only {', '.join(template)})")
             template = template[u.rate]

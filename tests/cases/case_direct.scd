@@ -287,6 +287,10 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 		metadata: (signals: [\impulse], specs: (t_trig: ControlSpec(0, 2, \lin, 0, 1)))),
 	SynthDef(\case_LagControl, { |freq = 440, amp = 0.3| Out.ar(0, [K2A.ar(freq) * 0.001, SinOsc.ar(freq) * amp]) }, [0.2, 0.05],
 		metadata: (specs: (freq: ControlSpec(100, 1000, \exp, 0, 440), amp: ControlSpec(0, 1, \lin, 0, 0.3)))),
+	// Scalar-rate operators (computed once in the constructor), on SampleRate.ir
+	SynthDef(\case_ops_ir, { var sr = SampleRate.ir;
+		Out.ar(0, [SinOsc.ar(sr * 0.01), DC.ar(1) * (sr.reciprocal * 1000), DC.ar(1) * ((sr * 0 + 69).midicps * 0.001),
+			DC.ar(1) * (sr / 48000).sqrt.neg, DC.ar(1) * ((sr * 0).rand + 0.5) * 0]) }, metadata: (signals: [\impulse])),
 	SynthDef(\case_Standard, { Out.ar(0, [StandardN.ar(8000), StandardL.ar(3000)] * 0.3) }, metadata: (signals: [\silence])),
 	SynthDef(\case_Formlet, { |freq = 1000| Out.ar(0, Formlet.ar(in.value, freq, 0.005, 0.1) * 0.5) },
 		metadata: (specs: (freq: spec.(50, 12000, 1000)))),
