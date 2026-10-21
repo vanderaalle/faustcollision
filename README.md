@@ -13,25 +13,77 @@ compared: most match to 1e-7 or better; where they cannot (float vs scsynth's do
 non-causal block processing), the measured floor and its cause are recorded in the
 mapping table.
 
-## Use
+## Quick start
+
+Requirements: SuperCollider 3.13 (`sclang` and `scsynth` on the PATH), Faust 2.70
+(`faust`), Python 3.12.
+
+**1. Install** (once):
 
 ```
+git clone https://github.com/vanderaalle/faustcollision.git
+cd faustcollision
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
-.venv/bin/python signals/make_signals.py           # test signals (once)
+.venv/bin/python signals/make_signals.py
+```
+
+**2. Put your SynthDefs in a project folder**, anywhere, under `defs/`: one SynthDef per
+`.scd` file, as SuperCollider source (not compiled `.scsyndef` files: the build runs
+`sclang` on them). For example `myproject/defs/tremolo.scd`:
+
+```supercollider
+SynthDef(\tremolo, { |rate = 5, depth = 0.5|
+    var in = SoundIn.ar(0);
+    Out.ar(0, in * (1 - (depth * SinOsc.kr(rate).range(0, 1))));
+}, metadata: (specs: (
+    rate: ControlSpec(0.5, 20, \exp, 0, 5),
+    depth: ControlSpec(0, 1, \lin, 0, 0.5)
+)))
+```
+
+The rules:
+
+- exactly one `Out.ar(0, ...)`: its channels become the Faust outputs;
+- the audio input is `SoundIn.ar(n)`: each channel becomes a Faust input;
+- every control (`|rate, depth|`) needs a range in `metadata: (specs: ...)`: each becomes
+  a slider (`hslider`), with an `\exp` spec a logarithmic one.
+
+**3. Translate** (from the faustcollision folder):
+
+```
+.venv/bin/python -m translator.build --project ../myproject
+```
+
+This writes `myproject/build/faust/tremolo.dsp`, next to copies of `sc.lib` and
+`sctables.lib` that it imports: the folder is self-contained. A SynthDef that cannot be
+translated gets `tremolo.error` instead, naming the reason (an unsupported UGen, a
+`doneAction` other than 0, a missing spec, ...).
+
+**4. Use the Faust** as any Faust program: `faust tremolo.dsp -o tremolo.cpp`, or one of
+the `faust2...` scripts for your target (`faust2jaqt`, `faust2lv2`, `faust2daisy`, ...).
+The tests compile with `-single -ftz 2` (single precision, denormals flushed).
+
+**5. Check it against scsynth** (optional):
+
+```
+.venv/bin/python -m pytest --project=../myproject
+```
+
+This renders every SynthDef with scsynth and with Faust, over the test signals and
+each control's minimum, default and maximum, and writes `myproject/report/fidelity.md`.
+A SynthDef without random UGens is compared sample by sample (the tremolo above: 2e-7).
+One with random UGens can only be compared statistically, and slow random modulation
+(an `LFNoise1.kr(0.3)` sweeping a filter) can fail that comparison by chance: the
+port cannot share scsynth's random seed. To check the rest of such a SynthDef, swap the
+random source for a deterministic one while testing.
+
+### Working on the library itself
+
+```
 .venv/bin/python -m translator.build                # examples/ and tests/cases/ -> build/
 .venv/bin/python -m pytest                          # layers 1-3 -> report/fidelity.md
 .venv/bin/python -m translator.census               # coverage of core UGens -> report/census.md
 ```
-
-For another project, keep its SynthDefs in `DIR/defs/*.scd` (each file evaluates to a
-SynthDef; knob ranges in `metadata: (specs: (...))`):
-
-```
-.venv/bin/python -m translator.build --project DIR  # DIR/build/faust/*.dsp
-.venv/bin/python -m pytest --project=DIR            # DIR/report/fidelity.md
-```
-
-Requirements: SuperCollider 3.13 (`sclang`, `scsynth`), Faust 2.70 (`faust`), Python 3.12.
 
 ## Layout
 
