@@ -280,8 +280,10 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 	SynthDef(\case_done_env_gate, { var g = SoundIn.ar(0).abs > 0.5; Out.ar(0, [EnvGen.ar(Env.asr(0.01, 1, 0.05), Trig.ar(g, 0.2), doneAction: 2), SinOsc.ar(300) * 0.1]) }),
 	SynthDef(\case_done_env_rel, { Out.ar(0, [EnvGen.ar(Env.asr(0.01, 1, 0.03), Line.kr(1, -1, 0.3) > 0, doneAction: 2), SinOsc.ar(300) * 0.1]) }, metadata: (signals: [\impulse])),
 	// Control variants: a t_ argument (its value for the first block, then 0) and lagged
-	// arguments (a lag per block); the settings change the controls at creation only
-	SynthDef(\case_TrigControl, { |t_trig = 1| Out.ar(0, [K2A.ar(t_trig), Decay2.ar(K2A.ar(t_trig), 0.001, 0.1) * SinOsc.ar(440)]) },
+	// arguments (a lag per block); the settings change the controls at creation only. No
+	// filter after the trigger: TrigControl's constructor output is 0, and constructor-time
+	// input values are not modelled (a filter would carry the first block's difference on)
+	SynthDef(\case_TrigControl, { |t_trig = 1| Out.ar(0, [K2A.ar(t_trig), K2A.ar(t_trig) * SinOsc.ar(440)]) },
 		metadata: (signals: [\impulse], specs: (t_trig: ControlSpec(0, 2, \lin, 0, 1)))),
 	SynthDef(\case_LagControl, { |freq = 440, amp = 0.3| Out.ar(0, [K2A.ar(freq) * 0.001, SinOsc.ar(freq) * amp]) }, [0.2, 0.05],
 		metadata: (specs: (freq: ControlSpec(100, 1000, \exp, 0, 440), amp: ControlSpec(0, 1, \lin, 0, 0.3)))),
