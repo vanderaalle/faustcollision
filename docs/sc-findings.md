@@ -47,6 +47,7 @@ not yet confirmed by a render. Kind: **bug?** (looks unintended), **undocumented
 | 33 | `Gendy1/2/3.kr` (default arguments) | output far outside ±1 (up to ~1e5): the phase drops by 1 at most per step while a kr step covers several breakpoints | bug? | measured, source |
 | 34 | `Gendy2`, `Gendy3` (amplitude walks) | `Gendyn_mirroring` folds a value d below `lower` to d above 0, not above `lower`: for [-1, 1], -1 - d becomes 1 + d (outside the range) | bug? | measured, source |
 | 35 | `NRand` (default arguments) | the default `n = 0` returns NaN: the constructor divides the sum of no draws by 0 | bug? | measured, source |
+| 36 | `EnvGen` (gate 0 at start, `doneAction: 2`) | the constructor's step calls DoneAction (the not-started stage counts as past the last), and it has no effect: the synth runs until a triggered envelope finishes | convention | measured, source |
 
 ## 1. `Amplitude.kr` with an audio-rate input releases 64× too fast
 
@@ -625,4 +626,19 @@ Measured (NRT): `NRand(0, 1, 0)` and `NRand.new` both output NaN.
   `SCClassLibrary/Common/Audio/Noise.sc` (`n = 0`). Fix: default `n = 1` (the comment's
   "same as Rand"), and/or treat n < 1 as 1 in the constructor.
 - Translation: refused (n must be at least 1), stating the reason.
+
+## 36. A done action raised in a constructor has no effect
+
+`EnvGen_Ctor` runs one step (`EnvGen_next_k(unit, 1)`). With the gate at 0 the envelope is
+not started, its stage is `ENVGEN_NOT_STARTED` (10^9), and `EnvGen_nextSegment` tests
+`m_stage + 1 >= numstages` before the not-started case: it takes the "finished" branch and
+calls `DoneAction`. The synth is nevertheless not freed: it waits for the gate, runs the
+envelope, and is freed when that envelope finishes.
+
+Measured (NRT): `EnvGen.ar(Env.asr(0.01, 1, 0.05), Trig.ar(SoundIn.ar(0).abs > 0.5, 0.2),
+doneAction: 2)` beside a sine: the sine continues past the first block (until the end of the
+first triggered envelope, e.g. sample 21631 on the impulse signal).
+
+- Source: `server/plugins/LFUGens.cpp` `EnvGen_Ctor`, `EnvGen_nextSegment` (branch order).
+- Translation: reproduced (the port gates on the DoneAction calls of running steps only).
 
