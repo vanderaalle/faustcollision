@@ -47,6 +47,9 @@ Requirements: SuperCollider 3.13 (`sclang`, `scsynth`), Faust 2.70 (`faust`), Py
 - `docs/`: `next.md` (status and next steps), `sc-findings.md`, `issues/` (upstream issue
   drafts), `faust-notes.md`, `plans/` (prepared ports not yet applied).
 
+How the ports are made and checked (execution model, precision, tolerances from measured
+floors, census): `docs/method.md`.
+
 ## Findings
 
 Porting at this level of detail surfaces behaviour of scsynth that its documentation
@@ -77,14 +80,14 @@ Gendy1/2/3 (statistics); GrainSin, GrainFM, GrainIn (the built-in Hann window; o
 voice per possible grain, so maxGrains <= 65).
 
 Census (`translator.census`, `report/census.md`): of the 215 core UGen classes in scope,
-470 probes (one per class and rate, plus every operator); 396 pass, 59 unmapped (chaos
-oscillators, grains, ambisonic panners, FreqShift/Hilbert, MoogFF.kr, a few others). Of
-the 15 not passing, most are probe artifacts or rejections by design: random UGens probed
-with a signal that triggers once (statistics of one value), T2K and Vibrato (rejected),
-Pitch.kr (substitute tracker), Blip.kr at the probe's 440 Hz (above the control-rate
-limit, sc-findings 25), Hasher.kr on a -0.0 input (docs/faust-notes.md). Unmapped UGens
-are a translation error naming the class: nothing is translated by guesswork. Excluded
-by design: buffers, buses, demand rate, FFT.
+470 probes (one per class and rate, plus every operator); 446 pass, 1 unmapped (MoogFF.kr),
+3 refused by design (T2K, Vibrato with rate variation). The 20 others are explained in
+the report; most are probe artifacts: random UGens measured on few draws, chaotic maps driven by
+audio-rate parameters into degenerate regimes (where double vs float and flushed denormals
+decide), Crackle at its bistable default; also Blip.kr above its control-rate limit
+(sc-findings 25), Hasher.kr on a -0.0 input and Pitch.kr (a substitute tracker). Unmapped
+UGens are a translation error naming the class: nothing is translated by guesswork.
+Excluded by design: buffers, buses, demand rate, FFT, server communication, user interface.
 
 Known limitation: where scsynth reads an input in the constructor (an initial phase or
 duty, the start of a ramp), the port uses the input's first-block value. The two differ
