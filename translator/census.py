@@ -114,7 +114,7 @@ def sclang(*args):
 
 
 def classify(u):
-    if not [r for r in u["rates"] if r in ("ar", "kr", "ir")]:
+    if not [r for r in u["rates"] if r in ("ar", "kr", "ir", "new")]:
         return "abstract or demand-only"
     for pat, why in EXCLUDE_FILES.items():
         if re.fullmatch(pat, u["file"]):
@@ -138,7 +138,8 @@ def probe_body(u, rate):
         return (o[rate] if isinstance(o, dict) else o).format(rate=rate, sig=sig)
     kwargs = [f"{a}: {sig}" for a, default in u["args"]
               if a in SIGNAL_ARGS or (default == "nil" and a not in ("mul", "add"))]
-    return f"{u['name']}.{rate}({', '.join(kwargs)})"
+    method = "new" if rate == "ir" and "new" in u["rates"] else rate  # scalar rate by *new
+    return f"{u['name']}.{method}({', '.join(kwargs)})"
 
 
 RANDOM_OPS = {"rand", "rand2", "linrand", "bilinrand", "sum3rand", "coin", "rrand", "exprand"}
