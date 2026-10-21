@@ -141,7 +141,8 @@ def translate(sdef: SynthDef, meta: dict, table=None) -> Translation:
                 a, b = src.inputs
                 if isinstance(a, Ref) and ugens[a.ugen].cls == "NumOutputBuses" and isinstance(b, Const):
                     return int(b.value)
-        raise TranslationError("In: only SoundIn (bus = NumOutputBuses + constant) is supported")
+        raise TranslationError("In: excluded by design (reads or writes a server bus other than the audio input and output); "
+                           "only SoundIn (bus = NumOutputBuses + constant) is translated")
 
     outs = [u for u in ugens if entry_of(u).get("kind") == "output"]
     if len(outs) != 1:
