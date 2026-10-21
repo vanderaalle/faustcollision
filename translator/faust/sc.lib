@@ -1221,14 +1221,16 @@ with { p = f * s; e = fmaf(f, s, 0.0 - p); q = p + 0.5; t = floor(q); };
 // segment (curve shape: b1) and drops the in-loop offset from the counter
 // (docs/sc-findings.md #18). Reproduced for curve -> curve; other shape pairs are not.
 envgen(n, gate, ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves, sr, gchk, clk, aa) =
-    envgen_all(n, gate, ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves, sr, gchk, clk, aa) : (si.block(12), _);
-// finished (EnvGen_next calls DoneAction): the state after the last stage, shape 0 with
-// the 'infinite' counter, which nothing else produces
+    envgen_all(n, gate, ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves, sr, gchk, clk, aa) : (si.block(13), _);
+// 1 where this step called DoneAction (EnvGen_nextSegment past the last stage). The 13th
+// state holds the event of the latest step only, so the constructor's call (an envelope
+// whose gate starts at 0 is 'finished' there) is dropped: scsynth ignores a done action
+// raised in a constructor (measured: such a synth runs until its triggered envelope ends).
 envgen_fin(n, gate, ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves, sr, gchk, clk, aa) =
     envgen_all(n, gate, ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves, sr, gchk, clk, aa)
-    : \(st, cn, lv, sh, p, a2, b1, k, ph, el, rl, pg, o).((sh == 0) & (cn > 1e8));
+    : (si.block(12), _, !);
 envgen_all(n, gate, ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves, sr, gchk, clk, aa) =
-    machine_all(12, step, init, 1, clk)
+    machine_all(13, step, init, 1, clk)
 with {
     INF = 1e9;
     NOTSTARTED = 1e9;
@@ -1236,7 +1238,7 @@ with {
     lev(i) = sel(i, levels); tim(i) = sel(i, times); shp(i) = sel(i, shapes); crv(i) = sel(i, curves);
     i0 = initv(ilev) * initv(ls) + initv(lb);
     init = NOTSTARTED, 0.0, select2(int(initv(shp(0))) == 8, i0, initv(lev(0))), 8.0,
-           0.0, 0.0, 0.0, 0.0, 0.0, i0, 0.0, 0.0;
+           0.0, 0.0, 0.0, 0.0, 0.0, i0, 0.0, 0.0, 0;
     nz(d) = select2(d == 0, d, 1.0);
 
     // level of shape sh at index k from the segment parameters
@@ -1278,7 +1280,7 @@ with {
         lev2 = select2(sh3 == 0, select2(sh3 == 8, l0, el), endL);
     };
 
-    step(st, cn, lv, sh, p, a2, b1, k, ph, el, rl, pg) = out, st3, cn3 - 1, lv4, sh3, p3, a23, b13, k3 + 1, ph3, el3, rl1, pg1
+    step(st, cn, lv, sh, p, a2, b1, k, ph, el, rl, pg, ev) = out, st3, cn3 - 1, lv4, sh3, p3, a23, b13, k3 + 1, ph3, el3, rl1, pg1, fin
     with {
         g = gate;
         trig = gchk & (pg <= 0) & (g > 0);
