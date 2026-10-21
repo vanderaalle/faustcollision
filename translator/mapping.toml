@@ -3193,3 +3193,20 @@ faust = { ir = "sc.exprand_ir({seed}, {lo}, {hi})" }
 compare = "distribution"
 tol = 0.2
 case = "case_ExpRand"
+
+[TrigControl]
+tier = "direct"
+kind = "control"
+# IOUGens.cpp: a t_ argument: its value for one block when set, then 0 (sc.trigctl)
+compare = "waveform"
+tol = 1e-6
+case = "case_TrigControl"
+
+[LagControl]
+tier = "direct"
+kind = "control"
+# IOUGens.cpp: an argument with a lag time: a one-pole lag per block (sc.lagctl). The case
+# sets controls at creation only (the start, not the glide, is compared with scsynth)
+compare = "waveform"
+tol = 1e-6
+case = "case_LagControl"

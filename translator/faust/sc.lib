@@ -737,6 +737,15 @@ nrand_ir(seed, lo, hi, N) = (par(i, N, hrand(seed, i)) :> _) / N * (h - l) + l w
 // pow(hi / lo, draw) * lo (powf)
 exprand_ir(seed, lo, hi) = pow(h / l, hrand(seed, 0)) * l with { l = initv(lo); h = initv(hi); };
 
+// TrigControl (IOUGens.cpp TrigControl_next): the control's value for the block in which it
+// was set, then 0 (the unit zeroes it); the constructor clears the output. Here: set = the
+// first block, or a block whose slider value differs from the previous block's.
+trigctl(v) = ba.sAndH(krclk, select2((ba.time == 0) | (a != a'), 0.0, a)) with { a = a2k(v); };
+// LagControl (IOUGens.cpp LagControl_next_k): per block, y = z + b1 (y - z) in float,
+// zapgremlins; starts at the value (the constructor's step). b1 from derive (float32).
+lagctl(v, b1) = (\(y).(select2(ba.time == 0, select2(krclk, y, zap(fadd(z, fmul(b1, fsub(y, z))))), z))) ~ _
+with { z = a2k(v); };
+
 // Dust / Dust2: frand below density * sampledur. density is read once per block.
 dust(seed, density, sdur) = select2(z < th, 0.0, z * select2(th > 0, 0.0, 1.0 / th))
 with { z = frand(seed); th = a2k(density) * sdur; };

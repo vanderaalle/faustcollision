@@ -18,6 +18,14 @@ FAUST_LIB_DIR = HERE / "faust"
 COMPARE_ORDER = ["waveform", "envelope", "spectrum", "statistics", "distribution"]
 
 
+def _lag_b1(lag):
+    """IOUGens.cpp LagControl_Ctor: b1 = lag == 0 ? 0 : (float)exp(log001 / (lag * controlRate)),
+    lag a float, the rate a double (48000 / 64)."""
+    import numpy as np
+    lag = float(np.float32(lag))
+    return 0.0 if lag == 0 else float(np.float32(math.exp(math.log(0.001) / (lag * (48000.0 / 64)))))
+
+
 class TranslationError(Exception):
     pass
 
@@ -165,6 +173,7 @@ def translate(sdef: SynthDef, meta: dict, table=None) -> Translation:
     gates = []  # node_alive, doneAction 2: UGens that end the node (every output stops)
     notes = []
     control_outputs = set()
+    ctl_wrap = {}  # (ugen, output) -> Faust wrapper of the slider (TrigControl, LagControl)
 
     def use(key, rec, tier):
         entries.setdefault(key, Entry(key, tier, rec["compare"], rec["tol"], rec["case"]))
@@ -179,7 +188,7 @@ def translate(sdef: SynthDef, meta: dict, table=None) -> Translation:
                 raise TranslationError(f"control '{cname}' is used but has no spec in the SynthDef metadata")
             controls[cname] = specs[cname]
             # prefixed: a bare name can clash with stdfaust's environments (db, ba, ma...)
-            return f"ctl_{_ident(cname)}"
+            return ctl_wrap.get(key, "{}").format(f"ctl_{_ident(cname)}")
         return names[key]
 
     for u in ugens:
@@ -192,7 +201,7 @@ def translate(sdef: SynthDef, meta: dict, table=None) -> Translation:
             continue
         if kind == "control":
             use(u.cls, e, e["tier"])
-            if u.cls != "Control":
+            if u.cls not in ("Control", "TrigControl", "LagControl"):
                 raise TranslationError(f"unsupported control UGen {u.cls}")
             for k in range(len(u.output_rates)):
                 cname = sdef.param_names.get(u.special + k)
@@ -200,6 +209,13 @@ def translate(sdef: SynthDef, meta: dict, table=None) -> Translation:
                     raise TranslationError(f"control output {u.special + k} has no name")
                 names[(u.index, k)] = cname
                 control_outputs.add((u.index, k))
+                if u.cls == "TrigControl":
+                    ctl_wrap[(u.index, k)] = "sc.trigctl({})"
+                elif u.cls == "LagControl":
+                    lag = u.inputs[k]
+                    if not isinstance(lag, Const):
+                        raise TranslationError(f"LagControl '{cname}': the lag time must be a constant")
+                    ctl_wrap[(u.index, k)] = "sc.lagctl({}, " + _literal(_lag_b1(lag.value)) + ")"
             continue
         if kind == "localout":
             if any(v.rate == u.rate for v in feedback):
