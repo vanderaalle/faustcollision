@@ -59,6 +59,17 @@ class Translation:
         return max(e.tol for e in self.entries if e.compare == self.compare)
 
 
+EXCLUDED = Path(__file__).with_name("excluded.toml")
+
+
+def excluded_reason(cls, path=EXCLUDED):
+    """The reason a class is excluded by design (translator/excluded.toml), or None."""
+    with open(path, "rb") as f:
+        ex = tomllib.load(f)
+    key = "fft" if cls.startswith("PV_") else ex["classes"].get(cls)
+    return ex["reasons"][key] if key else None
+
+
 def load_table(path=MAPPING):
     with open(path, "rb") as f:
         table = tomllib.load(f)
@@ -100,6 +111,9 @@ def translate(sdef: SynthDef, meta: dict, table=None) -> Translation:
     def entry_of(u):
         e = table.get(u.cls)
         if e is None:
+            why = excluded_reason(u.cls)
+            if why:
+                raise TranslationError(f"{u.cls}: excluded by design ({why})")
             raise TranslationError(f"unmapped UGen class {u.cls}")
         return e
 

@@ -60,6 +60,22 @@ def test_done_action_other_than_0_or_2_is_an_error():
         translate(g, {})
 
 
+# Excluded by design (translator/excluded.toml): refused with the reason, never "unmapped".
+def test_excluded_class_states_the_reason():
+    g = graph(UGen(2, "MouseX", "kr", 0, [Const(0.0), Const(1.0), Const(0.0), Const(0.2)], ["kr"]))
+    with pytest.raises(TranslationError, match="MouseX: excluded by design .user interface"):
+        translate(g, {})
+
+
+def test_excluded_classes_are_not_mapped():
+    import tomllib
+    from translator.codegen import EXCLUDED, load_table
+    with open(EXCLUDED, "rb") as f:
+        ex = tomllib.load(f)
+    assert not set(ex["classes"]) & set(load_table()), "a class is both mapped and excluded"
+    assert set(ex["classes"].values()) <= set(ex["reasons"])
+
+
 # Rejections with a reason (sc-findings 21, 22; not causal): scsynth reads garbage or
 # computes from the current audio block.
 def test_ar_input_of_constant_is_rejected():
