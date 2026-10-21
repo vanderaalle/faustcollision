@@ -134,6 +134,15 @@ def fsinosc(c):
     return out
 
 
+def nrand(c):
+    """NoiseUGens.cpp NRand_Ctor: the mean of n = (int)n draws, summed in a loop: n is the
+    loop count, a constant here; n <= 0 divides 0 by 0."""
+    n = int(c["n"])
+    if n < 1:
+        raise ValueError(f"n = {n}: NRand_Ctor computes sum / n = 0 / 0")
+    return {"N": n}
+
+
 def psingrain(c):
     """OscUGens.cpp PSinGrain_Ctor, all read once: float w = freq * radiansPerSample, float
     sdur = SR * dur, rdur = 1.f / sdur, rdur2 = rdur * rdur; slope = 4 (rdur - rdur2),

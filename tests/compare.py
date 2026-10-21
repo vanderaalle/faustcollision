@@ -9,6 +9,9 @@ statistics  long-term (Welch) spectrum in 1/3-octave bands, mean |dB difference|
             power in those bands (31 Hz – 16 kHz): below them, the mean and slowest parts of
             1/f-type noise over a few seconds are mostly chance.
             For noise UGens and trackers, where only distributions can agree.
+distribution  Kolmogorov-Smirnov distance between the sample-value distributions (0..1).
+            For values drawn once (Rand, IRand, ...): a case cycles many instances through
+            one channel, so its sample values are the draws.
 """
 import numpy as np
 from scipy import signal
@@ -73,7 +76,13 @@ def statistics(ref, test):
     return max(_masked_mean(*bands), float(level))
 
 
-METRICS = {"waveform": waveform, "envelope": envelope, "spectrum": spectrum, "statistics": statistics}
+def distribution(ref, test):
+    from scipy.stats import ks_2samp
+    return float(ks_2samp(ref, test).statistic)
+
+
+METRICS = {"waveform": waveform, "envelope": envelope, "spectrum": spectrum, "statistics": statistics,
+           "distribution": distribution}
 
 
 def score(mode, ref, test):

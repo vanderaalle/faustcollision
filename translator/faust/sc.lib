@@ -721,6 +721,20 @@ with {
         lv1 = fadd(l, s); sl1 = fadd(s, cv);
     };
 };
+// Rand, IRand, LinRand, NRand, ExpRand (NoiseUGens.cpp *_Ctor): one draw from the synth's
+// generator in the constructor, no calc function: a constant. The inputs are read then
+// (first-block values here, as everywhere). Draws: hrand(seed, j), independent per node.
+rand_ir(seed, lo, hi) = hrand(seed, 0) * (h - l) + l with { l = initv(lo); h = initv(hi); };
+// (int32)floor(range * drand()) + lo, range = hi - lo + 1 on the (int) inputs
+irand_ir(seed, lo, hi) = float(int(floor(hrand(seed, 0) * float(r))) + l) with { l = int(initv(lo)); r = int(initv(hi)) - l + 1; };
+// min (n <= 0) or max of two draws
+linrand_ir(seed, lo, hi, n) = select2(int(initv(n)) <= 0, max(a, b), min(a, b)) * (h - l) + l
+with { a = hrand(seed, 0); b = hrand(seed, 1); l = initv(lo); h = initv(hi); };
+// the mean of N draws (N, a constant >= 1, from derive.nrand)
+nrand_ir(seed, lo, hi, N) = (par(i, N, hrand(seed, i)) :> _) / N * (h - l) + l with { l = initv(lo); h = initv(hi); };
+// pow(hi / lo, draw) * lo (powf)
+exprand_ir(seed, lo, hi) = pow(h / l, hrand(seed, 0)) * l with { l = initv(lo); h = initv(hi); };
+
 // Dust / Dust2: frand below density * sampledur. density is read once per block.
 dust(seed, density, sdur) = select2(z < th, 0.0, z * select2(th > 0, 0.0, 1.0 / th))
 with { z = frand(seed); th = a2k(density) * sdur; };

@@ -15,7 +15,7 @@ from .scsyndef import Const, Ref, SynthDef
 HERE = Path(__file__).parent
 MAPPING = HERE / "mapping.toml"
 FAUST_LIB_DIR = HERE / "faust"
-COMPARE_ORDER = ["waveform", "envelope", "spectrum", "statistics"]
+COMPARE_ORDER = ["waveform", "envelope", "spectrum", "statistics", "distribution"]
 
 
 class TranslationError(Exception):

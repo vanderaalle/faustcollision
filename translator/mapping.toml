@@ -3131,3 +3131,65 @@ node_alive = "select2({nend} > 0, 1, ba.time < {nend})"
 compare = "waveform"
 tol = 1e-6
 case = "case_PSinGrain"
+
+[Rand]
+tier = "direct"
+inputs = ["lo", "hi"]
+# NoiseUGens.cpp: drawn once from the synth's generator (not reproducible): compared by the
+# distribution of 128 instances; inputs read in the constructor
+# tol: KS distance; scsynth against itself (RandSeed, 15 seed pairs) up to 0.156; the 1 %
+# critical value for two samples of 128 is 0.204
+faust = { ir = "sc.rand_ir({seed}, {lo}, {hi})" }
+compare = "distribution"
+tol = 0.2
+case = "case_Rand"
+
+[IRand]
+tier = "direct"
+inputs = ["lo", "hi"]
+# NoiseUGens.cpp: drawn once from the synth's generator (not reproducible): compared by the
+# distribution of 128 instances; inputs read in the constructor
+# tol: KS distance; scsynth against itself (RandSeed, 15 seed pairs) up to 0.156; the 1 %
+# critical value for two samples of 128 is 0.204
+faust = { ir = "sc.irand_ir({seed}, {lo}, {hi})" }
+compare = "distribution"
+tol = 0.2
+case = "case_IRand"
+
+[LinRand]
+tier = "direct"
+inputs = ["lo", "hi", "minmax"]
+# NoiseUGens.cpp: drawn once from the synth's generator (not reproducible): compared by the
+# distribution of 128 instances; inputs read in the constructor
+# tol: KS distance; scsynth against itself (RandSeed, 15 seed pairs) up to 0.156; the 1 %
+# critical value for two samples of 128 is 0.204
+faust = { ir = "sc.linrand_ir({seed}, {lo}, {hi}, {minmax})" }
+compare = "distribution"
+tol = 0.2
+case = "case_LinRand"
+
+[NRand]
+tier = "direct"
+inputs = ["lo", "hi", "n"]
+# NoiseUGens.cpp: drawn once from the synth's generator (not reproducible): compared by the
+# distribution of 128 instances; inputs read in the constructor
+# tol: KS distance; scsynth against itself (RandSeed, 15 seed pairs) up to 0.156; the 1 %
+# critical value for two samples of 128 is 0.204
+constant_inputs = ["n"]
+derive = "nrand"
+faust = { ir = "sc.nrand_ir({seed}, {lo}, {hi}, {N})" }
+compare = "distribution"
+tol = 0.2
+case = "case_NRand"
+
+[ExpRand]
+tier = "direct"
+inputs = ["lo", "hi"]
+# NoiseUGens.cpp: drawn once from the synth's generator (not reproducible): compared by the
+# distribution of 128 instances; inputs read in the constructor
+# tol: KS distance; scsynth against itself (RandSeed, 15 seed pairs) up to 0.156; the 1 %
+# critical value for two samples of 128 is 0.204
+faust = { ir = "sc.exprand_ir({seed}, {lo}, {hi})" }
+compare = "distribution"
+tol = 0.2
+case = "case_ExpRand"

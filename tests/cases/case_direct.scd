@@ -261,6 +261,13 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 	// PSinGrain: one grain; the node ends with it, silencing the other output too
 	SynthDef(\case_PSinGrain, { Out.ar(0, [PSinGrain.ar(660, 0.3, 0.5), SinOsc.ar(220) * 0.2]) }, metadata: (signals: [\silence])),
 	SynthDef(\case_PSinGrain_long, { Out.ar(0, PSinGrain.ar(1234.5, 2.3456, 0.8)) }, metadata: (signals: [\silence])),
+	// Scalar randoms: 128 instances cycled through one channel (one draw per sample); one
+	// SynthDef per UGen (all in one overflows sclang's synth message)
+] ++ [[\Rand, { Rand(-1, 1) }], [\IRand, { IRand(0, 9) * 0.1 }], [\LinRand, { LinRand(0, 1, 0) }], [\LinRand_max, { LinRand(-1, 0, 1) }],
+	[\NRand, { NRand(0, 1, 3) }], [\ExpRand, { ExpRand(0.01, 1) }]].collect { |k|
+	SynthDef(("case_" ++ k[0]).asSymbol, { var n = 128, ix = Phasor.ar(0, 1, 0, n);
+		Out.ar(0, Select.ar(ix, { k[1].value * DC.ar(1) } ! n)) }, metadata: (signals: [\impulse]))
+} ++ [
 	SynthDef(\case_Standard, { Out.ar(0, [StandardN.ar(8000), StandardL.ar(3000)] * 0.3) }, metadata: (signals: [\silence])),
 	SynthDef(\case_Formlet, { |freq = 1000| Out.ar(0, Formlet.ar(in.value, freq, 0.005, 0.1) * 0.5) },
 		metadata: (specs: (freq: spec.(50, 12000, 1000)))),

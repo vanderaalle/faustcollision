@@ -114,10 +114,12 @@ try {
 					[t0, ['/s_new', def.name, 1000, 0, 0] ++ args],
 					[sig.dur + (pad / sampleRate), ['/c_set', 0, 0]]
 				]);
-				var cmd, status;
+				var cmd, status, log = nrtDir +/+ tag ++ ".log", errs;
 				score.writeOSCFile(osc);
-				cmd = "scsynth -N % % % % WAV float -i 1 -o % -m 65536 > /dev/null".format(
-					osc.shellQuote, input.shellQuote, wav.shellQuote, sampleRate, numOutputs);
+				// -w: wire buffers; scsynth's default (64) cannot build larger graphs, and a synth
+				// that fails to build renders silence: its messages are checked below
+				cmd = "scsynth -N % % % % WAV float -i 1 -o % -m 65536 -w 1024 > % 2>&1".format(
+					osc.shellQuote, input.shellQuote, wav.shellQuote, sampleRate, numOutputs, log.shellQuote);
 				status = if(render) { cmd.systemCmd } { 0 };
 				if(status != 0) {
 					// scsynth occasionally aborts (seen once on an operator case); retry once, loudly
@@ -125,7 +127,11 @@ try {
 					status = cmd.systemCmd;
 				};
 				if(status != 0) { Error("scsynth NRT failed (%) for % %".format(status, def.name, tag)).throw };
+				errs = if(render) { File.readAllString(log).split($\n).select { |l|
+					l.containsi("FAILURE") or: { l.containsi("exceeded") } or: { l.beginsWith("ERROR") } } } { [] };
+				if(errs.notEmpty) { Error("scsynth NRT for % %: %".format(def.name, tag, errs[0])).throw };
 				File.delete(osc);
+				File.delete(log);
 				if(pad > 0) {
 					File.delete(input);
 					if(render) { shift.(wav, wav, pad.neg) };
