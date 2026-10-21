@@ -148,3 +148,15 @@ compared against it (the chaos UGens' samplesPerCycle) then fires one sample lat
 Translated code mostly escapes it because inputs arrive through `sc.a2k` (a recursive
 signal, not a constant), but a literal argument does not. Make the divisor opaque:
 `sr / fadd(max(freq, 0.001), 0.0)` (chaos_g, henon_g).
+
+## DawDreamer's JIT does not round sqrt correctly
+
+libfaust's LLVM JIT inside DawDreamer evaluates `sqrt` with a fast approximation: up to 3
+ulp off, 41 % of inputs differ, and sqrt(1) = 0.99999994, sqrt(4) = 1.99999988. Every other
+math primitive (exp, log, pow, the trigonometric functions, fmod, the roundings) agrees
+bit for bit with the C++ path. An `ffunction` calling `sqrtf` is recognised and
+approximated the same way, Faust cannot declare a `double` ffunction, and no compile
+flag changes it. The C++ that `faust` generates calls `std::sqrt`, correctly rounded, so
+targets are not affected: layer 2 renders through that C++ (tests/arch_render.cpp, g++
+-O2) and keeps DawDreamer only for layer 3's automated sweeps.
+

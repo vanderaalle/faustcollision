@@ -106,7 +106,7 @@ floors, census): `docs/method.md`.
 
 Porting at this level of detail surfaces behaviour of scsynth that its documentation
 does not state, some of it likely bugs: `docs/sc-findings.md` (with source references and
-reproducers; drafts of upstream issues in `docs/issues/`). 34 findings so far, most of them
+reproducers; drafts of upstream issues in `docs/issues/`). 36 findings so far, most of them
 measured on renders, among them buffer over-reads in fifteen `.ar` UGens fed a constant or
 control-rate input, an allpass that is not one (APF), and filters whose audio-rate inputs
 are read from the wrong samples (BEQSuite). Faust pitfalls met along the way
@@ -129,7 +129,9 @@ BiPanB2, DecodeB2, PanAz); Spring, Ball, TBall; the chaos oscillators (Cusp, Qua
 LinCong, Standard, FBSine, Latoocarfian, Gbman, Henon, LorenzL, Crackle, Logistic;
 statistics, their maps in double as float pairs where float32 changes the dynamics);
 Gendy1/2/3 (statistics); GrainSin, GrainFM, GrainIn (the built-in Hann window; one Faust
-voice per possible grain, so maxGrains <= 65).
+voice per possible grain, so maxGrains <= 65); PSinGrain; Rand, IRand, LinRand, NRand,
+ExpRand; `doneAction: 2` on Line, XLine and EnvGen (the program falls silent for good when
+the synth would be freed); `t_` and lagged controls.
 
 Census (`translator.census`, `report/census.md`): of the 215 core UGen classes in scope,
 470 probes (one per class and rate, plus every operator); 446 pass, 1 unmapped (MoogFF.kr),

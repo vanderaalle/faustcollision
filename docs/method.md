@@ -81,8 +81,11 @@ The test signals (`signals/make_signals.py`) are an impulse, an exponential sine
 white noise, silence (10 s, for generators) and a synthetic plucked bass line. Each
 starts with 100 ms of silence, so that the constructor sample does not meet a signal at
 full level. A SynthDef with controls is rendered at the defaults and at each control's
-minimum and maximum. The Faust code is rendered from the same signals and settings
-through DawDreamer (libfaust), with the target's flags.
+minimum and maximum. scsynth's console output is checked: a synth that fails to build
+(too few wire buffers, for instance) would otherwise render silence. The Faust code is
+rendered from the same signals and settings through the C++ that `faust` generates for a
+target (with the target's flags, compiled by g++ without fast-math); the control sweeps
+of layer 3 use DawDreamer (libfaust's JIT), which can automate controls.
 
 ### Three layers
 
@@ -103,6 +106,7 @@ through DawDreamer (libfaust), with the target's flags.
 | envelope | mean dB difference of 10 ms RMS envelopes | detectors, followers |
 | spectrum | mean dB difference of 1/3-octave STFT cells | phase-insensitive ports |
 | statistics | mean dB difference of long-term 1/3-octave spectra, at least the level difference | random, chaotic and tracking UGens |
+| distribution | Kolmogorov-Smirnov distance between sample-value distributions | values drawn once (Rand, IRand...), many instances cycled through one channel |
 
 ### Tolerances from measured floors
 
@@ -139,11 +143,17 @@ short cycles in float32), the map is ported in double precision (float pairs) in
 Excluded by design, as they have no counterpart in a self-contained Faust program:
 buffers, buses (other than the audio input and output), demand-rate UGens, FFT and phase
 vocoders, server communication (SendReply, Poll), and the user interface (MouseX, KeyState
-and similar). A UGen that ends its node (PSinGrain) is translated as permanent silence of
-the whole program from that block on; `doneAction: 2` (free this synth) will be translated
-the same way, while other done actions, which act on other nodes, stay excluded. Today
-every `doneAction` input must be 0. Ending the node is faithful, but on an always-running
-target such as an effects pedal it means the program falls silent for good.
+and similar); `translator/excluded.toml` lists them with the reason the translator gives.
+A UGen that ends its node (PSinGrain) and `doneAction: 2` (free this synth: Line, XLine,
+EnvGen) are translated as permanent silence of the whole program from the end of the block
+in which scsynth frees the synth; the build prints a note. Other done actions act on other
+nodes and are refused; Linen, DetectSilence and LFGauss still require `doneAction: 0`.
+Ending the node is faithful, but on an always-running target such as an effects pedal it
+means the program falls silent for good.
+
+Controls: plain arguments become sliders (a spec is required); `t_` arguments
+(TrigControl) output their value for one block when set, then 0; arguments with lag times
+(LagControl) are lagged once per block. Audio-rate `a_` arguments are not supported.
 
 Some ports carry resource limits where scsynth allocates dynamically: the grain UGens get
 one Faust voice per possible grain, so `maxGrains` must be at most 65.
@@ -162,7 +172,7 @@ from the wrong samples, random walks folded out of their range. The rules:
 - **Report upstream.** Each likely bug has a draft issue in `docs/issues/`, with a
   reproducer, the measured result, the cause in the source and a suggested fix.
 
-`docs/sc-findings.md` lists them (34 for 3.13.0). Pitfalls of Faust itself met along the
+`docs/sc-findings.md` lists them (36 for 3.13.0). Pitfalls of Faust itself met along the
 way (constant folding, compile-time expansion, rewritten arithmetic) are in
 `docs/faust-notes.md`.
 
@@ -174,8 +184,11 @@ way (constant folding, compile-time expansion, rewritten arithmetic) are in
   that scsynth keeps in the subnormal range is zero in the port. This only matters when an
   unstable system amplifies such tiny values (a Lorenz attractor driven out of its
   physical range).
-- **The test renderer is not the target compiler.** Renders use DawDreamer's LLVM JIT,
-  whose `sqrt` is not correctly rounded (sqrt(1) = 0.99999994), while the C++ that
-  `faust` generates for a target calls `std::sqrt`, which is. Ports using `sqrt` are
-  therefore measured slightly worse than they run; this is being removed from the
-  harness.
+- **Fidelity is measured on the C++ a target compiles,** on x86-64 with g++. A target
+  compiler that contracts multiply-adds into FMA instructions (common on ARM) may round
+  differently where the ports do not use opaque operations. The control sweeps of layer 3
+  run on DawDreamer's JIT, whose `sqrt` is not correctly rounded; they only check that
+  outputs stay finite and leave denormals.
+- **Controls are compared at their initial values.** The scsynth references set controls
+  when the synth is created, so a lag's glide or a trigger set later is ported from the
+  source but not compared with a render.
