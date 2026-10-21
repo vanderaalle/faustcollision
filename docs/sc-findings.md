@@ -4,7 +4,7 @@ Behaviour of scsynth (SuperCollider 3.13.0) that the documentation does not stat
 found by comparing renders sample by sample or by porting the C++. Source references
 are to the `Version-3.13.0` tag (`~/src/supercollider`).
 
-Issue drafts for #4, #5, #11, #15, #17-#28, #30-#34: `docs/issues/`.
+Issue drafts for #4, #5, #11, #15, #17-#28, #30-#35: `docs/issues/`.
 
 Status: **measured** = confirmed on scsynth NRT renders; **source** = read in the C++,
 not yet confirmed by a render. Kind: **bug?** (looks unintended), **undocumented**,
@@ -46,6 +46,7 @@ not yet confirmed by a render. Kind: **bug?** (looks unintended), **undocumented
 | 32 | `FreqShift` (constant or kr phase) | the phase argument is ignored: the constructor multiplies it by `m_radtoinc` before setting it | bug? | measured, source |
 | 33 | `Gendy1/2/3.kr` (default arguments) | output far outside ±1 (up to ~1e5): the phase drops by 1 at most per step while a kr step covers several breakpoints | bug? | measured, source |
 | 34 | `Gendy2`, `Gendy3` (amplitude walks) | `Gendyn_mirroring` folds a value d below `lower` to d above 0, not above `lower`: for [-1, 1], -1 - d becomes 1 + d (outside the range) | bug? | measured, source |
+| 35 | `NRand` (default arguments) | the default `n = 0` returns NaN: the constructor divides the sum of no draws by 0 | bug? | measured, source |
 
 ## 1. `Amplitude.kr` with an audio-rate input releases 64× too fast
 
@@ -610,4 +611,18 @@ folds with its own code, stays within ±1.
   from `lower` on both sides: `t = fmod(fabs(in - lower), 2 * range); in = lower + (t <
   range ? t : 2 * range - t)`.
 - Translation: reproduced (`sc.gmirror`).
+
+## 35. `NRand` returns NaN with its default arguments
+
+`NRand(lo, hi, n)` is the mean of n uniform draws, but the class's default is `n = 0`
+(`*new { arg lo = 0.0, hi = 1.0, n = 0; ... }`), and the constructor computes `sum / n` on
+the integer count without a guard: 0 / 0 = NaN, which then propagates through anything
+the value feeds. The help file's own example starts with `n = 0`.
+
+Measured (NRT): `NRand(0, 1, 0)` and `NRand.new` both output NaN.
+
+- Source: `server/plugins/NoiseUGens.cpp` `NRand_Ctor` (`ZOUT0(0) = (sum / n) * range + lo;`),
+  `SCClassLibrary/Common/Audio/Noise.sc` (`n = 0`). Fix: default `n = 1` (the comment's
+  "same as Rand"), and/or treat n < 1 as 1 in the constructor.
+- Translation: refused (n must be at least 1), stating the reason.
 
