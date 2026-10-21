@@ -34,11 +34,12 @@ int main(int argc, char** argv) {
         size_t eq = kv.find('=');
         if (eq == std::string::npos) return 2;
         std::string label = kv.substr(0, eq);
-        if (!ui.isParamExisting(label)) {
+        FAUSTFLOAT* zone = ui.getParamZone(label);
+        if (!zone) {
             std::fprintf(stderr, "no control %s\n", label.c_str());
             return 3;
         }
-        ui.setParamValue(label, (FAUSTFLOAT)std::atof(kv.substr(eq + 1).c_str()));
+        *zone = (FAUSTFLOAT)std::atof(kv.substr(eq + 1).c_str());
     }
     const int nin = d.getNumInputs(), nout = d.getNumOutputs();
     std::vector<float> in((size_t)nin * n), out((size_t)nout * n);
