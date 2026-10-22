@@ -41,7 +41,13 @@ in scope; only buffers, buses, demand rate and FFT stay excluded by design.
 ## Open
 - Gendy3 with knum < initCPs (and amp/dur distributions 3, 5): the port's spectrum differs
   from scsynth's (case_Gendy3 channel 2: port vs 10 scsynth seeds median 5.4 dB, scsynth vs
-  itself 1.3). Hidden by the wide tolerance the kr channel forces; investigate first.
+  itself 1.3). Hidden by the wide tolerance the kr channel forces. Set aside (Oct 2026).
+  Known: a float transcription of Gendy3_next_k matches scsynth (median 0.9-1.6), so the
+  port is wrong for all tested settings (dist 1/1 and 3/5, knum 7 and 12), its default
+  configuration excepted. gendist, gmirror, hrand and the initial state match the C; fed the
+  port's own draws, the model diverges at the first period: the amplitude step is right for
+  breakpoint 1 and identical for every breakpoint from 2 on, although the generated hash code
+  is correct per breakpoint. Suspect next: the list compaction (act/pos/slot in gendy3_g).
 
 ## Next, in order
 1. Batch 9 (branch ports-batch9): array arguments, FSinOsc with a varying freq, Linen
