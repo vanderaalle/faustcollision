@@ -150,6 +150,9 @@ def translate(sdef: SynthDef, meta: dict, table=None) -> Translation:
     out = outs[0]
     if out.cls != "Out":
         raise TranslationError(f"unsupported output UGen {out.cls}")
+    if out.rate != "ar":
+        raise TranslationError("Out.kr: excluded by design (writes a control bus; the program's outputs are "
+                               "audio): use Out.ar")
 
     # LocalIn/LocalOut: one feedback bus per rate. LocalIn outputs what the LocalOuts of its
     # rate wrote in the previous block (summed in graph order); a LocalOut placed before its
