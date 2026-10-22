@@ -1699,7 +1699,7 @@ with {
     y1 = sin(ip - wf), 0.0; y2 = sin(ip - 2.0 * wf), 0.0;
     moved = (\(c).(c | (krclk & (f != f0)))) ~ _;  // freq changed from its constructor value
     nb = dmulf(rh, rl, f) : d2cosp;
-    bh = select2(moved, 2.0 * cos(wf), nb : _, !); bl = select2(moved, 0.0, nb : !, _);
+    bh = select2(moved, 2.0 * cos(wf), (nb : _, !)); bl = select2(moved, 0.0, (nb : !, _));
 };
 fsinosc_var(freq, iphase) = fsinosc_var_g(freq, iphase, 0.0001308996870648116, 6.8347632241338996e-12, 1);
 fsinosc_var_kr(freq, iphase) = fsinosc_var_g(freq, iphase, 0.008377579972147942, 4.3742484634456957e-10, krclk);
