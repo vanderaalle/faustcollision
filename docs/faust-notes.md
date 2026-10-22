@@ -179,3 +179,10 @@ constructor step on zero states) were declared local to `instanceConstants()` ye
 `compute()` (2.70.3; fixed in 2.85.9). The zero states are made non-constant
 (`float(ba.time < 0)`).
 
+**A constant NaN or infinity inside a recursion crashes `-ftz 2`** (2.70.3 and 2.85.9):
+`process = (+ : *(0.0 / fadd(0.0, 0.0))) ~ _;` (fadd an opaque fmaf) stops with an
+assertion in mterm.cpp (`A[0] == SigBinOp[14,SigBitCast[0],2139095040]`). Filters whose
+coefficients fold to an infinity at a constant 0 Hz hit it: LPF.kr and BPF.kr with a constant
+frequency of 0 do not compile (their ar versions do). BPF's NaN at 0 Hz (scsynth's
+1 / tan(0)) is therefore produced by a time-dependent 0 / 0 (`sc.bpfnan`).
+

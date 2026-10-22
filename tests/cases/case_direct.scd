@@ -291,8 +291,9 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 	SynthDef(\case_ops_ir, { var sr = SampleRate.ir;
 		Out.ar(0, [SinOsc.ar(sr * 0.01), DC.ar(1) * (sr.reciprocal * 1000), DC.ar(1) * ((sr * 0 + 69).midicps * 0.001),
 			DC.ar(1) * (sr / 48000).sqrt.neg, DC.ar(1) * ((sr * 0).rand + 0.5) * 0]) }, metadata: (signals: [\impulse])),
-	// Singular settings: BPF at freq 0 (NaN in scsynth), Normalizer of silence (compiles; 0)
-	SynthDef(\case_bpf0, { var s = Saw.ar(70); Out.ar(0, [BPF.ar(s, 0, 0.1), Normalizer.ar(DC.ar(0)), K2A.ar(BPF.kr(LFSaw.kr(3), 0, 0.5))]) },
+	// Singular settings: BPF at freq 0 (NaN in scsynth), Normalizer of silence (compiles; 0).
+	// Not BPF.kr / LPF.kr at a constant 0 Hz: Faust crashes on them (docs/faust-notes.md)
+	SynthDef(\case_bpf0, { var s = Saw.ar(70); Out.ar(0, [BPF.ar(s, 0, 0.1), Normalizer.ar(DC.ar(0))]) },
 		metadata: (signals: [\impulse])),
 	// t_trig into EnvGen (the constructor reads TrigControl's constructor output: 0)
 	SynthDef(\case_trig_env, { |t_trig = 1| Out.ar(0, [K2A.ar(EnvGen.kr(Env.perc(0.01, 0.05), t_trig)), EnvGen.ar(Env.perc(0.01, 0.05), t_trig)]) },

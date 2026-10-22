@@ -1062,8 +1062,9 @@ with { a0 = fcoef((rhpfc(f, rq) : _, !, !)); b1 = fcoef((rhpfc(f, rq) : !, _, !)
 // with t = tan(p bw / 2): a0 = t / (1 + t), b1 = 2 - (2t + 2 s2(p)) / (1 + t), b2 = -1 + 2t / (1 + t).
 // At freq 0 or bw 0, t = 0: scsynth's C = 1 / tan(0) is infinite, b1 = C D a0 = inf * 0 and
 // b2 = (1 - C) a0 are NaN, and the output is NaN (measured); bpfnan reproduces it (a runtime
-// 0 / 0, its divisor opaque so that Faust does not fold it).
-bpfnan(t, b) = select2(t == 0.0, b, 0.0 / fadd(t, 0.0));
+// 0 / 0 that depends on time: a constant NaN inside a recursion crashes Faust's -ftz 2 code
+// generation, 2.70.3 and 2.85.9; docs/faust-notes.md).
+bpfnan(t, b) = select2(t == 0.0, b, z / fadd(z, 0.0)) with { z = fadd(t, float(ba.time < 0)); };
 bpfc(f, bw) = t / (1.0 + t), bpfnan(t, 2.0 - (2.0 * t + 2.0 * s2(p)) / (1.0 + t)), bpfnan(t, -1.0 + 2.0 * t / (1.0 + t))
 with { p = f * 2.0 * ma.PI / ma.SR; t = tan(bw * p * 0.5); };
 bpf(x, f, bw) = iir2(\(xx, y1, y2).(xx + b1 * y1 + b2 * y2 <: _, a0 * (_ - y2)), x, x)
