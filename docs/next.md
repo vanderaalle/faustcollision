@@ -21,6 +21,10 @@ Census failures fixed: kr UGens fed by audio read the block's first sample (a2k;
 only for kr_block entries: Amplitude, Pitch, T2K); EnvGen's audio-rate envelope inputs at
 the block start; LocalIn.kr held per block; Pan4.kr compile error (opaque inputs).
 Rejected with an explanation (tier "rejected"): T2K, Peak.kr of audio.
+Batch 8: Rand, IRand, LinRand, NRand, ExpRand (distribution metric); doneAction 2 on Line,
+XLine, EnvGen; TrigControl, LagControl; scalar-rate operators; excluded classes refused with
+their reason (translator/excluded.toml); Out bus 0 only, Out.kr refused; layer 2 rendered
+through the C++ a target compiles (three Faust C++ issues worked around); sc-findings 35, 36.
 Batch 7 (branch ports-batch7, before its full suite): DynKlank; Hilbert, FreqShift; PanB,
 PanB2, BiPanB2, DecodeB2, PanAz (ar and kr); Spring, Ball, TBall; the chaos family: Cusp,
 Quad, LinCong, Standard, FBSine, Latoocarfian, Gbman (N/L/C), Henon (N/L/C, the freeze and
@@ -40,13 +44,15 @@ in scope; only buffers, buses, demand rate and FFT stay excluded by design.
   itself 1.3). Hidden by the wide tolerance the kr channel forces; investigate first.
 
 ## Next, in order
-Each step has a prepared plan (and, where noted, code) in docs/plans/: apply, build, test,
-set tolerances from the measured floors, full suite, commit, bump vairi.
-1. Finish batch 7: full suite, merge, bump vairi, census. (FreqShift passed, 58 tests; its
-   compile time is down from 48 s to 0.9 s.)
-2. Grains: GrainSin, GrainFM, GrainIn.
+1. Batch 9 (branch ports-batch9): array arguments, FSinOsc with a varying freq, Linen
+   doneAction 2, more excluded classes (done there); the Gendy3 item above; then the
+   help-file corpus (721 SynthDefs in HelpSource, 332 translated) rendered against scsynth.
+2. doneAction 2 for DetectSilence and LFGauss; Pitch median, Pluck maxdelaytime, Klank
+   freqscale as non-constant inputs (help-file corpus).
 3. MoogFF.kr: set aside (plans/moogff-kr.md: a Faust miscompilation to understand first).
-4. Issue drafts: docs/issues/ covers 4, 5, 11, 15, 17-28, 30-34; file them upstream.
+4. Measure findings 6, 7, 8 (source only so far).
+5. Issue drafts: docs/issues/ covers SuperCollider findings 4, 5, 11, 15, 17-28, 30-35 and
+   two Faust bugs (faust-01, faust-02); filing them is the maintainer's decision.
 
 ## Working method (keeps cost down)
 - Read the scsynth source of the UGen (and nova-simd where a nova calc function runs).
