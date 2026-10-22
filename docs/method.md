@@ -191,6 +191,15 @@ way (constant folding, compile-time expansion, rewritten arithmetic) are in
   differently where the ports do not use opaque operations. The control sweeps of layer 3
   run on DawDreamer's JIT, whose `sqrt` is not correctly rounded; they only check that
   outputs stay finite and leave denormals.
+- **The first block is skipped, but not its echo.** Where the constructor limitation makes
+  the first block differ (a kr envelope ramped from its constructor value), a recursive
+  effect after it (a reverb, a long delay) carries that block into later samples. Corpus
+  tests show it; the regression cases avoid it.
+- **Quantizers amplify rounding.** A `round`, a comparison or a trigger turns a last-bit
+  difference near its threshold into an event one sample early or late (a pitch step in a
+  Formant, observed on a corpus SynthDef); after it the outputs differ, as for chaotic maps.
+  TrigControl's constructor value (0) is modelled for EnvGen's gate, the common
+  `EnvGen.kr(env, t_trig)` idiom.
 - **Controls are compared at their initial values.** The scsynth references set controls
   when the synth is created, so a lag's glide or a trigger set later is ported from the
   source but not compared with a render.
