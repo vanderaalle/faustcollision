@@ -160,3 +160,22 @@ flag changes it. The C++ that `faust` generates calls `std::sqrt`, correctly rou
 targets are not affected: layer 2 renders through that C++ (tests/arch_render.cpp, g++
 -O2) and keeps DawDreamer only for layer 3's automated sweeps.
 
+## The C++ backend factors common terms, and has two bugs (2.70.3; checked on 2.85.9)
+
+**Factoring.** `x * 0.75 + 0.75` (a `range`, a MulAdd) is emitted as `0.75f * (x + 1.0f)`,
+which rounds differently: 0.75240004 instead of 0.7524 for x = 0.0032000002. In a
+feedback oscillator (SinOscFB fed by `.range`) the difference grows. Faust 2.85.9 does the
+same. DawDreamer's JIT (libfaust 2.85.9, LLVM backend) happened to give the IEEE result,
+so it only showed once layer 2 rendered through C++. The MulAdd template is opaque
+(`sc.fadd(sc.fmul(...))`).
+
+**`-ftz 2` and a negation.** The flush-to-zero code takes the address of the recursive
+value, `*reinterpret_cast<int*>(&-fTemp1)`, which is not C++: a plain
+`fi.highpass(1, 20.0)` with `-ftz 2` does not compile (2.70.3 and 2.85.9). The Pitch port
+uses its own first-order highpass whose recursion goes through an opaque add (`sc.hp1`).
+
+**Constants out of scope.** Constant expressions built from `ffunction` calls (FreqShift's
+constructor step on zero states) were declared local to `instanceConstants()` yet used in
+`compute()` (2.70.3; fixed in 2.85.9). The zero states are made non-constant
+(`float(ba.time < 0)`).
+

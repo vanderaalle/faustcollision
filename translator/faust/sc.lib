@@ -72,6 +72,17 @@ with {
     };
 };
 
+// an.pitchTracker with its first-order highpass rewritten: with -ftz 2, Faust 2.70.3's C++
+// for fi.highpass(1, fc) takes the address of a negation (&-fTemp) and does not compile
+// (docs/faust-notes.md). hp1: the same filter, its recursion through an opaque add.
+hp1(fc, x) = (\(y).(fadd(b0 * x + b1 * x', 0.0 - a1 * y))) ~ _
+with { w = tan(ma.PI * fc / ma.SR); b0 = 1.0 / (1.0 + w); b1 = 0.0 - b0; a1 = (w - 1.0) / (w + 1.0); };
+pitch_tracker(N, t, x) = loop ~ _
+with {
+    xh = hp1(20.0, x);
+    loop(y) = an.zcr(t, fi.lowpass(N, max(20.0, y), xh)) * ma.SR * .5;
+};
+
 // Pitch: NOT a port. SC's Pitch is autocorrelation-based; this is Faust's
 // zero-crossing tracker with SC's interface: clamped to [minFreq, maxFreq],
 // voiced when the input envelope exceeds ampThreshold, last value held when
@@ -80,7 +91,7 @@ pitch(initFreq, minFreq, maxFreq, ampThreshold, x) = freq, hasFreq
 with {
     // tau 0.05 s and 30 ms smoothing: within 50 cents of SC on the bass_di notes,
     // ~140 ms to settle (tests/cases/case_Pitch.scd, report/fidelity.md).
-    raw = an.pitchTracker(4, 0.05, x) : si.smooth(ba.tau2pole(0.03)) : max(minFreq) : min(maxFreq);
+    raw = pitch_tracker(4, 0.05, x) : si.smooth(ba.tau2pole(0.03)) : max(minFreq) : min(maxFreq);
     hasFreq = float(an.amp_follower_ar(0.001, 0.05, x) > ampThreshold);
     held = ba.sAndH(hasFreq > 0, raw);
     seen = hasFreq : (max ~ _);
@@ -3355,7 +3366,10 @@ fs_step(cs, x) = \(s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, t0, t1, t2,
 fsround = par(i, 12, (\(h, l).(select2(blockend, h, zap(h)), select2(blockend, l, 0.0))));
 fs_hilbert(cs, x) = loop ~ si.bus(24) : par(i, 24, !), _, _
 with {
-    z = par(i, 24, 0.0);
+    // 0, but not a compile-time constant: with constant zeros Faust 2.70.3 folds the
+    // constructor step into constants it declares local to instanceConstants() yet uses in
+    // compute(): the C++ does not compile (docs/faust-notes.md)
+    z = par(i, 24, float(ba.time < 0));
     ctor = z : fs_step(cs, x) : !, !, fsround0;
     fsround0 = par(i, 12, (\(h, l).(zap(h), 0.0)));
     loop = si.bus(24) <: (si.bus(24), ctor) : ro.interleave(24, 2) : par(i, 24, select2(ba.time == 0))

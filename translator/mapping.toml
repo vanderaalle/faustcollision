@@ -787,7 +787,9 @@ case = "case_UnaryOp_scurve"
 [MulAdd]
 tier = "direct"
 inputs = ["in", "mul", "add"]
-faust = "({in} * {mul} + {add})"
+# MulAddUGens.cpp: (in * mul) + add, two float roundings. Opaque: Faust factors
+# x * k + k into k * (x + 1), which rounds differently (docs/faust-notes.md)
+faust = "sc.fadd(sc.fmul({in}, {mul}), {add})"
 compare = "waveform"
 tol = 1e-6
 case = "case_MulAdd"
