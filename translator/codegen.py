@@ -188,6 +188,20 @@ def translate(sdef: SynthDef, meta: dict, table=None) -> Translation:
     names, lines, controls, entries, channels = {}, [], {}, {}, {}
     gates = []  # node_alive, doneAction 2: UGens that end the node (every output stops)
     notes = []
+    # Out's bus: the Faust outputs are the program's outputs, i.e. bus 0. A control bus (the
+    # usual `arg out = 0`) is accepted at a default of 0 and fixed there.
+    bus = out.inputs[0]
+    if isinstance(bus, Const):
+        if bus.value != 0:
+            raise TranslationError(f"Out: bus {_literal(bus.value)}; only bus 0 is translated (the program's outputs)")
+    elif ugens[bus.ugen].cls in ("Control", "TrigControl", "LagControl"):
+        idx = ugens[bus.ugen].special + bus.output
+        bname, default = sdef.param_names.get(idx, f"#{idx}"), sdef.params[idx]
+        if default != 0:
+            raise TranslationError(f"Out: bus control '{bname}' defaults to {_literal(default)}; only bus 0 is translated")
+        notes.append(f"Out bus '{bname}' is a control: the program writes bus 0 (its default), whatever it is set to")
+    else:
+        raise TranslationError("Out: the bus is computed by the graph; only bus 0 is translated")
     control_outputs = set()
     ctl_wrap = {}  # (ugen, output) -> Faust wrapper of the slider (TrigControl, LagControl)
 

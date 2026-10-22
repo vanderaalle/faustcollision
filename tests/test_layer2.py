@@ -21,7 +21,9 @@ def test_fidelity(name, job, record):
         pytest.skip("translation failed (see layer 1)")
     x, _ = sf.read(ROOT / "signals" / f"{job['signal']}.wav", dtype="float32")
     ref, _ = sf.read(job["nrt"], dtype="float32", always_2d=True)
-    test = faustrun.render(conftest.BUILD / "faust" / f"{name}.dsp", x, settings=job["setting"])
+    # only the controls the program has: a spec'd control the graph never reads is not translated
+    setting = {k: v for k, v in job["setting"].items() if k in t.get("controls", {})}
+    test = faustrun.render(conftest.BUILD / "faust" / f"{name}.dsp", x, settings=setting)
     out = conftest.BUILD / "renders" / name
     out.mkdir(parents=True, exist_ok=True)
     sf.write(out / f"{job['tag']}.wav", test, faustrun.SR, subtype="FLOAT")
