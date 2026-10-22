@@ -2309,7 +2309,7 @@ tier = "direct"
 # per-block state machine; level and slope in double (float pairs), as Linen's struct;
 # kr values within 1.5e-14 of scsynth
 inputs = ["gate", "attackTime", "susLevel", "releaseTime", "doneAction"]
-require = { doneAction = 0.0 }
+done_input = "doneAction"  # 0, or 2: linen_kr_end gates every output
 self_hold = true
 faust = { kr = "sc.linen_kr({gate}, {attackTime}, {susLevel}, {releaseTime})" }
 compare = "waveform"

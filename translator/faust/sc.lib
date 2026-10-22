@@ -2843,7 +2843,8 @@ iprod(a, b) = int(p) - ((p == floor(p)) & (fmaf(a, b, 0.0 - p) < 0.0) & (p > 0.0
 // level and slope are doubles in the C struct (m_slope, m_level): float pairs here; the
 // output is (float)level.
 // one step: (stage, level h/l, slope h/l, counter, prevGate) -> same, plus the output
-linen_step(g, at, sl, rt, st0, lh0, ll0, sh0, sl0, ct0, pg) = st2, lh2, ll2, sh2, slo2, ct2, g, out
+// ev: this step ran at stage 3, where Linen_next_k calls DoneAction (outputs 0, stage 4)
+linen_step(g, at, sl, rt, st0, lh0, ll0, sh0, sl0, ct0, pg) = st2, lh2, ll2, sh2, slo2, ct2, g, out, (st == 3)
 with {
     srk = ma.SR / blocksize;
     rise = (pg <= 0.0) & (g > 0.0);
@@ -2869,19 +2870,22 @@ with {
 // state (7 wires) plus the held output, stepped at block starts; at time 0 the incoming
 // state is the constructor's step from the initial state. The step is one box wired with
 // lambdas: selecting its outputs by index re-expands it per output (compile blowup).
-linen_kr(g, at, sl, rt) = loop ~ si.bus(8) : par(i, 8, !), _
+linen_kr(g, at, sl, rt) = linen_kr_all(g, at, sl, rt) : (_, !);
+// doneAction 2: the block whose step ran at stage 3 (the constructor's step never does)
+linen_kr_end(g, at, sl, rt) = linen_kr_all(g, at, sl, rt) : (!, _);
+linen_kr_all(g, at, sl, rt) = loop ~ si.bus(8) : par(i, 8, !), _, _
 with {
     t0 = ba.time == 0;
     step = linen_step(g, at, sl, rt);
-    ctor = (select2(g <= -1.0, 4, 1), 0.0, 0.0, 0.0, 0.0, 0, 0.0) : step;
+    ctor = (select2(g <= -1.0, 4, 1), 0.0, 0.0, 0.0, 0.0, 0, 0.0) : step : (si.bus(8), !);
     loop(a0, a1, a2, a3, a4, a5, a6, ho) = (ctor, a0, a1, a2, a3, a4, a5, a6)
         : \(c0, c1, c2, c3, c4, c5, c6, c7, b0, b1, b2, b3, b4, b5, b6).(
             (select2(t0, b0, c0), select2(t0, b1, c1), select2(t0, b2, c2), select2(t0, b3, c3),
              select2(t0, b4, c4), select2(t0, b5, c5), select2(t0, b6, c6)) : step
-            : \(n0, n1, n2, n3, n4, n5, n6, n7).(
+            : \(n0, n1, n2, n3, n4, n5, n6, n7, ev).(
                 select2(krclk, b0, n0), select2(krclk, b1, n1), select2(krclk, b2, n2), select2(krclk, b3, n3),
                 select2(krclk, b4, n4), select2(krclk, b5, n5), select2(krclk, b6, n6),
-                select2(krclk, ho, n7), select2(krclk, ho, n7)));
+                select2(krclk, ho, n7), select2(krclk, ho, n7), krclk & ev));
 };
 
 //------------------------------------------------------------------------------
