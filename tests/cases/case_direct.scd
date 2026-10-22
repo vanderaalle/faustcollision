@@ -291,6 +291,9 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 	SynthDef(\case_ops_ir, { var sr = SampleRate.ir;
 		Out.ar(0, [SinOsc.ar(sr * 0.01), DC.ar(1) * (sr.reciprocal * 1000), DC.ar(1) * ((sr * 0 + 69).midicps * 0.001),
 			DC.ar(1) * (sr / 48000).sqrt.neg, DC.ar(1) * ((sr * 0).rand + 0.5) * 0]) }, metadata: (signals: [\impulse])),
+	// Singular settings: BPF at freq 0 (NaN in scsynth), Normalizer of silence (compiles; 0)
+	SynthDef(\case_bpf0, { var s = Saw.ar(70); Out.ar(0, [BPF.ar(s, 0, 0.1), Normalizer.ar(DC.ar(0)), K2A.ar(BPF.kr(LFSaw.kr(3), 0, 0.5))]) },
+		metadata: (signals: [\impulse])),
 	SynthDef(\case_Standard, { Out.ar(0, [StandardN.ar(8000), StandardL.ar(3000)] * 0.3) }, metadata: (signals: [\silence])),
 	SynthDef(\case_Formlet, { |freq = 1000| Out.ar(0, Formlet.ar(in.value, freq, 0.005, 0.1) * 0.5) },
 		metadata: (specs: (freq: spec.(50, 12000, 1000)))),

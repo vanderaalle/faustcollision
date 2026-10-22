@@ -1049,7 +1049,11 @@ with { a0 = fcoef((rhpfc(f, rq) : _, !, !)); b1 = fcoef((rhpfc(f, rq) : !, _, !)
 
 // BPF: C = 1 / tan(p bw / 2), a0 = 1 / (1 + C), b1 = 2 C cos p a0, b2 = (1 - C) a0;
 // with t = tan(p bw / 2): a0 = t / (1 + t), b1 = 2 - (2t + 2 s2(p)) / (1 + t), b2 = -1 + 2t / (1 + t).
-bpfc(f, bw) = t / (1.0 + t), 2.0 - (2.0 * t + 2.0 * s2(p)) / (1.0 + t), -1.0 + 2.0 * t / (1.0 + t)
+// At freq 0 or bw 0, t = 0: scsynth's C = 1 / tan(0) is infinite, b1 = C D a0 = inf * 0 and
+// b2 = (1 - C) a0 are NaN, and the output is NaN (measured); bpfnan reproduces it (a runtime
+// 0 / 0, its divisor opaque so that Faust does not fold it).
+bpfnan(t, b) = select2(t == 0.0, b, 0.0 / fadd(t, 0.0));
+bpfc(f, bw) = t / (1.0 + t), bpfnan(t, 2.0 - (2.0 * t + 2.0 * s2(p)) / (1.0 + t)), bpfnan(t, -1.0 + 2.0 * t / (1.0 + t))
 with { p = f * 2.0 * ma.PI / ma.SR; t = tan(bw * p * 0.5); };
 bpf(x, f, bw) = iir2(\(xx, y1, y2).(xx + b1 * y1 + b2 * y2 <: _, a0 * (_ - y2)), x, x)
 with { a0 = fcoef((bpfc(f, bw) : _, !, !)); b1 = fcoef((bpfc(f, bw) : !, _, !)); b2 = fcoef((bpfc(f, bw) : !, !, _)); };
@@ -1394,7 +1398,8 @@ with {
     out = select2(ba.time >= 2 * B - 1, 0.0, level * dx);
 };
 limiter(x, amp, dur) = dynlim(\(m, a).(select2(m > a, 1.0, a / m)), x, amp, dur);
-normalizer(x, amp, dur) = dynlim(\(m, a).(select2(m <= 0.00001, a / m, 100000.0 * a)), x, amp, dur);
+// the divisor opaque: with a constant-zero input Faust folds a / 0 and refuses to compile
+normalizer(x, amp, dur) = dynlim(\(m, a).(select2(m <= 0.00001, a / fadd(m, 0.0), 100000.0 * a)), x, amp, dur);
 
 // Compander. scsynth runs the peak follower over the whole block, takes the gain for the
 // block's end, and ramps to it across the same block: each output uses up to 63 samples
@@ -2899,7 +2904,7 @@ rlpf_kr(x, f, rq) = iir2_kr(\(xx, y1, y2).(a0 * xx + b1 * y1 + b2 * y2 <: _, _ +
 with { a0 = rlpfck(f, rq) : _, !, !; b1 = rlpfck(f, rq) : !, _, !; b2 = rlpfck(f, rq) : !, !, _; };
 rhpf_kr(x, f, rq) = iir2_kr(\(xx, y1, y2).(a0 * xx + b1 * y1 + b2 * y2 <: _, _ - 2.0 * y1 + y2), a0 * x, x)
 with { a0 = rhpfck(f, rq) : _, !, !; b1 = rhpfck(f, rq) : !, _, !; b2 = rhpfck(f, rq) : !, !, _; };
-bpfck(f, bw) = t / (1.0 + t), 2.0 - (2.0 * t + 2.0 * s2(p)) / (1.0 + t), -1.0 + 2.0 * t / (1.0 + t)
+bpfck(f, bw) = t / (1.0 + t), bpfnan(t, 2.0 - (2.0 * t + 2.0 * s2(p)) / (1.0 + t)), bpfnan(t, -1.0 + 2.0 * t / (1.0 + t))
 with { p = radk(f); t = tan(bw * p * 0.5); };
 bpf_kr(x, f, bw) = iir2_kr(\(xx, y1, y2).(xx + b1 * y1 + b2 * y2 <: _, a0 * (_ - y2)), x, x)
 with { a0 = bpfck(f, bw) : _, !, !; b1 = bpfck(f, bw) : !, _, !; b2 = bpfck(f, bw) : !, !, _; };
