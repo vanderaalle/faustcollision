@@ -207,6 +207,7 @@ def translate(sdef: SynthDef, meta: dict, table=None) -> Translation:
         raise TranslationError("Out: the bus is computed by the graph; only bus 0 is translated")
     control_outputs = set()
     ctl_wrap = {}  # (ugen, output) -> Faust wrapper of the slider (TrigControl, LagControl)
+    array_elems = {}  # name_k -> (name, param index): elements of array arguments after the first
 
     def use(key, rec, tier):
         entries.setdefault(key, Entry(key, tier, rec["compare"], rec["tol"], rec["case"]))
@@ -217,6 +218,12 @@ def translate(sdef: SynthDef, meta: dict, table=None) -> Translation:
         key = (inp.ugen, inp.output)
         if key in control_outputs:  # only controls that are actually read become hsliders
             cname = names[key]
+            if cname in array_elems:
+                bname, idx = array_elems[cname]
+                if bname not in specs:
+                    raise TranslationError(f"control '{bname}' is used but has no spec in the SynthDef metadata")
+                controls[cname] = dict(specs[bname], default=float(sdef.params[idx]))
+                return ctl_wrap.get(key, "{}").format(f"ctl_{_ident(cname)}")
             if cname not in specs:
                 raise TranslationError(f"control '{cname}' is used but has no spec in the SynthDef metadata")
             controls[cname] = specs[cname]
@@ -237,9 +244,18 @@ def translate(sdef: SynthDef, meta: dict, table=None) -> Translation:
             if u.cls not in ("Control", "TrigControl", "LagControl"):
                 raise TranslationError(f"unsupported control UGen {u.cls}")
             for k in range(len(u.output_rates)):
-                cname = sdef.param_names.get(u.special + k)
+                idx = u.special + k
+                cname = sdef.param_names.get(idx)
                 if cname is None:
-                    raise TranslationError(f"control output {u.special + k} has no name")
+                    # an element of an array argument (arg freqs = #[...]): only the first
+                    # index carries the name; the others become name_1, name_2, ... with the
+                    # name's spec and their own defaults
+                    base = max((i for i in sdef.param_names if i < idx), default=None)
+                    if base is None:
+                        raise TranslationError(f"control output {idx} has no name")
+                    bname = sdef.param_names[base]
+                    cname = f"{bname}_{idx - base}"
+                    array_elems[cname] = (bname, idx)
                 names[(u.index, k)] = cname
                 control_outputs.add((u.index, k))
                 if u.cls == "TrigControl":

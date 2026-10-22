@@ -298,6 +298,11 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 	// t_trig into EnvGen (the constructor reads TrigControl's constructor output: 0)
 	SynthDef(\case_trig_env, { |t_trig = 1| Out.ar(0, [K2A.ar(EnvGen.kr(Env.perc(0.01, 0.05), t_trig)), EnvGen.ar(Env.perc(0.01, 0.05), t_trig)]) },
 		metadata: (signals: [\impulse], specs: (t_trig: ControlSpec(0, 1, \lin, 0, 1)))),
+	// An array argument: element 0 keeps the name (and the render's setting), the others
+	// become freqs_1, freqs_2 with their own defaults and the name's spec
+	SynthDef(\case_ArrayControl, { |freqs = #[220, 330, 440], amp = 0.2|
+		Out.ar(0, SinOsc.ar(freqs).sum * amp) },
+		metadata: (signals: [\impulse], specs: (freqs: ControlSpec(100, 1000, \exp, 0, 220), amp: ControlSpec(0, 1, \lin, 0, 0.2)))),
 	SynthDef(\case_Standard, { Out.ar(0, [StandardN.ar(8000), StandardL.ar(3000)] * 0.3) }, metadata: (signals: [\silence])),
 	SynthDef(\case_Formlet, { |freq = 1000| Out.ar(0, Formlet.ar(in.value, freq, 0.005, 0.1) * 0.5) },
 		metadata: (specs: (freq: spec.(50, 12000, 1000)))),
