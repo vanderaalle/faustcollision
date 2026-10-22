@@ -130,8 +130,9 @@ LinCong, Standard, FBSine, Latoocarfian, Gbman, Henon, LorenzL, Crackle, Logisti
 statistics, their maps in double as float pairs where float32 changes the dynamics);
 Gendy1/2/3 (statistics); GrainSin, GrainFM, GrainIn (the built-in Hann window; one Faust
 voice per possible grain, so maxGrains <= 65); PSinGrain; Rand, IRand, LinRand, NRand,
-ExpRand; `doneAction: 2` on Line, XLine and EnvGen (the program falls silent for good when
-the synth would be freed); `t_` and lagged controls.
+ExpRand; `doneAction: 2` on Line, XLine, EnvGen and Linen (the program falls silent for good
+when the synth would be freed); `t_`, lagged and array arguments; FSinOsc with a varying
+frequency.
 
 Census (`translator.census`, `report/census.md`): of the 215 core UGen classes in scope,
 470 probes (one per class and rate, plus every operator); 446 pass, 1 unmapped (MoogFF.kr),
