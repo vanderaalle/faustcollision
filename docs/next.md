@@ -34,6 +34,11 @@ Completeness: every core UGen that can be translated into Faust, for the SuperCo
 community (vairi is one consumer). Order by value per effort, but niche or costly UGens are
 in scope; only buffers, buses, demand rate and FFT stay excluded by design.
 
+## Open
+- Gendy3 with knum < initCPs (and amp/dur distributions 3, 5): the port's spectrum differs
+  from scsynth's (case_Gendy3 channel 2: port vs 10 scsynth seeds median 5.4 dB, scsynth vs
+  itself 1.3). Hidden by the wide tolerance the kr channel forces; investigate first.
+
 ## Next, in order
 Each step has a prepared plan (and, where noted, code) in docs/plans/: apply, build, test,
 set tolerances from the measured floors, full suite, commit, bump vairi.

@@ -3071,9 +3071,11 @@ constant_inputs = ["initCPs"]
 self_hold = true
 faust = { ar = "sc.gendy3_g(max(1, int({initCPs})), {seed}, sc.a2k({ampdist}), sc.a2k({durdist}), sc.a2k({adparam}), sc.a2k({ddparam}), sc.a2k({freq}), sc.a2k({ampscale}), sc.a2k({durscale}), sc.a2k({knum}), 1.0 / ma.SR, 1)", kr = "sc.gendy3_g(max(1, int({initCPs})), {seed}, {ampdist}, {durdist}, {adparam}, {ddparam}, {freq}, {ampscale}, {durscale}, {knum}, sc.blocksize / ma.SR, sc.krclk)" }
 compare = "statistics"
-# tol: scsynth against itself (RandSeed, 15 seed pairs) scores up to 4.9 (the default's
-# overshoot spikes, #33)
-tol = 6.0
+# tol: scsynth against itself (RandSeed, 10 seeds, 45 pairs, plus the default seed) scores up
+# to 4.9 (the default's overshoot spikes, #33) and, for the kr channel, up to 11.1: the default-
+# seed reference is itself an outlier there (median 7.5 against the other seeds; the port 2.1).
+# A weak test; see docs/next.md (Gendy3 with knum < initCPs differs: open)
+tol = 12.0
 case = "case_Gendy3"
 
 [GrainSin]

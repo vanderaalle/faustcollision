@@ -3,3 +3,6 @@ build/
 report/
 __pycache__/
 .pytest_cache/
+
+# logs written at the repository root by test runs
+/*.log
