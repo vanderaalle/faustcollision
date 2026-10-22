@@ -1334,8 +1334,9 @@ faust = { ar_i = "sc.sos_g({in}, ({a0h}, {a0l}, {a1h}, {a1l}, {a2h}, {a2l}, {b1h
 faust_var = { ar_k = "sc.beq_k(sc.bhshc, {in}, {freq}, {rs}, {db})", ar_a = "sc.beq_a(sc.bhshc, 1, 0, {in}, {freq}, {rs}, {db})" }
 compare = "waveform"
 # measured: constants 4e-10 or less (exact up to pair rounding); next_aa 2.5e-6 or less; next_kk 4.8e-6 (+24 dB): w, sin,
-# s2(w) in float. tol twice the worst case
-tol = 9.5e-6
+# s2(w) in float; on the C++ path (g++ -O2) the worst case is 1.64e-5 (+6 dB at 50 Hz, the
+# float coefficients at a low corner). tol twice the worst case
+tol = 3.3e-5
 case = "case_BHiShelf"
 
 [Resonz]
