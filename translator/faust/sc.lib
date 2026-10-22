@@ -464,6 +464,17 @@ fcoin(seed) = select2(trand(seed) < 0, 1.0, -1.0);
 // ctor = 1 when the constructor runs one iteration before the first block.
 // clk: 1 where it steps (every sample at ar, block starts at kr).
 machine(N, stepB, initB, ctor, clk) = machine_all(N, stepB, initB, ctor, clk) : (si.block(N), _);
+// with a constructor step of its own (ctorB: N states -> (out, N states)), e.g. reading an
+// input's constructor-time value
+machine_allc(N, stepB, ctorB, initB, clk) = (core ~ si.bus(N))
+with {
+    first = ba.time == 0;
+    init = initB : ctorB : (!, si.bus(N));
+    core = (si.bus(N), init) : ro.interleave(N, 2) : par(i, N, select2(first))
+         : (si.bus(N) <: si.bus(N), stepB)
+         : route(2 * N + 1, 2 * N + 1, par(i, N, (i + 1, 2 * i + 1), (N + 2 + i, 2 * i + 2)), (N + 1, 2 * N + 1))
+         : (par(i, N, select2(clk)), _);
+};
 // the same, with the N new states before the output
 machine_all(N, stepB, initB, ctor, clk) = (core ~ si.bus(N))
 with {
@@ -1244,17 +1255,17 @@ with { p = f * s; e = fmaf(f, s, 0.0 - p); q = p + 0.5; t = floor(q); };
 // running segment's loop, and scsynth's loop writes its stale locals back over the new
 // segment (curve shape: b1) and drops the in-loop offset from the counter
 // (docs/sc-findings.md #18). Reproduced for curve -> curve; other shape pairs are not.
-envgen(n, gate, ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves, sr, gchk, clk, aa) =
-    envgen_all(n, gate, ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves, sr, gchk, clk, aa) : (si.block(13), _);
+envgen(n, gate, gc, ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves, sr, gchk, clk, aa) =
+    envgen_all(n, gate, gc, ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves, sr, gchk, clk, aa) : (si.block(13), _);
 // 1 where this step called DoneAction (EnvGen_nextSegment past the last stage). The 13th
 // state holds the event of the latest step only, so the constructor's call (an envelope
 // whose gate starts at 0 is 'finished' there) is dropped: scsynth ignores a done action
 // raised in a constructor (measured: such a synth runs until its triggered envelope ends).
-envgen_fin(n, gate, ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves, sr, gchk, clk, aa) =
-    envgen_all(n, gate, ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves, sr, gchk, clk, aa)
+envgen_fin(n, gate, gc, ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves, sr, gchk, clk, aa) =
+    envgen_all(n, gate, gc, ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves, sr, gchk, clk, aa)
     : (si.block(12), _, !);
-envgen_all(n, gate, ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves, sr, gchk, clk, aa) =
-    machine_all(13, step, init, 1, clk)
+envgen_all(n, gate, gc, ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves, sr, gchk, clk, aa) =
+    machine_allc(13, stepg(gate), stepg(gc), init, clk)
 with {
     INF = 1e9;
     NOTSTARTED = 1e9;
@@ -1304,9 +1315,10 @@ with {
         lev2 = select2(sh3 == 0, select2(sh3 == 8, l0, el), endL);
     };
 
-    step(st, cn, lv, sh, p, a2, b1, k, ph, el, rl, pg, ev) = out, st3, cn3 - 1, lv4, sh3, p3, a23, b13, k3 + 1, ph3, el3, rl1, pg1, fin
+    // one step reading gate value gv (the constructor's step reads the gate's constructor value)
+    stepg(gv, st, cn, lv, sh, p, a2, b1, k, ph, el, rl, pg, ev) = out, st3, cn3 - 1, lv4, sh3, p3, a23, b13, k3 + 1, ph3, el3, rl1, pg1, fin
     with {
-        g = gate;
+        g = gv;
         trig = gchk & (pg <= 0) & (g > 0);
         forced = gchk & (1 - trig) & (g <= -1) & (pg > -1);
         relz = gchk & (1 - trig) & (1 - forced) & (pg > 0) & (g <= 0) & (reln >= 0) & (rl == 0);
@@ -1344,24 +1356,24 @@ with {
         lv4 = shapelev(sh3, lv3, p3, a23, b13, k3 + 1, ph3);
     };
 };
-envgen_ak(n, gate, ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves) =
-    envgen(n, a2k(gate), ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves, ma.SR, krclk, 1, 0);
+envgen_ak(n, gate, gc, ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves) =
+    envgen(n, a2k(gate), a2k(gc), ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves, ma.SR, krclk, 1, 0);
 // every input but the gate is read with ZIN0 when a segment starts: the block's first
 // sample (a2k), also for audio-rate levels (census: VarLag's EnvGen, 0.066 -> 5e-9)
-envgen_aa(n, gate, ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves) =
-    envgen(n, gate, a2k(ls), a2k(lb), a2k(ts), a2k(ilev), reln, loopn, (levels : par(i, n, a2k)),
+envgen_aa(n, gate, gc, ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves) =
+    envgen(n, gate, gc, a2k(ls), a2k(lb), a2k(ts), a2k(ilev), reln, loopn, (levels : par(i, n, a2k)),
            (times : par(i, n, a2k)), (shapes : par(i, n, a2k)), (curves : par(i, n, a2k)), ma.SR, 1, 1, 1);
 // (the machine's output between steps already shows the next state: hold it per block)
-envgen_kr(n, gate, ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves) =
-    envgen(n, a2k(gate), ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves, ma.SR / blocksize, 1, krclk, 0) : a2k;
+envgen_kr(n, gate, gc, ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves) =
+    envgen(n, a2k(gate), a2k(gc), ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves, ma.SR / blocksize, 1, krclk, 0) : a2k;
 // doneAction 2 (mapping done_input): the same calls, ending where scsynth calls DoneAction
-envgen_ak_end(n, gate, ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves) =
-    envgen_fin(n, a2k(gate), ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves, ma.SR, krclk, 1, 0);
-envgen_aa_end(n, gate, ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves) =
-    envgen_fin(n, gate, a2k(ls), a2k(lb), a2k(ts), a2k(ilev), reln, loopn, (levels : par(i, n, a2k)),
+envgen_ak_end(n, gate, gc, ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves) =
+    envgen_fin(n, a2k(gate), a2k(gc), ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves, ma.SR, krclk, 1, 0);
+envgen_aa_end(n, gate, gc, ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves) =
+    envgen_fin(n, gate, gc, a2k(ls), a2k(lb), a2k(ts), a2k(ilev), reln, loopn, (levels : par(i, n, a2k)),
            (times : par(i, n, a2k)), (shapes : par(i, n, a2k)), (curves : par(i, n, a2k)), ma.SR, 1, 1, 1);
-envgen_kr_end(n, gate, ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves) =
-    envgen_fin(n, a2k(gate), ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves, ma.SR / blocksize, 1, krclk, 0);
+envgen_kr_end(n, gate, gc, ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves) =
+    envgen_fin(n, a2k(gate), a2k(gc), ls, lb, ts, ilev, reln, loopn, levels, times, shapes, curves, ma.SR / blocksize, 1, krclk, 0);
 
 //------------------------------------------------------------------------------
 // Dynamics (FilterUGens.cpp).

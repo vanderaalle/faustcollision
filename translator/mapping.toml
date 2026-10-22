@@ -1597,7 +1597,7 @@ done_input = "doneAction"  # 0, or 2: the port's _end companion gates every outp
 constant_inputs = ["numStages", "releaseNode", "loopNode"]
 # the template samples per block itself (gate checks at block start, kr steps)
 self_hold = true
-faust = { ar = "sc.envgen_ak({n}, {gate}, {levelScale}, {levelBias}, {timeScale}, {initLevel}, {releaseNode}, {loopNode}, ({levels}), ({times}), ({shapes}), ({curves}))", "ar<gate:ar" = "sc.envgen_aa({n}, {gate}, {levelScale}, {levelBias}, {timeScale}, {initLevel}, {releaseNode}, {loopNode}, ({levels}), ({times}), ({shapes}), ({curves}))", kr = "sc.envgen_kr({n}, {gate}, {levelScale}, {levelBias}, {timeScale}, {initLevel}, {releaseNode}, {loopNode}, ({levels}), ({times}), ({shapes}), ({curves}))" }
+faust = { ar = "sc.envgen_ak({n}, {gate}, {gate_ctor}, {levelScale}, {levelBias}, {timeScale}, {initLevel}, {releaseNode}, {loopNode}, ({levels}), ({times}), ({shapes}), ({curves}))", "ar<gate:ar" = "sc.envgen_aa({n}, {gate}, {gate_ctor}, {levelScale}, {levelBias}, {timeScale}, {initLevel}, {releaseNode}, {loopNode}, ({levels}), ({times}), ({shapes}), ({curves}))", kr = "sc.envgen_kr({n}, {gate}, {gate_ctor}, {levelScale}, {levelBias}, {timeScale}, {initLevel}, {releaseNode}, {loopNode}, ({levels}), ({times}), ({shapes}), ({curves}))" }
 compare = "waveform"
 tol = 1e-5
 case = "case_EnvGen"

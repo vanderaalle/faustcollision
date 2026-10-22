@@ -355,6 +355,12 @@ def translate(sdef: SynthDef, meta: dict, table=None) -> Translation:
         fixed = set(e.get("inputs", []))
         wires = {k: arg(k, v) for k, v in args.items() if isinstance(v, Ref) and k in fixed}
         fmt = {k: (f"w_{k}" if k in wires else arg(k, v)) for k, v in args.items()}
+        # {input_ctor}: the value a constructor reads. Known for TrigControl (its constructor
+        # clears the output: 0); elsewhere the first-block value (constructor-time values are
+        # not modelled otherwise)
+        for k, v in args.items():
+            trig = isinstance(v, Ref) and ugens[v.ugen].cls == "TrigControl"
+            fmt[f"{k}_ctor"] = "0.0" if trig else fmt[k]
         if e.get("derive") and exact:  # constructor-time structure (translator/derive.py)
             from . import derive
             consts = {k: args[k].value for k in constant + e.get("derive_when_constant", [])}

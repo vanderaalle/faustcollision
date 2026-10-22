@@ -294,6 +294,9 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 	// Singular settings: BPF at freq 0 (NaN in scsynth), Normalizer of silence (compiles; 0)
 	SynthDef(\case_bpf0, { var s = Saw.ar(70); Out.ar(0, [BPF.ar(s, 0, 0.1), Normalizer.ar(DC.ar(0)), K2A.ar(BPF.kr(LFSaw.kr(3), 0, 0.5))]) },
 		metadata: (signals: [\impulse])),
+	// t_trig into EnvGen (the constructor reads TrigControl's constructor output: 0)
+	SynthDef(\case_trig_env, { |t_trig = 1| Out.ar(0, [K2A.ar(EnvGen.kr(Env.perc(0.01, 0.05), t_trig)), EnvGen.ar(Env.perc(0.01, 0.05), t_trig)]) },
+		metadata: (signals: [\impulse], specs: (t_trig: ControlSpec(0, 1, \lin, 0, 1)))),
 	SynthDef(\case_Standard, { Out.ar(0, [StandardN.ar(8000), StandardL.ar(3000)] * 0.3) }, metadata: (signals: [\silence])),
 	SynthDef(\case_Formlet, { |freq = 1000| Out.ar(0, Formlet.ar(in.value, freq, 0.005, 0.1) * 0.5) },
 		metadata: (specs: (freq: spec.(50, 12000, 1000)))),
