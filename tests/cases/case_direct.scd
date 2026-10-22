@@ -307,7 +307,8 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 	SynthDef(\case_FSinOsc_var, { |freq = 440| Out.ar(0, [FSinOsc.ar(freq) * 0.5, FSinOsc.ar(Line.kr(200, 2000, 3)) * 0.5,
 		K2A.ar(FSinOsc.kr(Line.kr(1, 20, 3)))]) },
 		metadata: (signals: [\impulse], specs: (freq: ControlSpec(50, 5000, \exp, 0, 440)))),
-	SynthDef(\case_done_linen, { Out.ar(0, [K2A.ar(Linen.kr(Line.kr(1, -1, 0.2) > 0, 0.01, 0.8, 0.05, doneAction: 2)), SinOsc.ar(300) * 0.1]) },
+	// (0.21 s: a Line crossing 0 exactly at a block start would test the sign of rounding)
+	SynthDef(\case_done_linen, { Out.ar(0, [K2A.ar(Linen.kr(Line.kr(1, -1, 0.21) > 0, 0.01, 0.8, 0.05, doneAction: 2)), SinOsc.ar(300) * 0.1]) },
 		metadata: (signals: [\impulse])),
 	SynthDef(\case_Standard, { Out.ar(0, [StandardN.ar(8000), StandardL.ar(3000)] * 0.3) }, metadata: (signals: [\silence])),
 	SynthDef(\case_Formlet, { |freq = 1000| Out.ar(0, Formlet.ar(in.value, freq, 0.005, 0.1) * 0.5) },
