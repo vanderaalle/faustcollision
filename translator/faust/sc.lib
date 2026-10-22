@@ -1671,6 +1671,39 @@ with {
     };
 };
 fsinosc(bh, bl, y1h, y1l, y2h, y2l) = fsinosc_clk(bh, bl, y1h, y1l, y2h, y2l, 1);
+// sin of a pair, |x| <= 2 pi: Taylor to x^29 in pairs (~1e-14), Horner in x^2
+dsin_c = (1.0, 0.0), (-0.1666666716337204, 4.967053879312289e-09), (0.008333333767950535, -4.34617203337595e-10),
+         (-0.00019841270113829523, 2.725596874933456e-12), (2.7557318844628753e-06, 3.793571224297229e-14),
+         (-2.5052107943679403e-08, -4.4176230446483665e-16), (1.6059044372074283e-10, -5.352526511562726e-18),
+         (-7.647163609812713e-13, -1.2200710471178288e-20), (2.8114573589663704e-15, -1.0462084739763658e-22),
+         (-8.220635078476521e-18, -1.681478096855898e-25), (1.9572941524685808e-20, -4.612945513820017e-28),
+         (-3.868170297964731e-23, 1.2733404317146773e-30), (6.446950340479164e-26, -5.609469144028533e-34),
+         (-9.183689809957378e-29, -5.383816950112988e-37), (1.13099624727078e-31, 4.1373995769468457e-39);
+dsinp(xh, xl) = (ch(14), cl(14)) : seq(i, 14, hstep(13 - i)) : \(ah, al).(dmul2(ah, al, xh, xl))
+with {
+    ch(k) = dsin_c : ba.selector(2 * k, 30); cl(k) = dsin_c : ba.selector(2 * k + 1, 30);
+    zh = dmul2(xh, xl, xh, xl) : _, !; zl = dmul2(xh, xl, xh, xl) : !, _;
+    hstep(k) = \(ah, al).(dmul2(ah, al, zh, zl) : \(mh, ml).(dadd2(mh, ml, ch(k), cl(k))));
+};
+// 2 cos(w) on pairs: 2 - 4 sin^2(w / 2)
+d2cosp(wh, wl) = dsinp(wh * 0.5, wl * 0.5) : \(sh, sl).(dmul2(sh, sl, sh, sl)) : \(qh, ql).(drsub(2.0, qh * 4.0, ql * 4.0));
+// FSinOsc with a varying freq (FSinOsc_next): b1 = 2 cos(w) recomputed in double, w = freq *
+// radiansPerSample (double), at a block start whose freq differs from the stored one; the
+// constructor's b1 = 2 cosf(float w), and y1, y2 = sinf(iphase - w), sinf(iphase - 2 w) on
+// that float w, hold until the first change. The resonator runs on pairs (fsinosc_clk).
+fsinosc_var_g(freq, iphase, rh, rl, clk) = fsinosc_clk(bh, bl, (y1 : _, !), (y1 : !, _), (y2 : _, !), (y2 : !, _), clk)
+with {
+    f = a2k(freq); f0 = initv(f);
+    wf = dmulr(rh, rl, f0);                       // (float)(freq * radiansPerSample)
+    ip = initv(a2k(iphase));
+    y1 = sin(ip - wf), 0.0; y2 = sin(ip - 2.0 * wf), 0.0;
+    moved = (\(c).(c | (krclk & (f != f0)))) ~ _;  // freq changed from its constructor value
+    nb = dmulf(rh, rl, f) : d2cosp;
+    bh = select2(moved, 2.0 * cos(wf), nb : _, !); bl = select2(moved, 0.0, nb : !, _);
+};
+fsinosc_var(freq, iphase) = fsinosc_var_g(freq, iphase, 0.0001308996870648116, 6.8347632241338996e-12, 1);
+fsinosc_var_kr(freq, iphase) = fsinosc_var_g(freq, iphase, 0.008377579972147942, 4.3742484634456957e-10, krclk);
+
 fsinosc_kr(bh, bl, y1h, y1l, y2h, y2l) = fsinosc_clk(bh, bl, y1h, y1l, y2h, y2l, krclk);
 
 //------------------------------------------------------------------------------

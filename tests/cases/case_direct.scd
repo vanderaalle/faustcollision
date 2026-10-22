@@ -303,6 +303,10 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 	SynthDef(\case_ArrayControl, { |freqs = #[220, 330, 440], amp = 0.2|
 		Out.ar(0, SinOsc.ar(freqs).sum * amp) },
 		metadata: (signals: [\impulse], specs: (freqs: ControlSpec(100, 1000, \exp, 0, 220), amp: ControlSpec(0, 1, \lin, 0, 0.2)))),
+	// FSinOsc with a control and a changing freq (b1 recomputed in double), and its kr form
+	SynthDef(\case_FSinOsc_var, { |freq = 440| Out.ar(0, [FSinOsc.ar(freq) * 0.5, FSinOsc.ar(Line.kr(200, 2000, 3)) * 0.5,
+		K2A.ar(FSinOsc.kr(Line.kr(1, 20, 3)))]) },
+		metadata: (signals: [\impulse], specs: (freq: ControlSpec(50, 5000, \exp, 0, 440)))),
 	SynthDef(\case_Standard, { Out.ar(0, [StandardN.ar(8000), StandardL.ar(3000)] * 0.3) }, metadata: (signals: [\silence])),
 	SynthDef(\case_Formlet, { |freq = 1000| Out.ar(0, Formlet.ar(in.value, freq, 0.005, 0.1) * 0.5) },
 		metadata: (specs: (freq: spec.(50, 12000, 1000)))),

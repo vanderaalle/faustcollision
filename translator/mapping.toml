@@ -1708,10 +1708,12 @@ case = "case_LocalIn"
 [FSinOsc]
 tier = "direct"
 inputs = ["freq", "iphase"]
-# scsynth recomputes b1 = 2 cos(w) in double when freq changes: only a constant freq is ported.
+# constant freq and iphase: the constructor's values (derive). Otherwise FSinOsc_next
+# recomputes b1 = 2 cos(w) in double when freq changes: sc.fsinosc_var (cos on pairs).
 # Measured: ar <= 3e-9 (double state on float pairs, ~48 bits); kr 1.8e-7 is K2A's ramp in the case.
-constant_inputs = ["freq", "iphase"]
+derive_when_constant = ["freq", "iphase"]
 derive = "fsinosc"
+faust_var = { ar = "sc.fsinosc_var({freq}, {iphase})", kr = "sc.fsinosc_var_kr({freq}, {iphase})" }
 faust = { ar = "sc.fsinosc({bh_ar}, {bl_ar}, {y1h_ar}, {y1l_ar}, {y2h_ar}, {y2l_ar})", kr = "sc.fsinosc_kr({bh_kr}, {bl_kr}, {y1h_kr}, {y1l_kr}, {y2h_kr}, {y2l_kr})" }
 self_hold = true
 compare = "waveform"
