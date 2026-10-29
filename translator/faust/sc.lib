@@ -1161,10 +1161,11 @@ lagud(x, tu, td) = (\(fy).(zzend(y), y with {
     })) ~ _ : !, _;
 
 // Decay: y = x + b y1; y1 starts at in[0]
-decay(x, t) = rec1(\(xx, y1, b).(xx + b * y1), x, x, kcoef(dec60(t), 0));
+// xc: the input's constructor-time value (codegen {in_ctor}; 0 for a TrigControl)
+decay(x, xc, t) = rec1(\(xx, y1, b).(xx + b * y1), xc, x, kcoef(dec60(t), 0));
 // Decay2: difference of two decays (decayTime - attackTime); both start at in[0]; no zap
-decay2(x, at, dt) = d(kcoef(dec60(dt), 0)) - d(kcoef(dec60(at), 0))
-with { d(b) = (\(fy).(y, y with { y = x + b * select2(ba.time == 0, fy, x); })) ~ _ : _, !; };
+decay2(x, xc, at, dt) = d(kcoef(dec60(dt), 0)) - d(kcoef(dec60(at), 0))
+with { d(b) = (\(fy).(y, y with { y = x + b * select2(ba.time == 0, fy, xc); })) ~ _ : _, !; };
 // Integrator: y = x + b y1 from y1 = 0, no constructor sample
 integrator(x, coef) = rec1(\(xx, y1, b).(xx + b * y1), 0.0, x, kcoef(coef, 0));
 // Slew: level += clip(in - level, -dn / SR, up / SR); level starts at in[0]
@@ -2910,10 +2911,10 @@ lagud_kr(x, tu, td) = (\(fy).(nv, nv with {
         nv = select2(krclk, y1, zap(x + select2(x > y1, dec60k(td), dec60k(tu)) * (y1 - x)));
     })) ~ _ : !, _;
 // Decay: y = x + b y1; the constructor step from y1 = 0 leaves in[0]
-decay_kr(x, t) = rec1_kr(\(xx, y1, b).(xx + b * y1), x, x, kprev(dec60k(t)));   // one block late
+decay_kr(x, xc, t) = rec1_kr(\(xx, y1, b).(xx + b * y1), xc, x, kprev(dec60k(t)));   // one block late
 // Decay2: no constructor step (output 0), both states at in[0]; no zap (as the ar port)
-decay2_kr(x, at, dt) = d(kprev(dec60k(dt))) - d(kprev(dec60k(at)))   // one block late
-with { d(b) = (\(fy).(nv, nv with { y1 = select2(ba.time == 0, fy, x); nv = select2(krclk, y1, x + b * y1); })) ~ _ : !, _; };
+decay2_kr(x, xc, at, dt) = d(kprev(dec60k(dt))) - d(kprev(dec60k(at)))   // one block late
+with { d(b) = (\(fy).(nv, nv with { y1 = select2(ba.time == 0, fy, xc); nv = select2(krclk, y1, x + b * y1); })) ~ _ : !, _; };
 // Integrator: y = x + b y1 from 0
 integrator_kr(x, coef) = rec1_kr(\(xx, y1, b).(xx + b * y1), 0.0, x, kprev(coef));   // one block late
 // Slew: level += clip(in - level, -dn / SRk, up / SRk), level at in[0]

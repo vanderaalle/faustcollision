@@ -310,6 +310,9 @@ var spec = { |lo, hi, def, warp = \exp| ControlSpec(lo, hi, warp, 0, def) };
 	// (0.21 s: a Line crossing 0 exactly at a block start would test the sign of rounding)
 	SynthDef(\case_done_linen, { Out.ar(0, [K2A.ar(Linen.kr(Line.kr(1, -1, 0.21) > 0, 0.01, 0.8, 0.05, doneAction: 2)), SinOsc.ar(300) * 0.1]) },
 		metadata: (signals: [\impulse])),
+	// t_trig into Decay, Decay2 (their constructors read TrigControl's constructor output: 0)
+	SynthDef(\case_trig_decay, { |t_trig = 1| Out.ar(0, [K2A.ar(Decay.kr(t_trig, 0.1)), K2A.ar(Decay2.kr(t_trig, 0.01, 0.1))]) },
+		metadata: (signals: [\impulse], specs: (t_trig: ControlSpec(0, 1, \lin, 0, 1)))),
 	SynthDef(\case_Standard, { Out.ar(0, [StandardN.ar(8000), StandardL.ar(3000)] * 0.3) }, metadata: (signals: [\silence])),
 	SynthDef(\case_Formlet, { |freq = 1000| Out.ar(0, Formlet.ar(in.value, freq, 0.005, 0.1) * 0.5) },
 		metadata: (specs: (freq: spec.(50, 12000, 1000)))),

@@ -1446,7 +1446,7 @@ case = "case_LagUD"
 tier = "direct"
 inputs = ["in", "decayTime"]
 # long times put the coefficient within ~1e-4 of 1: float floor 1.6e-4 measured at 0.5 s
-faust = { ar = "sc.decay({in}, {decayTime})", kr = "sc.decay_kr({in}, {decayTime})" }
+faust = { ar = "sc.decay({in}, {in_ctor}, {decayTime})", kr = "sc.decay_kr({in}, {in_ctor}, {decayTime})" }
 compare = "waveform"
 # kr: one step per block (sc.*_kr), measured 7.0e-06 (float coefficient and state)
 tol = 3e-4
@@ -1456,7 +1456,7 @@ case = "case_Decay"
 tier = "direct"
 inputs = ["in", "attackTime", "decayTime"]
 # long times put the coefficient within ~1e-4 of 1: float floor 1.6e-4 measured at 0.5 s
-faust = { ar = "sc.decay2({in}, {attackTime}, {decayTime})", kr = "sc.decay2_kr({in}, {attackTime}, {decayTime})" }
+faust = { ar = "sc.decay2({in}, {in_ctor}, {attackTime}, {decayTime})", kr = "sc.decay2_kr({in}, {in_ctor}, {attackTime}, {decayTime})" }
 compare = "waveform"
 # kr: one step per block (sc.*_kr), measured 7.3e-06 (float coefficient and state)
 tol = 3e-4
