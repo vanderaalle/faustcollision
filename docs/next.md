@@ -21,6 +21,8 @@ Census failures fixed: kr UGens fed by audio read the block's first sample (a2k;
 only for kr_block entries: Amplitude, Pitch, T2K); EnvGen's audio-rate envelope inputs at
 the block start; LocalIn.kr held per block; Pan4.kr compile error (opaque inputs).
 Rejected with an explanation (tier "rejected"): T2K, Peak.kr of audio.
+Batch 10: Decay/Decay2 read t_trig's constructor value (help corpus Pbind_5: 0.93 -> 2.6e-7);
+RLPF and FreqShift tolerances re-measured on the C++ path.
 Batch 9: array arguments (name_1, name_2, ...), FSinOsc with a varying freq (cos on pairs),
 Linen doneAction 2, more excluded classes (buffer information, convolution, Bela...).
 Batch 8: Rand, IRand, LinRand, NRand, ExpRand (distribution metric); doneAction 2 on Line,
@@ -52,13 +54,13 @@ in scope; only buffers, buses, demand rate and FFT stay excluded by design.
   is correct per breakpoint. Suspect next: the list compaction (act/pos/slot in gendy3_g).
 
 ## Next, in order
-1. Constructor-time values beyond EnvGen's gate: TrigControl outputs 0 in its constructor,
-   but only EnvGen reads `{gate_ctor}`; Decay/Decay2 (and others whose constructor reads an
-   input) should too: `Decay2.kr(t_trig)` differs (help corpus: Pbind_5, 0.93).
-2. PulseCount: `PulseCount.ar(Impulse.ar(10), Impulse.ar(0.4))` differs from scsynth by
-   2e-4..5e-3 (help corpus, Classes_PulseCount); deterministic, not yet looked at.
-3. Re-measure on the C++ path: FreqShift (help corpus 1.7e-5 > 1e-5), the Bus help example
-   (0.017 > 0.015).
+1. Constructor-time values: TrigControl's 0 reaches EnvGen's gate and Decay/Decay2 (batch
+   10); other UGens whose constructor reads an input could take `{in_ctor}` the same way
+   when a corpus shows the need.
+2. PulseCount (parked): `SinOsc.ar(PulseCount.ar(Impulse.ar(10), Impulse.ar(0.4)) * 200)`
+   drifts from scsynth (help corpus, Classes_PulseCount: 2.6e-4 by sample 16119, up to
+   5e-3). The divergence starts mid-period, not at a trigger or reset: likely SinOsc's path
+   for an audio-rate freq that jumps in large steps, rather than PulseCount itself.
 4. doneAction 2 for DetectSilence and LFGauss; Pitch median, Pluck maxdelaytime, Klank
    freqscale as non-constant inputs.
 5. MoogFF.kr: set aside (plans/moogff-kr.md: a Faust miscompilation to understand first).
